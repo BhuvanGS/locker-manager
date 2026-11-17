@@ -122,7 +122,7 @@ describe('Conveyor and robot arm', () => {
     g.closeDialogue()
 
     d.tick(CONFIG.automation.beltSeconds + 0.5)
-    expect(g.conveyor.armJob()?.itemId).toBe(item.id) // at the end of the belt, the arm has it
+    expect(g.conveyor.armJobs()[0]?.itemId).toBe(item.id) // at the end of the belt, the arm has it
     d.tick(CONFIG.automation.armSeconds * 0.55) // mid-job: the door swings open
     expect(locker.doorOpen).toBe(true)
     d.tick(CONFIG.automation.armSeconds)
@@ -181,9 +181,9 @@ describe('Conveyor and robot arm', () => {
   it('says so when the robot has no free locker', () => {
     const d = owned(true)
     const g = d.game
-    for (const l of g.lockers.all()) if (l.bank < CONFIG.automation.robotBanks) l.state = 'unavailable'
+    for (const l of g.lockers.all()) l.state = 'unavailable'
     takeBag(d)
-    expect(g.loadConveyor().message).toBe('No free locker for the robot arm. Store it by hand in another hall.')
+    expect(g.loadConveyor().message).toBe('No free locker the robot arm can reach. Store it by hand, or extend the belts.')
     expect(g.hands).not.toBeNull() // the bag stays with the player
   })
 
@@ -258,13 +258,16 @@ describe('Conveyor and robot arm', () => {
     expect(g.takeFromConveyor().ok).toBe(false)
   })
 
-  it('the arm does not reach lockers in the other halls', () => {
+  it('the arm does not reach lockers in a hall until the belt is extended there', () => {
     const g = new GameManager(3)
     g.grantUpgrade('conveyor')
     g.grantUpgrade('annexEast')
-    const far = g.lockers.all().find((l) => l.bank === 3)!
+    const far = g.lockers.all().find((l) => g.zoneOf(l.id) === 'east')!
     expect(g.isRobotLocker(far.id)).toBe(false)
-    expect(g.robotLockersFree()).toBe(CONFIG.automation.robotBanks * CONFIG.facility.lockerRows * CONFIG.facility.lockerCols)
+    expect(g.robotLockersFree()).toBe(3 * CONFIG.facility.lockerRows * CONFIG.facility.lockerCols)
+    g.grantUpgrade('line-east')
+    expect(g.isRobotLocker(far.id)).toBe(true)
+    expect(g.robotLockersFree()).toBe(3 * 6 + 12)
   })
 
   it('the objective guides you through the belt', () => {

@@ -1,0 +1,247 @@
+import { describe, expect, it } from 'vitest'
+import { applyMod } from './mods'
+import { AUTOMATION_UPGRADES, AUTO_ZONES, CONFIG, ZONE_ROWS } from './config'
+import { GameManager } from './GameManager'
+import type { LockerId } from './types'
+
+/** A game with everything the conveyor levels build on, plenty of cash and a high level. */
+function rich() {
+  const g = new GameManager(3)
+  g.economy.xp = 5000
+  g.economy.money = 100_000
+  for (const id of ['labels', 'register', 'bank2', 'bank3', 'digital', 'conveyor']) expect(g.buyUpgrade(id).ok).toBe(true)
+  g.drainNotices()
+  return g
+}
+
+/** Run the simulation in small steps (a single large step would skip whole arm jobs). */
+function run(g: GameManager, seconds: number): void {
+  for (let t = 0; t < seconds - 1e-9; t += 0.05) g.update(0.05)
+}
+
+/** Put a bag in the player's hands (a new customer, taken at the counter) and load it. */
+function load(g: GameManager): { lockerId: LockerId; customerId: string } {
+  const id = g.spawnExtraCustomer()
+  g.customerReachedCounter(id)
+  expect(g.talkTo(id).ok).toBe(true)
+  expect(g.choose('greet').ok).toBe(true)
+  expect(g.choose('accept').ok).toBe(true)
+  g.closeDialogue()
+  const result = g.loadConveyor()
+  expect(result.ok).toBe(true)
+  const parcel = g.conveyor.parcels.at(-1)!
+  return { lockerId: parcel.lockerId, customerId: id }
+}
+
+describe('Conveyor levels: how far the belts reach', () => {
+  it('the catalogue conveyor is level 1: the storage room only', () => {
+    const g = rich()
+    expect(g.conveyor.coveredZones()).toEqual(['main'])
+  })
+
+  it('every hall has its own belt extension, in order, and needs the hall itself', () => {
+    const g = rich()
+    expect(g.consoleItems('hub').map((i) => i.id)).toEqual(['line-east', 'line-south', 'line-floor1', 'line-floor2'])
+    expect(g.buyUpgrade('line-east').ok).toBe(false) // not a catalogue item
+    expect(g.buyAutomation('line-east').message).toBe('Buy Storage annex (east) first')
+    expect(g.buyUpgrade('annexEast').ok).toBe(true)
+    expect(g.buyAutomation('line-south').message).toBe('Buy South expansion first')
+    g.buyUpgrade('southExpansion')
+    expect(g.buyAutomation('line-south').message).toBe('Buy Belt to the East annex first')
+    const money = g.economy.money
+    expect(g.buyAutomation('line-east').ok).toBe(true)
+    expect(g.economy.money).toBe(money - 700)
+    expect(g.conveyor.isCovered('east')).toBe(true)
+    expect(g.buyAutomation('line-south').ok).toBe(true)
+    expect(g.buyAutomation('line-east').ok).toBe(false) // only once
+    const notice = g.drainNotices().filter((n) => n.type === 'upgradeBought' && n.kind === 'automation')
+    expect(notice.map((n) => (n.type === 'upgradeBought' ? n.zone : ''))).toEqual(['east', 'south'])
+  })
+
+  it('needs the conveyor, the player level and the money, and says which is missing', () => {
+    const g = new GameManager(3)
+    expect(g.buyAutomation('speed-main-1').message).toBe('Needs the conveyor')
+    const r = rich()
+    r.economy.xp = 0
+    expect(r.buyAutomation('speed-main-1').message).toBe('Needs level 5')
+    r.economy.xp = 5000
+    r.economy.money = 10
+    expect(r.buyAutomation('speed-main-1').message).toMatch(/^Costs \$250/)
+  })
+
+  it('maps every bank to its zone and row (three banks to a row in the halls)', () => {
+    const g = rich()
+    g.buyUpgrade('annexEast')
+    g.buyUpgrade('southExpansion')
+    g.buyUpgrade('floor1')
+    const rows = new Map<string, Set<number>>()
+    for (const l of g.lockers.all()) {
+      const zone = g.zoneOf(l.id)
+      rows.set(zone, (rows.get(zone) ?? new Set()).add(g.rowOf(l.id)))
+    }
+    expect(rows.get('main')?.size).toBe(ZONE_ROWS.main)
+    expect(rows.get('east')?.size).toBe(ZONE_ROWS.east)
+    expect(rows.get('south')?.size).toBe(ZONE_ROWS.south)
+    expect(rows.get('floor1')?.size).toBe(ZONE_ROWS.floor1)
+  })
+
+  it('a bag for a hall rides the belt, goes through the duct, and is filed there; the trip back takes the duct too', () => {
+    const g = rich()
+    g.buyUpgrade('annexEast')
+    g.buyAutomation('line-east')
+    // Fill the storage room so the next bag has to go to the annex.
+    for (const l of g.lockers.all()) if (g.zoneOf(l.id) === 'main') l.state = 'unavailable'
+    const { lockerId, customerId } = load(g)
+    expect(g.zoneOf(lockerId)).toBe('east')
+    const parcel = g.conveyor.parcels[0]!
+    const { beltSeconds, armSeconds, transit } = CONFIG.automation
+    run(g, beltSeconds + 0.5)
+    expect(parcel.phase).toBe('transitIn') // gone down the duct
+    expect(g.conveyor.inbound()).toHaveLength(0) // it is not on the belt any more
+    run(g, transit.east)
+    expect(['waitingForArm', 'arm']).toContain(parcel.phase)
+    run(g, armSeconds + 0.5)
+    expect(g.customers.itemOf(g.customers.get(customerId))?.status).toBe('inLocker')
+    expect(g.lockers.get(lockerId)).toMatchObject({ locked: true, doorOpen: false, state: 'occupied' })
+
+    // Fetch it back.
+    expect(g.requestBag(lockerId).ok).toBe(true)
+    run(g, armSeconds + 0.1)
+    const fetch = g.conveyor.parcels[0]!
+    expect(fetch.phase).toBe('transitOut')
+    run(g, transit.east + beltSeconds + 0.5)
+    expect(g.conveyor.readyCount).toBe(1)
+    expect(g.takeFromConveyor().ok).toBe(true)
+  })
+
+  it('the terminal lists bags from every covered hall and says where each is', () => {
+    const g = rich()
+    g.buyUpgrade('annexEast')
+    g.buyAutomation('line-east')
+    for (const l of g.lockers.all()) if (g.zoneOf(l.id) === 'main') l.state = 'unavailable'
+    load(g)
+    run(g, CONFIG.automation.beltSeconds + CONFIG.automation.transit.east + CONFIG.automation.armSeconds + 1)
+    expect(g.terminalEntries().map((e) => e.where)).toEqual(['East annex'])
+  })
+})
+
+describe('Robot arm levels: speed and a second arm', () => {
+  it('speed levels make jobs shorter, in the zone that bought them only', () => {
+    const g = rich()
+    g.buyUpgrade('annexEast')
+    g.buyAutomation('line-east')
+    const base = CONFIG.automation.armSeconds
+    expect(g.conveyor.armDuration('main')).toBe(base)
+    expect(g.buyAutomation('speed-main-2').message).toBe('Buy Arm motors, level 1 first')
+    for (const tier of [1, 2, 3]) expect(g.buyAutomation(`speed-main-${tier}`).ok).toBe(true)
+    expect(g.conveyor.armDuration('main')).toBeCloseTo(base / CONFIG.automation.speedMult[3]!)
+    expect(g.conveyor.armDuration('east')).toBe(base) // the annex was not upgraded
+    expect(g.conveyor.speedLevel('main')).toBe(3)
+  })
+
+  it('a bag is actually filed faster at a higher speed level', () => {
+    const slow = rich()
+    const fast = rich()
+    fast.grantUpgrade('speed-main-3')
+    const timeToFile = (g: GameManager): number => {
+      const { customerId } = load(g)
+      let t = 0
+      while (g.customers.itemOf(g.customers.get(customerId))?.status !== 'inLocker' && t < 60) {
+        g.update(0.05)
+        t += 0.05
+      }
+      return t
+    }
+    expect(timeToFile(fast)).toBeLessThan(timeToFile(slow) - 1.5)
+  })
+
+  it('a second arm needs speed level 1, then two bags in the same row are filed at once', () => {
+    const g = rich()
+    expect(g.buyAutomation('arms-main').message).toBe('Buy Arm motors, level 1 first')
+    g.buyAutomation('speed-main-1')
+    expect(g.conveyor.armCount('main')).toBe(1)
+    expect(g.buyAutomation('arms-main').ok).toBe(true)
+    expect(g.conveyor.armCount('main')).toBe(2)
+
+    // Two bags, loaded a little apart, both reach the arms and are worked on at the same time.
+    load(g)
+    run(g, CONFIG.automation.loadGap + 0.1)
+    load(g)
+    run(g, CONFIG.automation.beltSeconds + 0.2)
+    const jobs = g.conveyor.armJobs()
+    expect(jobs).toHaveLength(2)
+    expect(new Set(jobs.map((j) => j.arm)).size).toBe(2) // each on its own arm
+    run(g, g.conveyor.armDuration('main') + 0.5)
+    expect(g.conveyor.parcels).toHaveLength(0)
+    expect(g.lockers.all().filter((l) => l.state === 'occupied')).toHaveLength(2)
+  })
+
+  it('with one arm the same two bags queue instead', () => {
+    const g = rich()
+    load(g)
+    run(g, CONFIG.automation.loadGap + 0.1)
+    load(g)
+    run(g, CONFIG.automation.beltSeconds + 0.2)
+    expect(g.conveyor.armJobs()).toHaveLength(1)
+  })
+
+  it('rows are separate stations: each has its own arm', () => {
+    const g = rich()
+    g.buyUpgrade('annexEast')
+    g.buyUpgrade('southExpansion')
+    g.buyAutomation('line-east')
+    g.buyAutomation('line-south')
+    // Make the storage room and annex unavailable, and put a bag in each of the south hall's two rows.
+    for (const l of g.lockers.all()) if (g.zoneOf(l.id) !== 'south') l.state = 'unavailable'
+    const south = g.lockers.all().filter((l) => g.zoneOf(l.id) === 'south')
+    for (const l of south) if (g.rowOf(l.id) === 0 && l.number !== south.find((x) => g.rowOf(x.id) === 0)!.number) l.state = 'unavailable'
+    load(g) // first free south locker (row 0)
+    for (const l of south) if (g.rowOf(l.id) === 0) l.state = 'unavailable'
+    run(g, CONFIG.automation.loadGap + 0.1)
+    load(g) // now it has to be row 1
+    const rows = g.conveyor.parcels.map((p) => p.row).sort()
+    expect(rows).toEqual([0, 1])
+    run(g, CONFIG.automation.beltSeconds + CONFIG.automation.transit.south + 0.5)
+    expect(g.conveyor.armJobs()).toHaveLength(2) // different rows, so no queueing
+  })
+})
+
+describe('Automation consoles and the mod menu', () => {
+  it('automation upgrades are only sold at their own consoles', () => {
+    const g = rich()
+    expect(g.consoleItems('hub').every((i) => i.id.startsWith('line-'))).toBe(true)
+    expect(g.consoleItems('main').map((i) => i.id)).toEqual(['speed-main-1', 'speed-main-2', 'speed-main-3', 'arms-main'])
+    expect(g.catalogueItems().some((i) => i.id.startsWith('speed-') || i.id.startsWith('line-'))).toBe(false)
+  })
+
+  it('consoles open only once the conveyor exists, and not mid-conversation', () => {
+    const g = new GameManager(3)
+    expect(g.openConsole('hub').ok).toBe(false)
+    const r = rich()
+    expect(r.openConsole('main').ok).toBe(true)
+    expect(r.consoleScope).toBe('main')
+    r.closeConsole()
+    expect(r.consoleScope).toBeNull()
+  })
+
+  it('every automation upgrade has a unique id and a console to buy it at', () => {
+    expect(new Set(AUTOMATION_UPGRADES.map((u) => u.id)).size).toBe(AUTOMATION_UPGRADES.length)
+    for (const zone of AUTO_ZONES) {
+      expect(AUTOMATION_UPGRADES.filter((u) => u.scope === zone).map((u) => u.kind)).toEqual(['speed', 'speed', 'speed', 'arms'])
+    }
+  })
+
+  it('the mod menu can unlock one automation upgrade with everything it needs, and "unlock everything" gets them all', () => {
+    const g = new GameManager(3)
+    expect(applyMod(g, { type: 'unlock', id: 'arms-floor2' }).ok).toBe(true)
+    for (const id of ['conveyor', 'floor2', 'line-east', 'line-south', 'line-floor1', 'line-floor2', 'speed-floor2-1', 'arms-floor2']) {
+      expect(g.upgrades.has(id)).toBe(true)
+    }
+    expect(g.conveyor.armCount('floor2')).toBe(2)
+    const all = new GameManager(3)
+    expect(applyMod(all, { type: 'unlockAll' }).ok).toBe(true)
+    expect(AUTOMATION_UPGRADES.every((u) => all.upgrades.has(u.id))).toBe(true)
+    expect(all.conveyor.coveredZones()).toEqual([...AUTO_ZONES])
+    expect(applyMod(all, { type: 'unlockAll' }).ok).toBe(false)
+  })
+})

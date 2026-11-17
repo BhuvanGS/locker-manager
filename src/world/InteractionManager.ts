@@ -55,6 +55,8 @@ export class InteractionManager {
         return game.takeFromConveyor()
       case 'terminal':
         return game.openTerminal()
+      case 'console':
+        return game.openConsole(t.scope)
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -88,6 +90,8 @@ export class InteractionManager {
       }
       case 'terminal':
         return { action: 'Use the terminal', hint: null }
+      case 'console':
+        return { action: t.scope === 'hub' ? 'Use the control hub' : 'Upgrade the robot arms here', hint: null }
       case 'customer': {
         const c = game.customers.get(t.customerId)
         if (game.dialogue?.customerId === c.id) return none()

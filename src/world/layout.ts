@@ -114,6 +114,33 @@ export const CONVEYOR = {
   kiosk: { x: -3.05, z: -1.2 },
 } as const
 
+/**
+ * Robot arm stations (one per row of lockers, in every part of the building the belts reach). Each row has a gantry rail
+ * `railOffset` north of its locker fronts; a second arm rides a parallel rail `secondRail` further out. The storage room
+ * is fed by the belts; the halls are fed through ducts that come down from the ceiling (`tubes`: x of the pick-up duct and the
+ * drop-off duct, `cradleY`: the height of the cradle bags wait on).
+ */
+export const STATION = {
+  railHeight: 2.85,
+  railOffset: 0.93,
+  secondRail: 0.4,
+  tubes: { east: [11.25, 11.75], hall: [3.3, 3.8] },
+  cradleY: 1.95,
+  extent: { main: [-5.95, 5.95], east: [6.3, 15.9], hall: [-5.95, 5.95] },
+} as const
+
+/**
+ * Where the upgrade consoles stand. `hub` is the control console in the staff area (belt extensions); each zone has an arm
+ * console near its robot arms. They face +z.
+ */
+export const CONSOLES = {
+  hub: { x: -2.35, z: -1.2 },
+  main: { x: -3.35, z: -6.1 },
+  east: { x: 11.5, z: -5.8 },
+  /** In the corridor east of the locker rows, 2.2 m north of the first row's fronts (z = -12.4 + 2.2). */
+  hall: { x: 3.55, z: -10.2 },
+} as const
+
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
 export function lockerSlot(bank: number, row: number, col: number): { x: number; y: number; z: number } {
   const pitch = LOCKER.width + LOCKER.gap

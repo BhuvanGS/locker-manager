@@ -179,7 +179,7 @@ export type SimNotice =
   | {
       type: 'upgradeBought'
       id: string
-      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'annex' | 'hall'
+      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'automation' | 'annex' | 'hall'
       index: number
       title: string
       /** Annex only: which neighbouring unit was knocked through, and the new bank and rack numbers. */
@@ -188,6 +188,8 @@ export type SimNotice =
       hall?: 'south' | 'floor1' | 'floor2'
       banks?: number[]
       racks?: number[]
+      /** Automation only: the part of the building the upgrade is for. */
+      zone?: 'main' | 'east' | 'south' | 'floor1' | 'floor2'
     }
   | { type: 'walkout'; customerId: CustomerId; message: string }
 

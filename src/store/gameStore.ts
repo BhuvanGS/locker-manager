@@ -19,6 +19,9 @@ export type Banner = { id: number; eyebrow: string; title: string; text: string 
 /** The supplier catalogue as the HUD shows it. */
 export type CatalogueView = { money: number; level: number; items: CatalogueItem[] }
 
+/** An automation console as the HUD shows it: what it sells here. */
+export type ConsoleView = { title: string; money: number; level: number; items: CatalogueItem[] }
+
 /** The conveyor terminal as the HUD shows it: the bags the robot arm can fetch. */
 export type TerminalView = { entries: TerminalEntry[]; free: number }
 
@@ -57,6 +60,9 @@ export type GameStoreState = {
   catalogue: CatalogueView | null
   /** Which catalogue row is highlighted (E / Enter buys it). */
   catalogueIndex: number
+  console: ConsoleView | null
+  /** Which console row is highlighted (E / Enter buys it). */
+  consoleIndex: number
   terminal: TerminalView | null
   /** Which terminal row is highlighted (E / Enter fetches it). */
   terminalIndex: number
@@ -68,6 +74,8 @@ export type GameStoreState = {
   pendingBuy: string | null
   /** Locker id of a terminal row clicked in the UI, consumed by the Engine. */
   pendingFetch: string | null
+  /** Console row clicked in the UI, consumed by the Engine. */
+  pendingConsoleBuy: string | null
 
   /** Mod menu (cheats for testing; see sim/mods.ts). */
   modOpen: boolean
@@ -114,12 +122,15 @@ export const useGameStore = create<GameStoreState>((set) => ({
   dialogueIndex: 0,
   catalogue: null,
   catalogueIndex: 0,
+  console: null,
+  consoleIndex: 0,
   terminal: null,
   terminalIndex: 0,
   toasts: [],
   pendingChoice: null,
   pendingBuy: null,
   pendingFetch: null,
+  pendingConsoleBuy: null,
   modOpen: false,
   modPause: true,
   modInfo: null,

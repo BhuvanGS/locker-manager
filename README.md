@@ -85,7 +85,7 @@ back-right corner of the staff area) and makes customers arrive a little faster.
 | Locker bank C | 3 | $160 | +6 lockers (right of the storage room) |
 | **Digital lockers** | 4 | $450 | **Digitalisation:** the keys go. Every locker locks itself electronically when you shut the door, an LED shows free/occupied, and the key racks become status screens (green free, red occupied). Needs the register |
 | Storage annex (east) | 5 | $600 | **Building expansion:** knock through into the unit next door: a new hall with +12 lockers and +16 key hooks (needs bank C) |
-| **Conveyor & robot arm** | 5 | $900 | **Automation:** replaces the west annex (there is no west storage annex). Belts run from the staff area through the partition to the lockers, and a robot arm files bags for you. Needs the digital lockers |
+| **Conveyor & robot arm** | 5 | $900 | **Automation, level 1:** replaces the west annex (there is no west storage annex). Belts run from the staff area through the partition to the storage room, and a robot arm files bags for you. Needs the digital lockers. Further levels are bought at consoles (see below) |
 | **South expansion** | 6 | $900 | Extend the storage room **backwards**: a doorway through the back wall into a big hall with lockers in **rows** (2 rows of 3 banks, +36 lockers, +40 key hooks). Needs the east annex |
 | **Floor 1** | 7 | $1,500 | A staircase up from the south hall to a new storage floor with **three rows** (+54 lockers, +40 hooks): it makes up for the west annex |
 | **Floor 2** | 8 | $2,200 | Another staircase and storage floor on top: another 36 lockers and 40 hooks (156 lockers in total) |
@@ -115,6 +115,13 @@ busy shop makes bags queue). When the customer is back, use the **terminal** nex
 item, and the name if you asked), and the arm fetches it onto the return belt; take it from the **COLLECT** tray and hand it over.
 You still have to choose the right bag: hand over the wrong one and it is a wrong package. The arm serves the three storage-room
 banks (18 lockers); the other halls are still filled by hand (the lockers work the same, just without keys).
+
+**Conveyor levels and arm upgrades are bought where they happen, not in the catalogue.** Walk up to the **control hub** console in the staff
+area (next to the terminal) to extend the belts to the **East annex** ($700), **South hall** ($1,000), **Floor 1** ($1,400) and **Floor 2**
+($1,800), in that order and once you own the hall. A bag for a hall rides the belt to the end, goes through a service duct, and arrives at that hall's
+own robot arm (4 to 10 s of extra travel); every row of lockers gets its own arm, hanging from a rail. Each part of the building has an **arm
+console** beside its arms, where you buy **arm motors** (levels 1–3, up to 2.3× faster) and a **second arm** on every row (two bags at once). Bags are
+filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
 **The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into
 the neighbouring unit, and a new storage hall rises out of the ground with its own locker banks and key racks.

@@ -3,9 +3,10 @@ import { FirstPersonCamera } from '../player/FirstPersonCamera'
 import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
 import type { ActionResult, DialogueOptionId } from '../sim/types'
-import { CONFIG } from '../sim/config'
+import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import { applyMod, modInfo } from '../sim/mods'
-import { useGameStore, type CatalogueView, type DialogueView, type TerminalView } from '../store/gameStore'
+import { useGameStore, type CatalogueView, type ConsoleView, type DialogueView, type TerminalView } from '../store/gameStore'
+import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
 import { CustomerAgents } from '../world/CustomerAgents'
 import { Annex, type AnnexSide } from '../world/Annex'
@@ -17,17 +18,20 @@ import { KeyRack } from '../world/KeyBoard'
 import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
 import { Stairs } from '../world/Stairs'
+import { StationView } from '../world/StationView'
 import { StatusScreen } from '../world/StatusScreen'
 import {
   ADJACENT_ZONES,
   ANNEX,
   ANNEX_RACK,
+  CONSOLES,
   FLOOR_HEIGHT,
   LOCKER,
   LOCKER_BANKS,
   PLAYER_SPAWN,
   REACH,
   SOUTH,
+  STATION,
   zoneAt,
   type Zone,
 } from '../world/layout'
@@ -66,6 +70,10 @@ export class Engine {
   private readonly bankSpots = new Map<number, { placement: BankPlacement; zone: Zone }>()
   /** The conveyor belts, robot arm and terminal, once bought. */
   private conveyorBay: ConveyorBay | null = null
+  /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
+  private stations: StationView[] = []
+  /** Upgrade consoles by scope (`hub`, or a zone). */
+  private consoles = new Map<string, AutomationConsole>()
   /** Everything the crosshair can hit; extended when upgrades add walls and racks. */
   private readonly interactionTargets: THREE.Object3D[] = []
   private readonly agents = new CustomerAgents()
@@ -83,6 +91,9 @@ export class Engine {
   private catalogueSig = ''
   private catalogueView: CatalogueView | null = null
   private catalogueIndex = 0
+  private consoleSig = ''
+  private consoleView: ConsoleView | null = null
+  private consoleIndex = 0
   private terminalSig = ''
   private terminalView: TerminalView | null = null
   private terminalIndex = 0
@@ -187,11 +198,69 @@ export class Engine {
   private addConveyor(animate: boolean): void {
     if (this.conveyorBay) return
     this.facility?.setConveyorOpen(true)
-    const bay = new ConveyorBay(this.physics)
+    const bay = new ConveyorBay(this.physics, (id) => this.lockerSlotWorld(id))
     if (animate) bay.appear()
     this.conveyorBay = bay
     this.scene.add(bay.root)
     this.interactionTargets.push(bay.root)
+    this.addConsole('hub', CONSOLES.hub.x, 0, CONSOLES.hub.z, 'main')
+    this.addConsole('main', CONSOLES.main.x, 0, CONSOLES.main.z, 'main')
+  }
+
+  /** The world position of the opening of a locker: x, the middle of the opening, and where a bag sits. */
+  private lockerSlotWorld(lockerId: string): { x: number; y: number; z: number } {
+    const locker = this.game.lockers.get(lockerId)
+    const spot = this.bankSpots.get(locker.bank)
+    const pitch = LOCKER.width + LOCKER.gap
+    const { centerX, frontZ, floorY } = spot?.placement ?? { centerX: 0, frontZ: LOCKER.frontZ, floorY: 0 }
+    return {
+      x: centerX + (locker.col - 1) * pitch,
+      y: floorY + LOCKER.baseY + locker.row * pitch + LOCKER.height / 2,
+      z: frontZ - LOCKER.depth / 2,
+    }
+  }
+
+  private addConsole(scope: 'hub' | AutoZone, x: number, floorY: number, z: number, zone: AutoZone): void {
+    if (this.consoles.has(scope)) return
+    const console = new AutomationConsole(scope, x, floorY, z, zone, this.physics)
+    this.consoles.set(scope, console)
+    this.scene.add(console.root)
+    this.interactionTargets.push(console.root)
+  }
+
+  /** Extend the belts to a hall: an arm station on every row of its lockers, with ducts down from the ceiling, and its console. */
+  private addLine(zone: AutoZone): void {
+    if (zone === 'main' || this.stations.some((s) => s.opts.zone === zone)) return
+    // One station per row: the banks of this zone, grouped by the row their lockers are in.
+    const rows = new Map<number, { frontZ: number; floorY: number }>()
+    for (const [bank, spot] of this.bankSpots) {
+      if (spot.zone !== zone) continue
+      const first = this.game.lockers.all().find((l) => l.bank === bank)
+      if (!first) continue
+      const row = this.game.rowOf(first.id)
+      if (!rows.has(row)) rows.set(row, { frontZ: spot.placement.frontZ, floorY: spot.placement.floorY })
+    }
+    const east = zone === 'east'
+    const [minX, maxX] = east ? STATION.extent.east : STATION.extent.hall
+    for (const [row, where] of rows) {
+      const station = new StationView({
+        zone,
+        row,
+        floorY: where.floorY,
+        frontZ: where.frontZ,
+        minX,
+        maxX,
+        dock: 'tube',
+        tubeX: east ? STATION.tubes.east : STATION.tubes.hall,
+        locate: (id) => this.lockerSlotWorld(id),
+      })
+      this.stations.push(station)
+      this.scene.add(station.root)
+      this.interactionTargets.push(station.root)
+    }
+    const floorY = (zone === 'floor1' ? 1 : zone === 'floor2' ? 2 : 0) * FLOOR_HEIGHT
+    const spot = east ? CONSOLES.east : CONSOLES.hall
+    this.addConsole(zone, spot.x, floorY, spot.z, zone)
   }
 
   private addRegisterBoard(animate: boolean): void {
@@ -262,6 +331,8 @@ export class Engine {
     for (const rack of this.keyRacks) show(rack.root)
     for (const screen of this.statusScreens.values()) show(screen.root)
     if (this.conveyorBay) show(this.conveyorBay.root)
+    for (const station of this.stations) show(station.root)
+    for (const console of this.consoles.values()) show(console.root)
     for (const annex of this.annexes) show(annex.root)
     for (const hall of this.halls) show(hall.root)
     for (const flight of this.stairs) show(flight.root)
@@ -297,6 +368,13 @@ export class Engine {
       this.conveyorBay.dispose()
       this.conveyorBay = null
     }
+    for (const station of this.stations) this.discard(station.root)
+    this.stations = []
+    for (const console of this.consoles.values()) {
+      this.discard(console.root)
+      console.dispose()
+    }
+    this.consoles.clear()
     this.facility?.setConveyorOpen(false)
     this.facility?.setKeysSignVisible(true)
     if (this.registerBoard) {
@@ -346,9 +424,11 @@ export class Engine {
     this.catalogueView = null
     this.terminalSig = ''
     this.terminalView = null
+    this.consoleSig = ''
+    this.consoleView = null
     this.modSig = ''
     this.modView = null
-    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -410,7 +490,7 @@ export class Engine {
 
     // Player and camera. While you are talking or browsing the catalogue you stand still
     // (W/S/arrows choose answers instead).
-    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || modOpen
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
       player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
@@ -441,6 +521,7 @@ export class Engine {
         else if (notice.kind === 'register') this.addRegisterBoard(true)
         else if (notice.kind === 'digital') this.goDigital()
         else if (notice.kind === 'conveyor') this.addConveyor(true)
+        else if (notice.kind === 'automation' && notice.id.startsWith('line-') && notice.zone) this.addLine(notice.zone)
         else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
         else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
         // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
@@ -454,6 +535,8 @@ export class Engine {
     for (const rack of this.keyRacks) rack.update(dt, this.game)
     for (const screen of this.statusScreens.values()) screen.update(dt, this.game)
     this.conveyorBay?.update(dt, this.game)
+    for (const station of this.stations) station.update(dt, this.game)
+    for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)
     for (const annex of this.annexes) annex.update(dt)
     for (const hall of this.halls) hall.update(dt)
@@ -472,6 +555,8 @@ export class Engine {
         this.handleCatalogueInput(input)
       } else if (this.game.terminalOpen) {
         this.handleTerminalInput(input)
+      } else if (this.game.consoleScope !== null) {
+        this.handleConsoleInput(input)
       } else {
         if (store.pendingChoice) store.patch({ pendingChoice: null })
         if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
@@ -534,6 +619,31 @@ export class Engine {
       buy = items[this.catalogueIndex]?.id ?? null
     }
     if (buy) this.report(this.game.buyUpgrade(buy))
+  }
+
+  /** Console controls, like the catalogue's: W/S or the wheel choose, 1–9 jump, E / Enter / a click buy, Q closes. */
+  private handleConsoleInput(input: InputSnapshot): void {
+    const scope = this.game.consoleScope
+    if (scope === null) return
+    const store = useGameStore.getState()
+    const items = this.game.consoleItems(scope)
+    const n = items.length
+    if (n > 0) {
+      if (input.menuMove !== 0) this.consoleIndex = (this.consoleIndex + input.menuMove + n) % n
+      if (input.choice !== null && input.choice <= n) this.consoleIndex = input.choice - 1
+      this.consoleIndex = Math.min(this.consoleIndex, n - 1)
+    }
+    let buy: string | null = null
+    if (store.pendingConsoleBuy) {
+      buy = store.pendingConsoleBuy
+      store.patch({ pendingConsoleBuy: null })
+    } else if (input.cancelPressed) {
+      this.game.closeConsole()
+      return
+    } else if (input.interactPressed || input.confirmPressed) {
+      buy = items[this.consoleIndex]?.id ?? null
+    }
+    if (buy) this.report(this.game.buyAutomation(buy))
   }
 
   /**
@@ -618,6 +728,23 @@ export class Engine {
       this.catalogueView = catalogue
     }
 
+    // Console view, cached the same way.
+    let consoleView: ConsoleView | null = null
+    if (game.consoleScope !== null) {
+      const scope = game.consoleScope
+      consoleView = {
+        title: scope === 'hub' ? 'Control hub · extend the belts' : `Robot arms · ${ZONE_TITLES[scope]}`,
+        money: game.economy.money,
+        level: level.level,
+        items: game.consoleItems(scope),
+      }
+    }
+    const consoleSig = consoleView ? JSON.stringify(consoleView) : ''
+    if (consoleSig !== this.consoleSig) {
+      this.consoleSig = consoleSig
+      this.consoleView = consoleView
+    }
+
     // Terminal view, cached the same way.
     let terminal: TerminalView | null = null
     if (game.terminalOpen) terminal = { entries: game.terminalEntries(), free: game.robotLockersFree() }
@@ -652,13 +779,15 @@ export class Engine {
       queue: game.queue().length,
       objective: game.objective(),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
-      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen ? null : (aim?.action ?? null),
-      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen ? null : (aim?.hint ?? null),
+      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null ? null : (aim?.action ?? null),
+      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null ? null : (aim?.hint ?? null),
       holding,
       dialogue: this.dialogueView,
       dialogueIndex: this.dialogueIndex,
       catalogue: this.catalogueView,
       catalogueIndex: this.catalogueIndex,
+      console: this.consoleView,
+      consoleIndex: this.consoleIndex,
       terminal: this.terminalView,
       terminalIndex: this.terminalIndex,
       modInfo: this.modView,

@@ -60,6 +60,8 @@ new collider must be removable (`PhysicsWorld.removeBody`) so a new game can wal
 
 ### South hall and floors
 
+**Robot-arm stations** (`world/StationView.ts`, `ArmRig.ts`): one per row of lockers, rail `STATION.railOffset` north of the locker fronts, a second arm on a parallel rail, ducts from the ceiling in the halls (keep `STATION.tubes` clear of stairs and rows). **Consoles** (`AutomationConsole`) stand at `CONSOLES`; keep them out of the aisles.
+
 **Conveyor bay** (`world/ConveyorBay.ts`): positions come from `CONVEYOR` and `lockerSlot()` in `layout.ts`. The belts cross the partition through a hatch that
 `Facility.setConveyorOpen` cuts (the staff-side partition is built in pieces so the plug can come out). Keep the aisle in front of the lockers clear (belts end
 at least 1.2 m from the locker faces) and the arm rail above head height. Status screens (`StatusScreen`) stand on top of their bank.

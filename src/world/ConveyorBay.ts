@@ -2,28 +2,18 @@ import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
-import type { Parcel } from '../sim/ConveyorSystem'
 import type { GameManager } from '../sim/GameManager'
+import { makeBag } from './bags'
 import { markBlocker, tag } from './interactables'
-import { CONVEYOR, lockerSlot, PARTITION, ROOM } from './layout'
-import { fitInto, makeItemMesh, makeSign, mat } from './models'
+import { CONVEYOR, PARTITION, STATION } from './layout'
+import { makeSign, mat } from './models'
+import { PICKUP_Z, StationView } from './StationView'
 
 const RISE_SECONDS = 1.5
-const BAG = { w: 0.38, h: 0.3, d: 0.3 }
 /** Bags wait on the belts this far apart. */
 const SPACING = 0.5
-/** The arm picks up from, and drops at, this z (a little before the end of the belts). */
-const PICKUP_Z = CONVEYOR.endZ + 0.15
-const REACH_TO_PICKUP = PICKUP_Z - CONVEYOR.rail.z
-/** From the wrist to the base of a bag in the gripper. */
-const HANG = 0.4
-const WRIST_HOME = 2.25
-const WRIST_BELT = CONVEYOR.topY + HANG
 const BELT_LENGTH = CONVEYOR.startZ - CONVEYOR.endZ
 const TEXTURE_TILE = 0.45
-
-type Pose = { x: number; wrist: number; reach: number; claw: number }
-type Key = [p: number, x: number, wrist: number, reach: number, claw: number]
 
 /**
  * The conveyor system you see: two belts from the staff area through the partition to the back of the storage room, the
@@ -35,70 +25,33 @@ type Key = [p: number, x: number, wrist: number, reach: number, claw: number]
  */
 export class ConveyorBay {
   readonly root = new THREE.Group()
+  /** The arms of the storage room's row of lockers (they hang from the rail along the lockers). */
+  readonly station: StationView
   private readonly bodies: RAPIER.RigidBody[] = []
   private readonly physics: PhysicsWorld
   private readonly beltTextures: { texture: THREE.CanvasTexture; direction: number }[] = []
-  private readonly carriage = new THREE.Group()
-  private readonly column: THREE.Mesh
-  private readonly bar: THREE.Mesh
-  private readonly gripper = new THREE.Group()
-  private readonly fingers: THREE.Mesh[] = []
-  private readonly anchor = new THREE.Group()
   private readonly parcels = new Map<number, { group: THREE.Group; z: number; x: number }>()
-  private readonly pose: Pose = { x: CONVEYOR.inX, wrist: WRIST_HOME, reach: 0, claw: 0 }
   private readonly kiosk = { canvas: document.createElement('canvas'), texture: null as THREE.CanvasTexture | null, signature: '' }
-  private readonly status = new THREE.MeshBasicMaterial({ color: 0x22c55e })
   private rise = 1
 
-  constructor(physics: PhysicsWorld) {
+  /** `locate` gives the world position of a locker's opening (see Engine). */
+  constructor(physics: PhysicsWorld, locate: (lockerId: string) => { x: number; y: number; z: number }) {
     this.physics = physics
     this.root.userData.zone = 'main'
     this.buildBelts()
     this.buildSigns()
     this.buildKiosk()
-
-    // The gantry rail, hung from the ceiling.
-    const { z, y, minX, maxX } = CONVEYOR.rail
-    const yellow = mat(0xe5a50a, 0.55, 0.2)
-    const dark = mat(0x1f2937, 0.5, 0.4)
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.14, 0.16), yellow)
-    beam.position.set((minX + maxX) / 2, y + 0.12, z)
-    this.root.add(beam)
-    for (const x of [-4.5, -1.5, 1.5, 4.5]) {
-      const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.06, ROOM.height - y - 0.05, 0.06), dark)
-      hanger.position.set(x, (ROOM.height + y + 0.05) / 2, z)
-      this.root.add(hanger)
-    }
-
-    // The carriage rides the rail; a column drops from it, a horizontal bar reaches out at the wrist, and the gripper hangs
-    // at the end of the bar.
-    this.carriage.position.set(this.pose.x, y, z)
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.4), dark)
-    body.position.y = 0.0
-    this.carriage.add(body)
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.06), this.status)
-    lamp.position.set(0, 0.14, 0.2)
-    this.carriage.add(lamp)
-    this.column = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1, 0.12), yellow)
-    this.carriage.add(this.column)
-    this.bar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1), yellow)
-    this.carriage.add(this.bar)
-    this.carriage.add(this.gripper)
-    const wrist = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.2), dark)
-    this.gripper.add(wrist)
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.22), dark)
-    palm.position.y = -0.14
-    this.gripper.add(palm)
-    for (const side of [-1, 1]) {
-      const finger = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.2), yellow)
-      finger.position.set(side * 0.24, -0.25, 0)
-      this.gripper.add(finger)
-      this.fingers.push(finger)
-    }
-    this.anchor.position.y = -HANG
-    this.gripper.add(this.anchor)
-    this.root.add(this.carriage)
-    this.place()
+    this.station = new StationView({
+      zone: 'main',
+      row: 0,
+      floorY: 0,
+      frontZ: CONVEYOR.rail.z - STATION.railOffset,
+      minX: STATION.extent.main[0],
+      maxX: STATION.extent.main[1],
+      dock: 'belt',
+      locate,
+    })
+    this.root.add(this.station.root)
   }
 
   /** Start the "rising out of the floor" animation (a freshly installed system). */
@@ -120,77 +73,9 @@ export class ConveyorBay {
     }
     const speed = BELT_LENGTH / CONFIG.automation.beltSeconds
     for (const { texture, direction } of this.beltTextures) texture.offset.y += (direction * speed * dt) / TEXTURE_TILE
-
-    const job = game.conveyor.armJob()
-    const target = job ? this.targetPose(job, game) : { x: CONVEYOR.inX, wrist: WRIST_HOME, reach: 0, claw: 0 }
-    const k = 1 - Math.exp(-7 * dt)
-    this.pose.x += (target.x - this.pose.x) * k
-    this.pose.wrist += (target.wrist - this.pose.wrist) * k
-    this.pose.reach += (target.reach - this.pose.reach) * k
-    this.pose.claw += (target.claw - this.pose.claw) * (1 - Math.exp(-14 * dt))
-    this.place()
-    this.status.color.setHex(job ? 0xf59e0b : 0x22c55e)
-
+    this.station.update(dt, game)
     this.syncParcels(dt, game)
-    this.drawKiosk(game, job)
-  }
-
-  // ------------------------------------------------------------------ the arm
-
-  /** Where the arm should be, given how far through its current job the simulation is. */
-  private targetPose(job: Parcel, game: GameManager): Pose {
-    const progress = game.conveyor.armProgress() ?? 0
-    const locker = game.lockers.get(job.lockerId)
-    const slot = lockerSlot(locker.bank, locker.row, locker.col)
-    const lockX = slot.x
-    const lockWrist = slot.y - 0.03
-    const lockReach = slot.z - CONVEYOR.rail.z
-    const inX = CONVEYOR.inX
-    const outX = CONVEYOR.outX
-    const keys: Key[] =
-      job.kind === 'store'
-        ? [
-            [0, inX, WRIST_BELT, REACH_TO_PICKUP, 0],
-            [0.1, inX, WRIST_BELT, REACH_TO_PICKUP, 0],
-            [0.18, inX, WRIST_BELT, REACH_TO_PICKUP, 1],
-            [0.3, inX, WRIST_HOME, 0, 1],
-            [0.42, lockX, WRIST_HOME, 0, 1],
-            [0.5, lockX, lockWrist, 0, 1],
-            [0.62, lockX, lockWrist, lockReach, 1],
-            [0.68, lockX, lockWrist, lockReach, 0],
-            [0.78, lockX, lockWrist, 0, 0],
-            [0.86, lockX, WRIST_HOME, 0, 0],
-            [1, inX, WRIST_HOME, 0, 0],
-          ]
-        : [
-            [0, lockX, WRIST_HOME, 0, 0],
-            [0.2, lockX, lockWrist, 0, 0],
-            [0.36, lockX, lockWrist, 0, 0],
-            [0.5, lockX, lockWrist, lockReach, 0],
-            [0.56, lockX, lockWrist, lockReach, 1],
-            [0.66, lockX, lockWrist, 0, 1],
-            [0.74, lockX, WRIST_HOME, 0, 1],
-            [0.84, outX, WRIST_HOME, 0, 1],
-            [0.92, outX, WRIST_BELT, REACH_TO_PICKUP, 1],
-            [0.97, outX, WRIST_BELT, REACH_TO_PICKUP, 0],
-            [1, outX, WRIST_BELT, REACH_TO_PICKUP, 0],
-          ]
-    return sample(keys, progress)
-  }
-
-  private place(): void {
-    const { rail } = CONVEYOR
-    const { x, wrist, reach, claw } = this.pose
-    this.carriage.position.x = x
-    const down = rail.y - wrist // how far the wrist hangs below the rail
-    this.column.scale.y = Math.max(0.01, down)
-    this.column.position.y = -down / 2
-    this.bar.scale.z = Math.max(0.01, Math.abs(reach))
-    this.bar.position.set(0, -down, reach / 2)
-    this.gripper.position.set(0, -down, reach)
-    const open = 0.24 - claw * 0.09
-    this.fingers[0]?.position.setX(-open)
-    this.fingers[1]?.position.setX(open)
+    this.drawKiosk(game)
   }
 
   // ------------------------------------------------------------------ bags
@@ -200,60 +85,36 @@ export class ConveyorBay {
     const inbound = game.conveyor.inbound()
     const returning = game.conveyor.returning()
     const { beltSeconds } = CONFIG.automation
-    const progress = game.conveyor.armProgress() ?? 0
     const smooth = 1 - Math.exp(-9 * dt)
 
     for (const parcel of game.conveyor.parcels) {
-      // Where is it, and is the arm holding it?
       let x = parcel.kind === 'store' ? CONVEYOR.inX : CONVEYOR.outX
       let z = PICKUP_Z
-      let carried = false
-      let visible = true
-      if (parcel.phase === 'beltIn' || parcel.phase === 'waitingForArm') {
+      let startZ = PICKUP_Z
+      if (parcel.phase === 'beltIn' || (parcel.phase === 'waitingForArm' && parcel.zone === 'main')) {
         const rank = inbound.indexOf(parcel)
         const travelled = parcel.phase === 'beltIn' ? parcel.t / beltSeconds : 1
         z = Math.max(CONVEYOR.startZ + (CONVEYOR.endZ - CONVEYOR.startZ) * travelled, PICKUP_Z + rank * SPACING)
-      } else if (parcel.phase === 'arm') {
-        const grabbed = parcel.kind === 'store' ? progress >= 0.18 && parcel.step < 2 : parcel.step >= 2
-        carried = grabbed
-        visible = parcel.kind === 'store' ? parcel.step < 2 : parcel.step >= 2
+        startZ = z
       } else if (parcel.phase === 'beltOut' || parcel.phase === 'ready') {
         const rank = returning.indexOf(parcel)
         const travelled = parcel.phase === 'beltOut' ? parcel.t / beltSeconds : 1
         z = Math.min(PICKUP_Z + (CONVEYOR.trayZ - PICKUP_Z) * travelled, CONVEYOR.trayZ - rank * SPACING)
+        // It was dropped by its arm a little to one side of the others (a second arm drops further back).
+        startZ = PICKUP_Z + parcel.arm * SPACING
       } else {
-        visible = false // queued: still in its locker
+        continue // in a duct, with an arm, or still in its locker: not on the belts
       }
-      if (!visible) continue
       live.add(parcel.id)
 
       let view = this.parcels.get(parcel.id)
       if (!view) {
-        const item = game.customers.item(parcel.itemId)
-        const mesh = makeItemMesh(item.category, item.color)
-        fitInto(mesh, BAG.w, BAG.h, BAG.d)
-        const group = new THREE.Group()
-        group.add(mesh)
-        view = { group, z, x }
+        view = { group: makeBag(game, parcel), z: startZ, x }
         this.parcels.set(parcel.id, view)
-        this.root.add(group)
+        this.root.add(view.group)
       }
-      if (carried) {
-        if (view.group.parent !== this.anchor) this.anchor.add(view.group)
-        view.group.position.set(0, 0, 0)
-        view.group.rotation.set(0, 0, 0)
-        view.x = this.pose.x
-        view.z = PICKUP_Z
-      } else {
-        if (view.group.parent !== this.root) {
-          this.root.add(view.group)
-          // Dropped from the gripper: carry on from where the arm let go.
-          view.x = x
-          view.z = PICKUP_Z
-        }
-        view.z += (z - view.z) * smooth
-        view.group.position.set(x, CONVEYOR.topY + 0.02, view.z)
-      }
+      view.z += (z - view.z) * smooth
+      view.group.position.set(x, CONVEYOR.topY + 0.02, view.z)
     }
     for (const [id, view] of this.parcels) {
       if (live.has(id)) continue
@@ -392,13 +253,15 @@ export class ConveyorBay {
     this.root.add(sign)
   }
 
-  private drawKiosk(game: GameManager, job: Parcel | null): void {
+  private drawKiosk(game: GameManager): void {
     const stored = game.terminalEntries().length
     const free = game.robotLockersFree()
     const inbound = game.conveyor.inbound().length
     const returning = game.conveyor.returning().length
-    const queued = game.conveyor.parcels.filter((p) => p.phase === 'queued' || p.phase === 'waitingForArm').length
-    const doing = job ? `${job.kind === 'store' ? 'STORING' : 'FETCHING'} ${game.lockers.get(job.lockerId).number}` : 'IDLE'
+    const queued = game.conveyor.parcels.filter((p) => p.phase === 'queued' || p.phase === 'waitingForArm' || p.phase === 'transitIn' || p.phase === 'transitOut').length
+    const jobs = game.conveyor.armJobs()
+    const first = jobs[0]
+    const doing = first ? `${first.kind === 'store' ? 'STORING' : 'FETCHING'} ${game.lockers.get(first.lockerId).number}${jobs.length > 1 ? ` +${jobs.length - 1}` : ''}` : 'IDLE'
     const signature = [doing, stored, free, inbound, returning, queued].join('|')
     if (signature === this.kiosk.signature) return
     this.kiosk.signature = signature
@@ -412,7 +275,7 @@ export class ConveyorBay {
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
     ctx.fillText('ROBOT ARM', 28, 44)
-    ctx.fillStyle = job ? '#f59e0b' : '#22c55e'
+    ctx.fillStyle = first ? '#f59e0b' : '#22c55e'
     ctx.font = '800 54px system-ui, sans-serif'
     ctx.fillText(doing, 28, 112)
     ctx.fillStyle = '#e2e8f0'
@@ -452,25 +315,4 @@ function beltTexture(): THREE.CanvasTexture {
   texture.wrapT = THREE.RepeatWrapping
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
-}
-
-/** Linear interpolation through keyframes `[progress, x, wrist, reach, claw]` (progress ascending). */
-function sample(keys: Key[], p: number): Pose {
-  const first = keys[0]!
-  if (p <= first[0]) return { x: first[1], wrist: first[2], reach: first[3], claw: first[4] }
-  for (let i = 1; i < keys.length; i++) {
-    const a = keys[i - 1]!
-    const b = keys[i]!
-    if (p > b[0]) continue
-    const t = b[0] === a[0] ? 1 : (p - a[0]) / (b[0] - a[0])
-    const s = t * t * (3 - 2 * t) // ease in and out
-    return {
-      x: a[1] + (b[1] - a[1]) * s,
-      wrist: a[2] + (b[2] - a[2]) * s,
-      reach: a[3] + (b[3] - a[3]) * s,
-      claw: a[4] + (b[4] - a[4]) * s,
-    }
-  }
-  const last = keys[keys.length - 1]!
-  return { x: last[1], wrist: last[2], reach: last[3], claw: last[4] }
 }

@@ -74,6 +74,8 @@ Confirming a deposit is guarded by `storedBlocker`: bag in a locker, door shut, 
 
 ### Customer return order
 
+**Automation levels:** coverage, speed and arm count live in `ConveyorSystem` and are set only by `applyAutomation`; add a new level by extending `buildAutomationUpgrades` in `config.ts`, and test it in `AutomationLevels.test.ts` (step the sim with small `dt`).
+
 **Automation** (`sim/ConveyorSystem.ts`): a bag is a `Parcel` in a phase; one arm does one job at a time and mutates lockers, items and customers together at the `ARM_STEPS`
 moments. Reserve the locker (`state: 'reserved'`) when a job is created and guard the manual actions (`openLocker`, `putItem`, `takeItem`) against it. Tests step the
 sim in small `dt` (a single big `dt` skips whole jobs). Keep the 3D arm keyframes in `ConveyorBay.targetPose` in line with `ARM_STEPS`.

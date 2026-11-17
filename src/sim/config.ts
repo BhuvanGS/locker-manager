@@ -62,6 +62,101 @@ export interface UpgradeDef {
   hall?: 'south' | 'floor1' | 'floor2'
 }
 
+/** The parts of the building a robot arm can serve. `main` is the storage room, the rest are the halls built later. */
+export type AutoZone = 'main' | 'east' | 'south' | 'floor1' | 'floor2'
+export const AUTO_ZONES: readonly AutoZone[] = ['main', 'east', 'south', 'floor1', 'floor2']
+export const ZONE_TITLES: Record<AutoZone, string> = {
+  main: 'Storage room',
+  east: 'East annex',
+  south: 'South hall',
+  floor1: 'Floor 1',
+  floor2: 'Floor 2',
+}
+/** Rows of lockers (one arm station each) in every zone. */
+export const ZONE_ROWS: Record<AutoZone, number> = { main: 1, east: 1, south: 2, floor1: 3, floor2: 2 }
+
+/**
+ * Upgrades for the conveyor system. They are not sold from the supplier catalogue: you buy each one at a console in the part of
+ * the building it affects. `hub` is the control console in the staff area (it extends the belts to more halls); every zone has its
+ * own console for its robot arms (speed levels 1–3 and a second arm).
+ */
+export interface AutomationUpgradeDef {
+  id: string
+  /** Which console sells it. */
+  scope: 'hub' | AutoZone
+  kind: 'line' | 'speed' | 'arms'
+  zone: AutoZone
+  /** Speed level reached (1–3); 0 for the others. */
+  tier: number
+  title: string
+  description: string
+  cost: number
+  /** Player level needed. */
+  level: number
+  /** Another automation upgrade that must be owned first. */
+  requires?: string
+  /** A catalogue upgrade that must be owned first (the hall the belts extend to). */
+  needs?: string
+}
+
+const LINE_NEEDS: Record<Exclude<AutoZone, 'main'>, { needs: string; cost: number; level: number; requires?: string }> = {
+  east: { needs: 'annexEast', cost: 700, level: 5 },
+  south: { needs: 'southExpansion', cost: 1000, level: 6, requires: 'line-east' },
+  floor1: { needs: 'floor1', cost: 1400, level: 7, requires: 'line-south' },
+  floor2: { needs: 'floor2', cost: 1800, level: 8, requires: 'line-floor1' },
+}
+
+function buildAutomationUpgrades(): AutomationUpgradeDef[] {
+  const out: AutomationUpgradeDef[] = []
+  for (const zone of AUTO_ZONES) {
+    if (zone === 'main') continue
+    const info = LINE_NEEDS[zone]
+    out.push({
+      id: `line-${zone}`,
+      scope: 'hub',
+      kind: 'line',
+      zone,
+      tier: 0,
+      title: `Belt to the ${ZONE_TITLES[zone]}`,
+      description: `Extend the conveyor to the ${ZONE_TITLES[zone]}: its own robot arm${ZONE_ROWS[zone] > 1 ? ` on each of its ${ZONE_ROWS[zone]} rows` : ''}, fed through a service duct`,
+      cost: info.cost,
+      level: info.level,
+      requires: info.requires,
+      needs: info.needs,
+    })
+  }
+  for (const zone of AUTO_ZONES) {
+    const rows = ZONE_ROWS[zone]
+    for (let tier = 1; tier <= 3; tier++) {
+      out.push({
+        id: `speed-${zone}-${tier}`,
+        scope: zone,
+        kind: 'speed',
+        zone,
+        tier,
+        title: `Arm motors, level ${tier}`,
+        description: `The arms in the ${ZONE_TITLES[zone]} work ${CONFIG.automation.speedMult[tier]}× as fast`,
+        cost: 250 * tier * rows,
+        level: 4 + tier,
+        requires: tier > 1 ? `speed-${zone}-${tier - 1}` : undefined,
+      })
+    }
+    out.push({
+      id: `arms-${zone}`,
+      scope: zone,
+      kind: 'arms',
+      zone,
+      tier: 0,
+      title: 'Second arm',
+      description: `A second arm on ${rows > 1 ? `each of the ${rows} rows` : 'the row'} in the ${ZONE_TITLES[zone]}: two bags at once`,
+      cost: 500 * rows,
+      level: 6,
+      requires: `speed-${zone}-1`,
+    })
+  }
+  return out
+}
+
 export const CONFIG = {
   facility: {
     /** Each locker bank is a wall of rows × cols lockers; the shop starts with one bank. */
@@ -327,8 +422,12 @@ export const CONFIG = {
     loadGap: 1.4,
     /** Bags that can wait on the return belt. */
     readyCapacity: 3,
-    /** The robot arm serves the storage room's locker banks (bank numbers below this). */
-    robotBanks: 3,
+    /** Seconds a bag spends in the service duct between the hub and a hall (each way). The storage room has no duct. */
+    transit: { main: 0, east: 4, south: 6, floor1: 8, floor2: 10 },
+    /** How much faster the arms of a hall work at speed level 0, 1, 2, 3. */
+    speedMult: [1, 1.4, 1.8, 2.3],
+    /** Arms per row of lockers: one, or two with the extra-arm upgrade. */
+    maxArms: 2,
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,
@@ -353,3 +452,5 @@ export const CONFIG = {
    */
   modMenu: { enabled: true },
 } as const
+
+export const AUTOMATION_UPGRADES: readonly AutomationUpgradeDef[] = buildAutomationUpgrades()

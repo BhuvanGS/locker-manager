@@ -157,6 +157,7 @@ Use the mod menu (M → "Unlock everything", or unlock one at a time) or `__game
 - Automation: `g=__game.sim(); g.grantUpgrade('conveyor')` (pulls in labels, register and digital), then spawn a customer, `g.customerReachedCounter(id)`, `g.talkTo(id)`,
   `g.choose('greet')`, `g.choose('accept')`, stand at (−5.05, −0.2) facing the LOAD belt (−5.05, −1.5) and `__game.interact()`. To watch the arm mid-move step the sim in
   small slices (`for (...) g.update(0.05)`) then `__game.advance(0.1)` a few times; a single large `update` skips the whole job. The terminal is at (−3.05, −1.2).
+- Levels: `g.grantUpgrade('arms-floor2')` pulls in everything below it (hall, belts, speed 1). Consoles: hub at (−2.35, −1.2), storage room (−3.35, −6.1), East annex (11.5, −5.8), halls (3.55, −10.2) at their floor height. Open one with `g.openConsole('east')` or aim and `__game.interact()`; press real keys one at a time with an `__game.advance(0.3)` between them (two keys in one frame lose the second). Fill the storage room (`l.state='unavailable'`) to send bags to a hall.
 - `__game.walk(forward, right, seconds)` walks relative to the camera; `__game.teleport(x, z)` keeps the current height.
 - Only the current zone and its neighbours are drawn: from floor 2 the ground floor should be hidden, and from the main room floor 1 and 2 hidden.
 - The deposit register shows "page 1/2" when more than 42 bags are stored.

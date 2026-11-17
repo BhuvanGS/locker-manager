@@ -136,8 +136,21 @@ Requested as "the next major upgrade: automation".
 - [x] **The conveyor replaces the west annex** (`annexWest` is gone from the catalogue; the east annex now needs bank C), and **floor 1 got a third row**
       (+54 lockers instead of +36) to make up for it.
 - [x] Tests: `sim/Automation.test.ts` (digital, belt, arm, fetch, wrong bag, queueing), layout tests for the belts and rows.
-- Not done: the robot arm reaching the annex, south hall and floors (one arm per hall); belt jams and arm breakdowns (brief §11); automated allocation
+- [x] **Conveyor levels and arm upgrades** (see the next section).
+- Not done: belt jams and arm breakdowns (brief §11); automated allocation
   beyond "lowest free locker"; the terminal does not search customers by name.
+
+## Interim work: conveyor levels, arm upgrades and upgrade consoles (done)
+
+- [x] **Coverage levels:** the conveyor reaches one zone at a time: storage room (the catalogue upgrade), then the East annex, South hall, Floor 1 and Floor 2
+      (`line-*` upgrades, each needing its hall and the previous belt). A bag for a hall leaves the belt into a service duct (`transitIn`/`transitOut`,
+      `CONFIG.automation.transit`) and reaches that hall's arms.
+- [x] **One arm station per row of lockers** (`sim/ConveyorSystem.ts`: stations are `zone:row`; `ZONE_ROWS` = 1, 1, 2, 3, 2), drawn by `world/StationView.ts` with `ArmRig`.
+- [x] **Arm upgrades per zone:** speed levels 1–3 (`CONFIG.automation.speedMult`) and a second arm on every row of the zone (a parallel rail).
+- [x] **Upgrade consoles** (`world/AutomationConsole.ts`, `ui/ConsolePanel.tsx`): the control hub in the staff area sells belt extensions; every zone has its arm
+      console next to its arms. These upgrades are `AUTOMATION_UPGRADES` in `config.ts`, bought with `buyAutomation`, and are not in the supplier catalogue.
+- [x] Tests: `sim/AutomationLevels.test.ts` (levels, ducts, speed, two arms, rows as stations, consoles, mod menu).
+- Next idea: move the other upgrades (lockers, racks, halls) to consoles in their own areas, the same way; arm breakdowns; a duct visible between halls.
 
 ## Interim work: mod menu (done)
 

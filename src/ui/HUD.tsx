@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { CONFIG } from '../sim/config'
 import { useGameStore, type Banner, type Toast } from '../store/gameStore'
 import { CataloguePanel } from './CataloguePanel'
+import { ConsolePanel } from './ConsolePanel'
 import { DialoguePanel } from './DialoguePanel'
 import { ModMenu } from './ModMenu'
 import { TerminalPanel } from './TerminalPanel'
@@ -31,6 +32,7 @@ export function HUD() {
       dialogue: st.dialogue,
       catalogue: st.catalogue,
       terminal: st.terminal,
+      console: st.console,
       modOpen: st.modOpen,
       modInfo: st.modInfo,
       banner: st.banner,
@@ -64,7 +66,7 @@ export function HUD() {
 
       <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />
 
-      {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && !s.terminal && (
+      {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && !s.terminal && !s.console && (
         <div className={`prompt${s.prompt ? '' : ' hint'}`}>
           {s.prompt ? (
             <>
@@ -85,6 +87,7 @@ export function HUD() {
       {s.dialogue && <DialoguePanel dialogue={s.dialogue} />}
       {s.catalogue && <CataloguePanel catalogue={s.catalogue} />}
       {s.terminal && <TerminalPanel terminal={s.terminal} />}
+      {s.console && <ConsolePanel console={s.console} />}
       {s.modOpen && s.modInfo && <ModMenu info={s.modInfo} />}
       {CONFIG.modMenu.enabled && !s.modOpen && <ModChip />}
 
@@ -92,7 +95,7 @@ export function HUD() {
 
       {s.banner && <BannerCard banner={s.banner} />}
 
-      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.terminal && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
+      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.terminal && !s.console && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
 
       <div className="controls">
         <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}

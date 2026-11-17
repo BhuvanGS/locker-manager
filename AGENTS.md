@@ -109,6 +109,15 @@ Rules:
   from `game.conveyor` and steers the arm to a pose from `armProgress()` with keyframes that match `ARM_STEPS`; change one, change the other. The belts pass through
   a hatch in the partition (`Facility.setConveyorOpen`) and `CONVEYOR`/`lockerSlot` in `layout.ts` hold the positions (tested in `layout.test.ts`).
   There is **no west annex**: the upgrade was removed and the conveyor takes its place; floor 1 has a third row (`SOUTH.rowFrontZ` has three entries; floors use the rows they need).
+- **Conveyor levels, arms and consoles** (`AutoZone` in `config.ts`: `main | east | south | floor1 | floor2`): the sim maps every bank to a zone and row
+  (`GameManager.bankInfo`, `zoneOf`, `rowOf`). `ConveyorSystem` keeps which zones are `covered`, each zone's speed level and arm count, and one station per
+  `zone:row` whose arms (`Parcel.arm`) each take the oldest waiting bag. Halls are fed through ducts (`transitIn` / `transitOut`, `CONFIG.automation.transit`).
+  Levels are `AUTOMATION_UPGRADES` (generated in `config.ts`): `line-<zone>` sold at the **hub** console, `speed-<zone>-1..3` and `arms-<zone>` at that zone's
+  console, bought with `buyAutomation` (`consoleItems(scope)` gives the menu). `grantUpgrade` (mod menu) also accepts these ids and grants everything they need.
+  3D: `ArmRig` (one arm, keyframes tied to `ARM_STEPS`), `StationView` (rail(s), arms, ducts, bags for one row), `ConveyorBay` (the hub: belts, kiosk, the storage
+  room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds a station per row of a zone when its `line-*` notice arrives
+  (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION` and `CONSOLES` in `layout.ts`. To add a zone: `AutoZone`, `ZONE_ROWS`,
+  `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
 - **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
   `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles
   materials); the halls use emissive fixtures and no point lights.

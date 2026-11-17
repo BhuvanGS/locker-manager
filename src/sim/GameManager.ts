@@ -1,5 +1,13 @@
 import { mulberry32 } from '../lib/random'
-import { CONFIG, type ArrivalStage, type UpgradeDef } from './config'
+import {
+  AUTOMATION_UPGRADES,
+  CONFIG,
+  ZONE_TITLES,
+  type ArrivalStage,
+  type AutoZone,
+  type AutomationUpgradeDef,
+  type UpgradeDef,
+} from './config'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { ConveyorSystem } from './ConveyorSystem'
@@ -37,6 +45,8 @@ export interface TerminalEntry {
   lockerId: LockerId
   lockerNumber: number
   itemLabel: string
+  /** The part of the building the locker is in. */
+  where: string
   /** The customer's name, only if the player asked for it at the deposit. */
   name: string | null
   /** The arm is already on this one. */
@@ -64,6 +74,8 @@ export class GameManager {
   readonly upgrades = new UpgradeManager(CONFIG.upgrades)
   /** The conveyor belt and robot arm (idle until the upgrade is bought). */
   readonly conveyor: ConveyorSystem
+  /** Which part of the building each locker bank is in, and which row of that part (an arm station). */
+  private readonly bankInfo = new Map<number, { zone: AutoZone; row: number }>([[0, { zone: 'main', row: 0 }]])
   private readonly factory: CustomerFactory
   private readonly rand: () => number
 
@@ -75,6 +87,8 @@ export class GameManager {
   catalogueOpen = false
   /** The conveyor terminal menu is open (player is picking a bag to fetch). */
   terminalOpen = false
+  /** An automation console is open (`hub`, or the zone whose arms it controls). */
+  consoleScope: 'hub' | AutoZone | null = null
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
   busyUntil = 0
   firstCustomerId: CustomerId | null = null
@@ -93,7 +107,12 @@ export class GameManager {
       this.lockers.all().map((l) => ({ lockerId: l.id, keyId: l.keyId })),
       hooksPerRack,
     )
-    this.conveyor = new ConveyorSystem(this.lockers, this.customers, () => this.now)
+    this.conveyor = new ConveyorSystem(
+      this.lockers,
+      this.customers,
+      { zoneOf: (id) => this.zoneOf(id), rowOf: (id) => this.rowOf(id) },
+      () => this.now,
+    )
     this.economy = new EconomyManager(CONFIG.economy.startingMoney, CONFIG.economy.startingReputation)
     this.scheduler = new CustomerScheduler(stages, this.rand)
     this.scheduleNextArrival()
@@ -548,6 +567,8 @@ export class GameManager {
    * It goes through the same code as a purchase, so banks, racks and annexes appear exactly as if bought.
    */
   grantUpgrade(id: string): ActionResult {
+    const auto = AUTOMATION_UPGRADES.find((d) => d.id === id)
+    if (auto) return this.grantAutomation(auto)
     const def = this.upgrades.def(id)
     if (!def) return fail('Not in the catalogue.')
     if (this.upgrades.has(id)) return fail(`${def.title} is already owned.`)
@@ -562,6 +583,7 @@ export class GameManager {
     if (def.kind === 'lockerBank') {
       const added = this.lockers.addBank(CONFIG.facility.lockerRows, CONFIG.facility.lockerCols)
       for (const locker of added) this.keys.addKey(locker.id, locker.keyId)
+      this.bankInfo.set(this.lockers.bankCount - 1, { zone: 'main', row: 0 })
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: this.lockers.bankCount - 1, title: def.title })
     } else if (def.kind === 'keyRack') {
       this.keys.addHooks(CONFIG.facility.hooksPerRack)
@@ -573,6 +595,9 @@ export class GameManager {
         const added = this.lockers.addBank(CONFIG.facility.lockerRows, CONFIG.facility.lockerCols)
         for (const locker of added) this.keys.addKey(locker.id, locker.keyId)
         banks.push(this.lockers.bankCount - 1)
+        // Halls have rows of three banks; the annex is a single row.
+        const zone: AutoZone = def.kind === 'annex' ? 'east' : (def.hall ?? 'south')
+        this.bankInfo.set(this.lockers.bankCount - 1, { zone, row: def.kind === 'annex' ? 0 : Math.floor(i / 3) })
       }
       const racks: number[] = []
       for (let i = 0; i < (def.racks ?? 0); i++) {
@@ -580,6 +605,9 @@ export class GameManager {
         racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
       }
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, hall: def.hall, banks, racks })
+    } else if (def.kind === 'conveyor') {
+      this.conveyor.cover('main')
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, zone: 'main' })
     } else if (def.kind === 'digital') {
       this.goDigital()
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
@@ -759,14 +787,95 @@ export class GameManager {
     return ok()
   }
 
-  // ------------------------------------------------------------------ conveyor and robot arm
+  // ------------------------------------------------------------------ automation consoles
 
-  /** Lockers the robot arm can reach: the storage room's own banks. */
-  isRobotLocker(id: LockerId): boolean {
-    return this.lockers.get(id).bank < CONFIG.automation.robotBanks
+  /** Open the console for `scope` (the hub control console, or a zone's arm console). */
+  openConsole(scope: 'hub' | AutoZone): ActionResult {
+    if (!this.hasConveyor) return fail('There is no conveyor yet.')
+    if (this.dialogue) return fail('Finish talking first.')
+    this.consoleScope = scope
+    return ok()
   }
 
-  /** Free lockers the arm could file a bag in right now. */
+  closeConsole(): void {
+    this.consoleScope = null
+  }
+
+  /** What a console sells, in order, with whether each can be bought now and why not. */
+  consoleItems(scope: 'hub' | AutoZone): CatalogueItem[] {
+    return AUTOMATION_UPGRADES.filter((d) => d.scope === scope).map((def) => ({
+      id: def.id,
+      title: def.title,
+      description: def.description,
+      cost: def.cost,
+      level: def.level,
+      ...this.automationState(def),
+    }))
+  }
+
+  private automationState(def: AutomationUpgradeDef): { state: CatalogueItem['state']; note: string | null } {
+    if (this.upgrades.has(def.id)) return { state: 'owned', note: 'Owned' }
+    const locked = (note: string) => ({ state: 'locked' as const, note })
+    if (!this.hasConveyor) return locked('Needs the conveyor')
+    if (def.kind !== 'line' && !this.conveyor.isCovered(def.zone)) return locked(`Extend the belt to the ${ZONE_TITLES[def.zone]} first`)
+    if (def.needs && !this.upgrades.has(def.needs)) return locked(`Buy ${this.upgrades.def(def.needs)?.title ?? def.needs} first`)
+    if (def.requires && !this.upgrades.has(def.requires)) {
+      const first = AUTOMATION_UPGRADES.find((d) => d.id === def.requires)
+      return locked(`Buy ${first?.title ?? def.requires} first`)
+    }
+    if (this.economy.level.level < def.level) return locked(`Needs level ${def.level}`)
+    if (this.economy.money < def.cost) return { state: 'tooExpensive', note: `Costs $${def.cost}, you have $${this.economy.money}` }
+    return { state: 'available', note: null }
+  }
+
+  /** Buy an automation upgrade at its console. */
+  buyAutomation(id: string): ActionResult {
+    const def = AUTOMATION_UPGRADES.find((d) => d.id === id)
+    if (!def) return fail('Not sold here.')
+    const status = this.automationState(def)
+    if (status.state !== 'available') return fail(status.note ?? 'Not available.')
+    this.economy.spend(def.cost)
+    this.applyAutomation(def)
+    return ok(`${def.title}: ${def.description}.`)
+  }
+
+  /** Mod menu: an automation upgrade for free, after whatever it needs. */
+  private grantAutomation(def: AutomationUpgradeDef): ActionResult {
+    if (this.upgrades.has(def.id)) return fail(`${def.title} is already owned.`)
+    if (!this.hasConveyor) this.grantUpgrade('conveyor')
+    if (def.needs && !this.upgrades.has(def.needs)) this.grantUpgrade(def.needs)
+    if (def.kind !== 'line' && !this.conveyor.isCovered(def.zone)) this.grantUpgrade(`line-${def.zone}`)
+    if (def.requires && !this.upgrades.has(def.requires)) this.grantUpgrade(def.requires)
+    this.applyAutomation(def)
+    return ok(`Unlocked ${def.title}.`)
+  }
+
+  private applyAutomation(def: AutomationUpgradeDef): void {
+    this.upgrades.markOwned(def.id)
+    if (def.kind === 'line') this.conveyor.cover(def.zone)
+    else if (def.kind === 'speed') this.conveyor.setSpeedLevel(def.zone, def.tier)
+    else this.conveyor.setArmCount(def.zone, 2)
+    this.notify({ type: 'upgradeBought', id: def.id, kind: 'automation', index: 0, title: def.title, zone: def.zone })
+  }
+
+  // ------------------------------------------------------------------ conveyor and robot arm
+
+  /** Which part of the building a locker is in. */
+  zoneOf(lockerId: LockerId): AutoZone {
+    return this.bankInfo.get(this.lockers.get(lockerId).bank)?.zone ?? 'main'
+  }
+
+  /** Which row of lockers (arm station) it is in, within its zone. */
+  rowOf(lockerId: LockerId): number {
+    return this.bankInfo.get(this.lockers.get(lockerId).bank)?.row ?? 0
+  }
+
+  /** Lockers the robot arms can reach: those in a zone the belts have been extended to. */
+  isRobotLocker(id: LockerId): boolean {
+    return this.hasConveyor && this.conveyor.isCovered(this.zoneOf(id))
+  }
+
+  /** Free lockers the arms could file a bag in right now. */
   robotLockersFree(): number {
     return this.lockers.all().filter((l) => l.state === 'available' && this.isRobotLocker(l.id)).length
   }
@@ -782,7 +891,7 @@ export class GameManager {
     const locker = this.lockers
       .all()
       .find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId)
-    if (!locker) return fail('No free locker for the robot arm. Store it by hand in another hall.')
+    if (!locker) return fail('No free locker the robot arm can reach. Store it by hand, or extend the belts.')
     const item = this.customers.item(this.hands.itemId)
     locker.state = 'reserved'
     item.status = 'onConveyor'
@@ -802,6 +911,7 @@ export class GameManager {
         lockerId: locker.id,
         lockerNumber: locker.number,
         itemLabel: item.label,
+        where: ZONE_TITLES[this.zoneOf(locker.id)],
         name: customer.nameTaken ? customer.name : null,
         fetching: this.conveyor.isBusy(locker.id),
       })

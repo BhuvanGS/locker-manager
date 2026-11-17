@@ -39,7 +39,9 @@ export function TerminalPanel({ terminal }: { terminal: TerminalView }) {
                   <strong>
                     Locker {entry.lockerNumber} · {entry.itemLabel}
                   </strong>
-                  <span>{entry.name ?? 'name not taken'}</span>
+                  <span>
+                    {entry.where} · {entry.name ?? 'name not taken'}
+                  </span>
                 </span>
                 <span className="catalogue-price">
                   {entry.fetching ? <em>Robot is on it</em> : i === selected && <em className="buy">E to fetch</em>}
