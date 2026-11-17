@@ -37,6 +37,27 @@ const LED_MATERIALS = {
   reserved: new THREE.MeshBasicMaterial({ color: 0xf59e0b, toneMapped: false }),
 }
 
+let doorMaterial: THREE.MeshStandardMaterial | null = null
+
+/** Brushed steel for every door (ambientCG Metal009, CC0, in public/textures/locker-door), loaded once and shared by all banks. */
+function lockerDoorMaterial(): THREE.MeshStandardMaterial {
+  if (doorMaterial) return doorMaterial
+  const loader = new THREE.TextureLoader()
+  const base = `${import.meta.env.BASE_URL}textures/locker-door/`
+  const color = loader.load(`${base}color.jpg`)
+  color.colorSpace = THREE.SRGBColorSpace
+  doorMaterial = new THREE.MeshStandardMaterial({
+    color: 0xdde4ee,
+    map: color,
+    normalMap: loader.load(`${base}normal.jpg`),
+    normalScale: new THREE.Vector2(0.6, 0.6),
+    roughnessMap: loader.load(`${base}roughness.jpg`),
+    roughness: 1,
+    metalness: 0.12,
+  })
+  return doorMaterial
+}
+
 /**
  * One bank (wall) of lockers, drawn from simulation state: door swing, key in lock, and the item inside.
  * Bank 0 is built at the start; later banks are built when the storage upgrade is bought and rise out of
@@ -51,8 +72,6 @@ export class LockerWall {
   private rise = 1
   /** True once the number plates and key tags have been added (labels upgrade). */
   private labelled = false
-  /** Door material to update when texture loads. */
-  private doorMat: THREE.MeshStandardMaterial
 
   /**
    * `placement` says where this bank stands: its centre along the wall, the z of its door face, and the height of the floor
@@ -75,11 +94,8 @@ export class LockerWall {
     // Not very metallic: metal only looks right with an environment to reflect, and the halls have none (they went black).
     const steel = mat(0x8d99a6, 0.55, 0.12)
     const inner = mat(0x4b5563, 0.7, 0.2)
-    this.doorMat = mat(0x9aa5b1, 0.5, 0.12)
+    const doorMat = lockerDoorMaterial()
     const slot = mat(0x374151, 0.6, 0.3)
-
-    // Load a web texture for the locker doors
-    this.loadDoorTexture()
 
     // Carcass: a hollow steel frame (back panel, shelves, dividers) so open compartments show inside.
     // The player collides with one solid box; reach rays are only blocked by the back panel.
@@ -137,7 +153,7 @@ export class LockerWall {
       // Door hinged on its left edge.
       const hinge = new THREE.Group()
       hinge.position.set(x0, cy, frontZ + 0.015)
-      const door = new THREE.Mesh(new THREE.BoxGeometry(width - 0.01, height - 0.01, 0.025), this.doorMat)
+      const door = new THREE.Mesh(new THREE.BoxGeometry(width - 0.01, height - 0.01, 0.025), doorMat)
       door.position.set(width / 2, 0, 0)
       door.castShadow = true
       tag(door, { kind: 'lockerDoor', lockerId: locker.id })
@@ -173,31 +189,6 @@ export class LockerWall {
       this.root.add(hinge)
       this.views.set(locker.id, { id: locker.id, hinge, angle: 0, keyInLock: keyGroup, keyMesh: keyInLock, led, plate: null, interior, itemSlot, shownItem: null })
     }
-  }
-
-  /** Load a web texture and apply it to all door materials. */
-  private loadDoorTexture(): void {
-    const loader = new THREE.TextureLoader()
-    // Using a metal texture from JSDelivr CDN (which has proper CORS)
-    // This is a rust/painted metal texture that works well for lockers
-    const textureUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/uv_grid_opengl.jpg'
-
-    loader.load(
-      textureUrl,
-      (texture) => {
-        // Optimize the texture
-        texture.magFilter = THREE.LinearFilter
-        texture.minFilter = THREE.LinearMipmapLinearFilter
-        // Apply to door material
-        this.doorMat.map = texture
-        this.doorMat.needsUpdate = true
-        console.log('✓ Door texture loaded from web')
-      },
-      undefined,
-      (error) => {
-        console.warn('⚠ Failed to load door texture:', error)
-      },
-    )
   }
 
   /** Add a number plate to every door and a matching tag to every key. */
