@@ -9,8 +9,14 @@ import { mat } from './models'
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
  * room shell. Lockers, keys and people are separate views that read the simulation.
  */
+/** Where the sun sits relative to the point it lights (the same angle as before), and half the width of its shadow box. */
+const SUN_OFFSET = new THREE.Vector3(-8, 14, 16)
+const SHADOW_HALF = 16
+
 export class Facility {
   readonly root = new THREE.Group()
+  /** The sun. Its shadow covers a square around the player (`followSun`), so the far rooms, halls and the warehouse get shadows too. */
+  private readonly sun = new THREE.DirectionalLight(0xfff1d6, 1.6)
   private readonly physics: PhysicsWorld
   private doorL: THREE.Mesh | null = null
   private doorR: THREE.Mesh | null = null
@@ -43,6 +49,20 @@ export class Facility {
   }
 
   /** Slide the glass entrance doors open while someone is near them. */
+  /**
+   * Keep the sun's shadow box centred on the player. It moves in whole shadow-map texels (snapped), so shadow edges do not
+   * shimmer as you walk.
+   */
+  followSun(x: number, y: number, z: number): void {
+    const texel = (SHADOW_HALF * 2) / this.sun.shadow.mapSize.x
+    const step = texel * 8
+    const cx = Math.round(x / step) * step
+    const cz = Math.round(z / step) * step
+    const cy = Math.max(0, Math.round(y / 3) * 3 - 1.5)
+    this.sun.target.position.set(cx, cy, cz)
+    this.sun.position.set(cx + SUN_OFFSET.x, cy + SUN_OFFSET.y, cz + SUN_OFFSET.z)
+  }
+
   update(dt: number, someoneNearDoor: boolean): void {
     const target = someoneNearDoor ? 1 : 0
     this.doorOpen += (target - this.doorOpen) * Math.min(1, dt * 5)
@@ -489,16 +509,19 @@ export class Facility {
   private buildLights(): void {
     const hemi = new THREE.HemisphereLight(0xf5f0e6, 0x6b6257, 1.1)
     this.root.add(hemi)
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.6)
-    sun.position.set(-8, 14, 16)
+    const sun = this.sun
+    sun.position.copy(SUN_OFFSET)
     sun.castShadow = true
-    sun.shadow.mapSize.set(1024, 1024)
-    sun.shadow.camera.left = -14
-    sun.shadow.camera.right = 14
-    sun.shadow.camera.top = 14
-    sun.shadow.camera.bottom = -14
-    sun.shadow.bias = -0.0005
-    this.root.add(sun)
+    sun.shadow.mapSize.set(2048, 2048)
+    sun.shadow.camera.left = -SHADOW_HALF
+    sun.shadow.camera.right = SHADOW_HALF
+    sun.shadow.camera.top = SHADOW_HALF
+    sun.shadow.camera.bottom = -SHADOW_HALF
+    sun.shadow.camera.near = 1
+    sun.shadow.camera.far = 60
+    sun.shadow.bias = -0.0004
+    sun.shadow.normalBias = 0.03
+    this.root.add(sun, sun.target)
 
     const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.2 })
     for (const [x, z] of [

@@ -9,44 +9,43 @@ import { SOUTH, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
 
 const T = 0.2
-/** Trucks come in from the main street and leave out of the far end of the road. */
+/** Trucks come in from the main street and leave by the far end of the road. */
 const START_Z = 16
-const END_Z = -56
 const RISE_SECONDS = 1.4
-const CRATE = { w: 0.8, h: 0.6, d: 0.9 }
-const POLICE_X = 25.6
-const POLICE_PARK_Z = -11.5
+const CRATE = { w: 0.8, h: 0.6, d: 0.8 }
+const POLICE = { x: 35.4, z: -11.5 }
+/** The shutter opens when you are this close to it. */
+const SHUTTER_REACH = 5
 
-/** The look of each kind of crate (what it looks like on the dock or on a shelf). */
+/** The look of each kind of crate (what it looks like: on a truck before you know, or what it really is once stored). */
 const CARGO_COLOUR: Record<CargoType, number> = { general: 0xb08a5a, food: 0x84cc16, cold: 0x38bdf8, metals: 0x94a3b8, illegal: 0x111827 }
+const SECTIONS: readonly Section[] = ['shelves', 'cold', 'vault', 'hidden']
 
-type TruckView = { id: number; group: THREE.Group; crates: THREE.Mesh[]; shown: number; kind: Truck['kind'] }
+type TruckView = { id: number; group: THREE.Group; crates: THREE.Mesh[]; shown: number; label: string; tag: THREE.Sprite | null }
 type CrateView = { group: THREE.Group; box: THREE.Mesh; band: THREE.Mesh }
 type Rect = { minX: number; maxX: number; minZ: number; maxZ: number }
 
 /**
- * The warehouse extension: a walkway from the door in the south hall, a steel-clad shed with pallet racks, a roller shutter, a receiving dock
- * and desk, and the service road with the trucks that drive in from the street, stop at the bay and drive out the far end (and, now and then,
- * a police car). Upgrades add what you buy: more rack rows, a cold room, a vault and a hidden room. It draws `game.warehouse` and decides nothing.
+ * The warehouse extension: a walkway from the door in the south hall, a big steel-clad shed with pallet racks, a roller shutter on the east
+ * side, three parking spots outside it where trucks wait while their crates are carried, the service road, a receiving desk, and (when bought)
+ * extra rack rows, a cold room, a vault and a hidden room, each with its own racks. Now and then a police car. It draws `game.warehouse` and
+ * decides nothing.
  *
- * `root` is the building (hidden when you are far away, like the halls); `yard` is the road and the vehicles (always drawn, you can see
- * the trucks from the street).
+ * `root` is the building (hidden when you are far away, like the halls); `yard` is the road, the parking and the vehicles (always drawn).
  */
 export class Warehouse {
   readonly root = new THREE.Group()
   readonly yard = new THREE.Group()
   private readonly bodies: RAPIER.RigidBody[] = []
   private readonly physics: PhysicsWorld
-  /** Crate slots per section, and one crate view for each. */
+  /** Crate slots per section (in the order they fill), and the crate views on them. */
   private readonly slots: Record<Section, THREE.Vector3[]> = { shelves: [], cold: [], vault: [], hidden: [] }
   private readonly crates: Record<Section, CrateView[]> = { shelves: [], cold: [], vault: [], hidden: [] }
   private readonly shutter: THREE.Mesh
   private shutterOpen = 0
-  private truck: TruckView | null = null
+  private readonly trucks = new Map<number, TruckView>()
   private readonly built = new Set<string>()
   private crateSignature = ''
-  private dockSignature = ''
-  private readonly dock = new THREE.Group()
   private police: { group: THREE.Group; lights: THREE.MeshBasicMaterial[] } | null = null
   private policeShown = false
   private readonly board = { canvas: document.createElement('canvas'), texture: null as THREE.CanvasTexture | null, signature: '' }
@@ -56,79 +55,87 @@ export class Warehouse {
   constructor(physics: PhysicsWorld) {
     this.physics = physics
     this.root.userData.zone = 'warehouse'
-    const { minX, maxX, minZ, maxZ, height: H, door, shutter, road } = WAREHOUSE
+    const { minX, maxX, minZ, maxZ, height: H, door, shutter, road, parking } = WAREHOUSE
     const w = maxX - minX
     const d = maxZ - minZ
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    const steel = mat(0xb9c3cd, 0.6, 0.25)
+    // Inside, the roof shades everything from the sun, so the shed's own surfaces glow a little (no extra lights: see AGENTS.md, zones).
+    const steel = lit(0xb9c3cd, 0.6, 0.25)
     const dark = mat(0x374151, 0.6, 0.3)
 
-    // Ground: the road with its dashed centre line, the concrete apron and the walkway from the hall's door.
+    // Outside: the road with its centre line, the concrete apron with the parking spots, and the walkway from the hall's door.
     const asphalt = mat(0x3a3d43, 0.9)
-    const roadW = road.maxX - road.minX
-    const roadLen = road.maxZ - road.minZ
-    this.decoYard(roadW, 0.03, roadLen, asphalt, (road.minX + road.maxX) / 2, 0.005, (road.minZ + road.maxZ) / 2)
+    this.decoYard(road.maxX - road.minX, 0.03, road.maxZ - road.minZ, asphalt, (road.minX + road.maxX) / 2, 0.005, (road.minZ + road.maxZ) / 2)
     for (let z = road.maxZ - 1; z > road.minZ; z -= 3.6) this.decoYard(0.15, 0.012, 1.6, mat(0xf2d16b, 0.6), (road.minX + road.maxX) / 2, 0.025, z)
     const concrete = mat(0xb8b4ac, 0.95)
-    this.decoYard(road.minX - maxX, 0.03, d + 1, concrete, (maxX + road.minX) / 2, 0.012, cz)
-    this.decoYard(minX - SOUTH.maxX - 0.2, 0.03, 2, concrete, (SOUTH.maxX + 0.2 + minX) / 2, 0.012, door.z)
+    this.decoYard(road.minX - maxX - T, 0.03, d + 4, concrete, (maxX + T + road.minX) / 2, 0.012, cz)
+    this.decoYard(minX - SOUTH.maxX - 0.2, 0.03, 2.4, concrete, (SOUTH.maxX + 0.2 + minX) / 2, 0.012, door.z)
+    const paint = mat(0xf8fafc, 0.6)
+    for (const z of parking.z) {
+      for (const dz of [-3.3, 3.3]) this.decoYard(3.6, 0.012, 0.1, paint, parking.x, 0.03, z + dz)
+      const spot = makeSign('PARKING', 1.4, 0.24, '#0f172a', '#e2e8f0')
+      spot.position.set(parking.x + 2.3, 0.02, z)
+      spot.rotation.x = -Math.PI / 2
+      spot.rotation.z = Math.PI / 2
+      this.yard.add(spot)
+    }
 
-    // The building: floor, walls (west door, east shutter opening), roof.
-    this.deco(w, 0.03, d, mat(0x8f949a, 0.85), cx, 0.016, cz)
+    // The building: floor, walls (a door in the west wall, the shutter opening in the east wall), roof.
+    this.deco(w, 0.03, d, lit(0x8f949a, 0.85, 0, 0.3), cx, 0.016, cz)
+    // A light ceiling under the roof.
+    this.deco(w, 0.02, d, lit(0xe5e7eb, 0.9, 0, 0.45), cx, H - 0.02, cz).receiveShadow = false
     const wall = (width: number, depth: number, x: number, z: number, y0 = 0, y1 = H) => {
       if (width < 0.01 || depth < 0.01) return
-      const h = y1 - y0
-      this.solid(width, h, depth, steel, x, y0 + h / 2, z)
+      this.solid(width, y1 - y0, depth, steel, x, (y0 + y1) / 2, z)
     }
     const south = minZ - T
     const north = maxZ + T
     wall(w + T * 2, T, cx, maxZ + T / 2)
     wall(w + T * 2, T, cx, minZ - T / 2)
-    const dw = door.halfWidth + 0.1
-    const dh = door.height + 0.2
+    const dw = door.halfWidth + 0.2
+    const dh = door.height + 0.3
     wall(T, door.z - dw - south, minX - T / 2, (south + door.z - dw) / 2)
     wall(T, north - (door.z + dw), minX - T / 2, (door.z + dw + north) / 2)
     wall(T, dw * 2, minX - T / 2, door.z, dh, H)
     wall(T, shutter.z - shutter.halfWidth - south, maxX + T / 2, (south + shutter.z - shutter.halfWidth) / 2)
     wall(T, north - (shutter.z + shutter.halfWidth), maxX + T / 2, (shutter.z + shutter.halfWidth + north) / 2)
     wall(T, shutter.halfWidth * 2, maxX + T / 2, shutter.z, shutter.height, H)
-    this.deco(w + 0.8, 0.12, d + 0.8, mat(0x4b5563, 0.8), cx, H + 0.06, cz)
-    this.deco(w + 0.42, 0.5, d + 0.42, mat(0x1d4ed8, 0.7), cx, H - 0.6, cz)
-    this.deco(w + 0.38, 0.52, d + 0.38, steel, cx, H - 0.6, cz)
+    // The roof casts a shadow, so the sun does not shine in through it (the shadow box follows the player in here too).
+    this.deco(w + 0.8, 0.12, d + 0.8, mat(0x4b5563, 0.8), cx, H + 0.06, cz).castShadow = true
+    // The blue stripe around the top of the outside walls (four thin strips, so it is not a false ceiling inside).
+    const stripe = mat(0x1d4ed8, 0.7)
+    const sy = H - 0.6
+    this.deco(w + 0.42, 0.5, 0.01, stripe, cx, sy, maxZ + T + 0.01)
+    this.deco(w + 0.42, 0.5, 0.01, stripe, cx, sy, minZ - T - 0.01)
+    this.deco(0.01, 0.5, d + 0.42, stripe, minX - T - 0.01, sy, cz)
+    this.deco(0.01, 0.5, d + 0.42, stripe, maxX + T + 0.01, sy, cz)
 
     this.shutter = new THREE.Mesh(new THREE.BoxGeometry(0.08, shutter.height, shutter.halfWidth * 2), mat(0x94a3b8, 0.5, 0.5))
     this.shutter.position.set(maxX - 0.02, shutter.height / 2, shutter.z)
     this.root.add(this.shutter)
+    this.shutterBody = this.physics.addStaticBox(new THREE.Vector3(maxX + T / 2, shutter.height / 2, shutter.z), new THREE.Vector3(T / 2, shutter.height / 2, shutter.halfWidth))
 
+    // Lights: two rows of panels along the shed.
     const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.3 })
-    for (const x of [cx - 2.4, cx + 2.4]) {
-      for (const z of [cz - 3.6, cz + 3.6]) {
+    for (const x of [cx - 3.6, cx, cx + 3.6]) {
+      for (const z of [cz - 5, cz, cz + 5]) {
         const f = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.5), panel)
         f.position.set(x, H - 0.05, z)
         this.root.add(f)
       }
     }
 
-    // The two base pallet racks (24 slots).
-    const { racks } = WAREHOUSE
-    const length = racks.bays * racks.pitch
-    for (const rx of racks.x) this.rackAlongZ(rx, racks.firstZ + racks.pitch / 2, length, racks.bays, racks.pitch)
-    for (const level of racks.levels) {
-      for (const rx of racks.x) for (let b = 0; b < racks.bays; b++) this.slots.shelves.push(this.slot(rx, level, racks.firstZ - b * racks.pitch))
-    }
-    // Rack rows that come with the upgrades: their slots exist from the start (hidden until the rows are built).
-    for (const z of [ROW_NORTH_Z, ROW_SOUTH_Z]) {
-      for (const level of racks.levels) for (const x of ROW_X) this.slots.shelves.push(this.slot(x, level, z))
-    }
-    // The other sections' slots (a grid of crates on the floor and on one shelf above it).
-    this.gridSlots('cold', COLD, [16.9, 17.8, 18.7], [-14.1, -15.2])
-    this.gridSlots('vault', VAULT, [17.3, 18.5], [-23.8, -25.0])
-    this.gridSlots('hidden', HIDDEN, [10.35, 11.15], [-22.7, -23.4, -24.1, -24.8])
-
+    // The two base racks (24 slots). The other racks' slots exist from the start; the racks themselves appear when bought.
+    const { racks, rows } = WAREHOUSE
+    for (const rx of racks.x) this.slots.shelves.push(...this.rackAlongZ(rx, racks.northZ, racks.bays, racks.pitch, racks.levels, 'shelves'))
+    this.slots.shelves.push(...this.rowSlots(rows.northZ), ...this.rowSlots(rows.southZ))
+    this.slots.cold.push(...this.rowSlotsAt(WAREHOUSE.cold.maxZ - 0.75, WAREHOUSE.cold.minX + 0.4, 4, 0.9, racks.levels))
+    this.slots.vault.push(...this.rowSlotsAt(WAREHOUSE.vault.minZ + 0.75, WAREHOUSE.vault.minX + 0.4, 4, 0.9, racks.levels.slice(0, 2)))
+    this.slots.hidden.push(...this.zSlotsAt(WAREHOUSE.hidden.minX + 0.75, WAREHOUSE.hidden.minZ + 0.6, 4, 0.9, racks.levels))
     const cardboard = mat(0xb08a5a, 0.85)
     const gold = mat(0xfbbf24, 0.5, 0.5)
-    for (const section of ['shelves', 'cold', 'vault', 'hidden'] as const) {
+    for (const section of SECTIONS) {
       for (const slot of this.slots[section]) {
         const group = new THREE.Group()
         const box = new THREE.Mesh(new THREE.BoxGeometry(CRATE.w, CRATE.h, CRATE.d), cardboard)
@@ -144,13 +151,13 @@ export class Warehouse {
       }
     }
 
-    // Signs, the notice board, the receiving dock and desk.
-    const outside = makeSign('WAREHOUSE', 3, 0.5, '#0f172a', '#fbbf24')
+    // Signs, the notice board and the receiving desk.
+    const outside = makeSign('WAREHOUSE', 3.4, 0.56, '#0f172a', '#fbbf24')
     outside.position.set(maxX + T + 0.03, H - 0.9, shutter.z)
     outside.rotation.y = Math.PI / 2
     this.root.add(outside)
     const doorSign = makeSign('WAREHOUSE', 1.6, 0.26, '#0f172a', '#fbbf24')
-    doorSign.position.set(minX - T - 0.03, door.height + 0.5, door.z)
+    doorSign.position.set(minX - T - 0.03, door.height + 0.6, door.z)
     doorSign.rotation.y = -Math.PI / 2
     this.root.add(doorSign)
     const canvas = this.board.canvas
@@ -159,19 +166,19 @@ export class Warehouse {
     const texture = new THREE.CanvasTexture(canvas)
     texture.colorSpace = THREE.SRGBColorSpace
     this.board.texture = texture
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 0.05), dark)
-    frame.position.set(racks.x[1]! + 2.2, 2.3, maxZ - 0.04)
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.5, 0.05), dark)
+    frame.position.set(15.2, 3.4, maxZ - 0.04)
     this.root.add(frame)
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.25), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }))
-    face.position.set(racks.x[1]! + 2.2, 2.3, maxZ - 0.07)
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.35), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }))
+    face.position.set(15.2, 3.4, maxZ - 0.07)
     face.rotation.y = Math.PI
     this.root.add(face)
-
-    this.root.add(this.dock)
     this.buildDesk()
   }
 
-  /** Start the "rising out of the ground" animation (a freshly built warehouse). */
+  private shutterBody: RAPIER.RigidBody
+  private shutterSolid = true
+
   appear(): void {
     this.rise = 0
     this.root.scale.y = 0.001
@@ -180,61 +187,71 @@ export class Warehouse {
   dispose(): void {
     for (const body of this.bodies) this.physics.removeBody(body)
     this.bodies.length = 0
+    if (this.shutterSolid) this.physics.removeBody(this.shutterBody)
     this.board.texture?.dispose()
     this.desk.texture?.dispose()
   }
 
-  update(dt: number, game: GameManager): void {
+  update(dt: number, game: GameManager, player: THREE.Vector3): void {
     if (this.rise < 1) {
       this.rise = Math.min(1, this.rise + dt / RISE_SECONDS)
       this.root.scale.y = Math.max(0.001, 1 - (1 - this.rise) ** 3)
     }
     this.syncUpgrades(game)
     this.syncCrates(game)
-    this.syncDock(game)
-    this.syncTruck(dt, game)
+    this.syncTrucks(game)
     this.syncPolice(game)
+    // The shutter rolls up when you walk towards it (or the robots are working a truck), so you can carry crates through.
+    const near = Math.hypot(player.x - WAREHOUSE.maxX, player.z - WAREHOUSE.shutter.z) < SHUTTER_REACH && player.y < 2.5
+    const robots = game.warehouse.autoLevel > 0 && game.warehouse.trucks.some((t) => t.phase === 'parked')
+    this.moveShutter(dt, near || robots)
     this.drawBoard(game)
     this.drawDesk(game)
   }
 
-  // ------------------------------------------------------------------ upgrades: rack rows and rooms appear when bought
+  // ------------------------------------------------------------------ upgrades: racks and rooms appear when bought
 
   private syncUpgrades(game: GameManager): void {
     const wh = game.warehouse
+    const { rows, racks } = WAREHOUSE
     if (wh.has('wh-cap-1') && !this.built.has('north')) {
       this.built.add('north')
-      this.rackAlongX(ROW_NORTH_Z, ROW_X[0]! - 0.45, ROW_X[3]! + 0.45)
+      this.rackAlongX(rows.northZ, rows.x0, rows.bays, rows.pitch, racks.levels, 'shelves')
     }
     if (wh.has('wh-cap-2') && !this.built.has('south')) {
       this.built.add('south')
-      this.rackAlongX(ROW_SOUTH_Z, ROW_X[0]! - 0.45, ROW_X[3]! + 0.45)
+      this.rackAlongX(rows.southZ, rows.x0, rows.bays, rows.pitch, racks.levels, 'shelves')
     }
     if (wh.coldCapacity > 0 && !this.built.has('cold')) {
       this.built.add('cold')
-      this.room(COLD, { side: 'west', at: -14.65, width: 1.1 }, 0xe0f2fe, 'COLD ROOM', '#38bdf8', 0xbae6fd, 1.4)
+      const r = WAREHOUSE.cold
+      this.room(r, { side: 'west', at: -15.6, width: 1.4 }, 0xe0f2fe, 'COLD ROOM', '#38bdf8', 0xbae6fd, 'cold')
+      this.rackAlongX(r.maxZ - 0.75, r.minX + 0.4, 4, 0.9, racks.levels, 'cold')
     }
     if (wh.vaultCapacity > 0 && !this.built.has('vault')) {
       this.built.add('vault')
-      this.room(VAULT, { side: 'north', at: 17.9, width: 1.1 }, 0x475569, 'VAULT', '#fbbf24', 0x1e293b, 0.9)
+      const r = WAREHOUSE.vault
+      this.room(r, { side: 'north', at: 20.8, width: 1.4 }, 0x475569, 'VAULT', '#fbbf24', 0x1e293b, 'vault')
+      this.rackAlongX(r.minZ + 0.75, r.minX + 0.4, 4, 0.9, racks.levels.slice(0, 2), 'vault')
     }
     if (wh.hiddenCapacity > 0 && !this.built.has('hidden')) {
       this.built.add('hidden')
-      this.room(HIDDEN, { side: 'north', at: 10.8, width: 1.0 }, 0xa8a29e, 'STAFF ONLY', '#e2e8f0', 0x78716c, 0.7)
+      const r = WAREHOUSE.hidden
+      this.room(r, { side: 'north', at: 11.9, width: 1.2 }, 0xa8a29e, 'STAFF ONLY', '#e2e8f0', 0x78716c, 'hidden')
+      this.rackAlongZ(r.minX + 0.75, r.minZ + 0.6 + 4 * 0.9, 4, 0.9, racks.levels, 'hidden')
     }
   }
 
-  /** The crates in each section: one per stored crate, coloured by what is really in them (with a gold band on a VIP's). */
+  /** The crates in each section: one per stored crate, coloured by what is really in them (grey if spoiled, a gold band on a VIP's). */
   private syncCrates(game: GameManager): void {
     const wh = game.warehouse
-    const signature = JSON.stringify(wh.consignments.map((c) => [c.section, c.cargo, c.crates, c.kind, c.spoiled])) + `|${wh.capacity}|${wh.coldCapacity}|${wh.vaultCapacity}|${wh.hiddenCapacity}`
+    const signature = JSON.stringify(wh.consignments.map((c) => [c.section, c.cargo, c.crates, c.kind, c.spoiled]))
     if (signature === this.crateSignature) return
     this.crateSignature = signature
-    for (const section of ['shelves', 'cold', 'vault', 'hidden'] as const) {
+    for (const section of SECTIONS) {
       const flat = wh.consignments.filter((c) => c.section === section).flatMap((c) => Array.from({ length: c.crates }, () => c))
-      const open = Math.min(wh.sectionCapacity(section), this.crates[section].length)
       this.crates[section].forEach((crate, i) => {
-        const c = i < open ? flat[i] : undefined
+        const c = flat[i]
         crate.group.visible = c !== undefined
         if (!c) return
         crate.band.visible = c.kind === 'vip'
@@ -243,80 +260,93 @@ export class Warehouse {
     }
   }
 
-  /** The loads waiting on the dock: a pallet each with its crates, coloured by what they LOOK like, and a label. */
-  private syncDock(game: GameManager): void {
-    const loads = game.receivingLoads()
-    const signature = JSON.stringify(loads.map((l) => [l.id, l.crates, l.looksLike, l.spoiled, l.opening]))
-    if (signature === this.dockSignature) return
-    this.dockSignature = signature
-    this.dock.clear()
-    const wood = mat(0x8b6b45, 0.9)
-    loads.slice(0, 3).forEach((load, i) => {
-      const z = DOCK_Z[i]!
-      this.dockMesh(new THREE.BoxGeometry(1.1, 0.12, 1.2), wood, DOCK_X, 0.06, z)
-      const colour = load.spoiled ? 0x57534e : CARGO_COLOUR[load.looksLike]
-      const stack = mat(colour, 0.8)
-      for (let n = 0; n < Math.min(load.crates, 6); n++) {
-        const col = n % 2
-        const layer = Math.floor(n / 2)
-        this.dockMesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), stack, DOCK_X - 0.27 + col * 0.54, 0.12 + 0.225 + layer * 0.46, z)
-      }
-      const tag = makeSign(`${load.owner.split(' (')[0]} · ${load.crates}${load.opening ? ' · opening…' : ''}`, 1.2, 0.18, '#0f172a', load.opening ? '#f59e0b' : '#e2e8f0')
-      tag.position.set(DOCK_X, 1.9, z)
-      tag.rotation.y = -Math.PI / 2
-      this.dock.add(tag)
-    })
-  }
-
-  private dockMesh(geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(geo, material)
-    mesh.position.set(x, y, z)
-    mesh.castShadow = true
-    this.dock.add(mesh)
-  }
-
   // ------------------------------------------------------------------ vehicles
 
-  private syncTruck(dt: number, game: GameManager): void {
-    const t = game.warehouse.truck
+  /** One view per truck: it drives down the road, pulls into its parking spot, waits, and pulls out and drives off. */
+  private syncTrucks(game: GameManager): void {
+    const wh = game.warehouse
     const w = CONFIG.warehouse
-    if (!t) {
-      if (this.truck) {
-        this.yard.remove(this.truck.group)
-        this.truck = null
+    const live = new Set<number>()
+    for (const t of wh.trucks) {
+      live.add(t.id)
+      let view = this.trucks.get(t.id)
+      if (!view) {
+        view = this.buildTruck(t)
+        this.trucks.set(t.id, view)
+        this.yard.add(view.group)
       }
-      this.moveShutter(dt, false)
-      return
+      const spotZ = WAREHOUSE.parking.z[t.spot] ?? WAREHOUSE.parking.z[0]!
+      const lane = WAREHOUSE.road.laneX
+      const park = WAREHOUSE.parking.x
+      let x = park
+      let z = spotZ
+      if (t.phase === 'arriving') {
+        const p = Math.min(1, t.t / w.arriveSeconds)
+        // Down the road, then in sideways to the spot.
+        if (p < 0.7) {
+          x = lane
+          z = START_Z + (spotZ - START_Z) * easeOut(p / 0.7)
+        } else {
+          x = lane + (park - lane) * easeOut((p - 0.7) / 0.3)
+        }
+      } else if (t.phase === 'leaving') {
+        const p = Math.min(1, t.t / w.leaveSeconds)
+        if (p < 0.3) x = park + (lane - park) * easeIn(p / 0.3)
+        else {
+          x = lane
+          z = spotZ + (WAREHOUSE.road.minZ - spotZ) * easeIn((p - 0.3) / 0.7)
+        }
+      }
+      view.group.position.set(x, 0, z)
+      // The crates on board: a kei truck's are visible on its bed; a box truck's are counted on its sign.
+      if (t.onBoard !== view.shown) {
+        view.shown = t.onBoard
+        view.crates.forEach((c, i) => (c.visible = i < t.onBoard))
+      }
+      const label = this.truckLabel(game, t)
+      if (label !== view.label) {
+        view.label = label
+        if (view.tag) view.group.remove(view.tag)
+        view.tag = makeNameSprite(label)
+        view.tag.position.set(0, t.kind === 'kei' ? 2.5 : 3.6, 0)
+        view.group.add(view.tag)
+      }
     }
-    if (!this.truck || this.truck.id !== t.id) {
-      if (this.truck) this.yard.remove(this.truck.group)
-      this.truck = this.buildTruck(t)
-      this.yard.add(this.truck.group)
+    for (const [id, view] of this.trucks) {
+      if (live.has(id)) continue
+      this.yard.remove(view.group)
+      this.trucks.delete(id)
     }
-    const bay = WAREHOUSE.bay.z
-    let z = bay
-    if (t.phase === 'arriving') z = START_Z + (bay - START_Z) * easeOut(t.t / w.arriveSeconds)
-    else if (t.phase === 'leaving') z = bay + (END_Z - bay) * easeIn(t.t / w.leaveSeconds)
-    this.truck.group.position.set(WAREHOUSE.bay.x, 0, z)
+  }
 
-    const n = Math.min(t.crates, this.truck.crates.length)
-    const progress = t.phase === 'unloading' ? t.t / w.unloadSeconds : t.phase === 'leaving' ? 1 : 0
-    let shown = n
-    if (t.job === 'deliver') shown = t.phase === 'arriving' ? n : t.phase === 'leaving' ? 0 : Math.ceil(n * (1 - progress))
-    else shown = t.phase === 'arriving' ? 0 : t.phase === 'leaving' ? n : Math.floor(n * progress)
-    if (shown !== this.truck.shown) {
-      this.truck.shown = shown
-      this.truck.crates.forEach((c, i) => (c.visible = i < shown))
-    }
-    this.moveShutter(dt, t.phase === 'unloading' || (t.phase === 'arriving' && t.t > w.arriveSeconds - 2) || (t.phase === 'leaving' && t.t < 1.5))
+  private truckLabel(game: GameManager, t: Truck): string {
+    const name = t.owner.split(' (')[0]
+    if (t.job === 'collect') return `${name} · collecting · ${t.onBoard} loaded`
+    const load = game.warehouse.loadOf(t)
+    const looks = load ? game.warehouse.visibleCargo(load) : t.declared
+    return `${name} · ${CONFIG.warehouse.cargo[looks].label.toLowerCase()} · ${t.onBoard} on board`
   }
 
   private moveShutter(dt: number, open: boolean): void {
     this.shutterOpen += ((open ? 1 : 0) - this.shutterOpen) * Math.min(1, dt * 3)
     this.shutter.position.y = WAREHOUSE.shutter.height / 2 + this.shutterOpen * WAREHOUSE.shutter.height * 0.97
+    // You can walk through once it is mostly up.
+    const solid = this.shutterOpen < 0.6
+    if (solid !== this.shutterSolid) {
+      this.shutterSolid = solid
+      if (solid) {
+        const { shutter, maxX } = WAREHOUSE
+        this.shutterBody = this.physics.addStaticBox(
+          new THREE.Vector3(maxX + T / 2, shutter.height / 2, shutter.z),
+          new THREE.Vector3(T / 2, shutter.height / 2, shutter.halfWidth),
+        )
+      } else {
+        this.physics.removeBody(this.shutterBody)
+      }
+    }
   }
 
-  /** A kei truck (small white flatbed) or a box truck (a VIP's, navy with a gold stripe), facing −z, with the owner's name over it. */
+  /** A kei truck (small white flatbed) or a box truck (a VIP's, navy with a gold stripe), facing −z, tagged so you can aim at it. */
   private buildTruck(t: Truck): TruckView {
     const group = new THREE.Group()
     const add = (geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number) => {
@@ -357,15 +387,15 @@ export class Warehouse {
       add(new THREE.BoxGeometry(2.22, 0.18, 4.22), mat(0xfbbf24, 0.5, 0.4), 0, 2.2, 1.0)
       for (const x of [-1.0, 1.0]) for (const z of [-2.3, 0.9, 2.3]) wheel(x, z, 0.4)
     }
-    const text = t.job === 'deliver' ? `${t.owner} · ${CONFIG.warehouse.cargo[t.declared].label.toLowerCase()}` : t.owner
-    const tag = makeNameSprite(text)
-    tag.position.set(0, t.kind === 'kei' ? 2.4 : 3.5, 0)
-    group.add(tag)
-    group.position.set(WAREHOUSE.bay.x, 0, START_Z)
-    return { id: t.id, group, crates, shown: -1, kind: t.kind }
+    // What you aim at: the whole truck.
+    const proxy = new THREE.Mesh(new THREE.BoxGeometry(t.kind === 'kei' ? 1.8 : 2.6, 2.6, t.kind === 'kei' ? 4.0 : 6.6), new THREE.MeshBasicMaterial({ visible: false }))
+    proxy.position.set(0, 1.3, 0.4)
+    tag(proxy, { kind: 'truck', truckId: t.id })
+    group.add(proxy)
+    group.position.set(WAREHOUSE.road.laneX, 0, START_Z)
+    return { id: t.id, group, crates, shown: -1, label: '', tag: null }
   }
 
-  /** The police car: white and black with a flashing light bar, parked on the road by the north end of the shed while they look round. */
   private syncPolice(game: GameManager): void {
     const visit = game.warehouse.police
     const p = CONFIG.warehouse.police
@@ -381,10 +411,10 @@ export class Warehouse {
       this.yard.add(this.police.group)
       this.policeShown = true
     }
-    let z = POLICE_PARK_Z
-    if (visit.phase === 'arriving') z = START_Z + (POLICE_PARK_Z - START_Z) * easeOut(visit.t / p.arriveSeconds)
-    else if (visit.phase === 'leaving') z = POLICE_PARK_Z + (END_Z - POLICE_PARK_Z) * easeIn(visit.t / p.leaveSeconds)
-    this.police.group.position.set(POLICE_X, 0, z)
+    let z = POLICE.z
+    if (visit.phase === 'arriving') z = START_Z + (POLICE.z - START_Z) * easeOut(visit.t / p.arriveSeconds)
+    else if (visit.phase === 'leaving') z = POLICE.z + (WAREHOUSE.road.minZ - POLICE.z) * easeIn(visit.t / p.leaveSeconds)
+    this.police.group.position.set(POLICE.x, 0, z)
     const flash = Math.floor(performance.now() / 180) % 2 === 0
     const on = visit.phase !== 'leaving' || visit.t < 2
     this.police.lights[0]!.color.setHex(on && flash ? 0xef4444 : 0x450a0a)
@@ -400,7 +430,6 @@ export class Warehouse {
       group.add(mesh)
       return mesh
     }
-    // Faces −z, like the trucks.
     add(new THREE.BoxGeometry(1.9, 0.6, 4.6), mat(0xf1f5f9, 0.45, 0.3), 0, 0.6, 0)
     add(new THREE.BoxGeometry(1.7, 0.55, 2.4), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1, metalness: 0.6 }), 0, 1.15, 0.1)
     add(new THREE.BoxGeometry(1.92, 0.3, 4.62), mat(0x111827, 0.5, 0.3), 0, 0.5, 0)
@@ -411,13 +440,13 @@ export class Warehouse {
     const tyre = mat(0x111827, 0.9)
     for (const x of [-0.95, 0.95]) {
       for (const z of [-1.4, 1.4]) {
-        const w = add(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14), tyre, x, 0.34, z)
-        w.rotation.z = Math.PI / 2
+        const wh = add(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14), tyre, x, 0.34, z)
+        wh.rotation.z = Math.PI / 2
       }
     }
-    const tag = makeNameSprite('POLICE · inspection')
-    tag.position.set(0, 2.3, 0)
-    group.add(tag)
+    const label = makeNameSprite('POLICE · inspection')
+    label.position.set(0, 2.3, 0)
+    group.add(label)
     return { group, lights: [red, blue] }
   }
 
@@ -425,9 +454,8 @@ export class Warehouse {
 
   private drawBoard(game: GameManager): void {
     const wh = game.warehouse
-    const truck = wh.truck
-    const status = truck ? `${truck.owner}: ${truck.job === 'deliver' ? 'delivering' : 'collecting'} ${truck.crates}` : 'Bay free'
-    const signature = [wh.stored, wh.capacity, wh.coldCapacity, wh.vaultCapacity, wh.hiddenCapacity, status, wh.waiting, wh.earned, wh.collected, wh.fines, wh.receiving.length, wh.police?.phase ?? ''].join('|')
+    const parked = wh.trucks.filter((t) => t.phase === 'parked').length
+    const signature = [wh.stored, wh.capacity, wh.coldCapacity, wh.vaultCapacity, wh.hiddenCapacity, parked, wh.waiting, wh.earned, wh.collected, wh.fines, wh.police?.phase ?? ''].join('|')
     if (signature === this.board.signature) return
     this.board.signature = signature
     const ctx = this.board.canvas.getContext('2d')
@@ -446,18 +474,16 @@ export class Warehouse {
     ctx.fillText(`${wh.stored} / ${total} crates`, 32, 112)
     ctx.fillStyle = '#e2e8f0'
     ctx.font = '600 30px system-ui, sans-serif'
-    ctx.fillText(`Dock: ${wh.receiving.length} waiting · Bay: ${status}`, 32, 176)
-    ctx.fillText(`In the road: ${wh.waiting}${wh.police ? '   ·   POLICE HERE' : ''}`, 32, 220)
+    ctx.fillText(`Trucks parked: ${parked} · waiting in the road: ${wh.waiting}`, 32, 176)
+    ctx.fillText(wh.police ? 'POLICE HERE' : wh.autoLevel > 0 ? `Robots level ${wh.autoLevel} carry the crates` : 'You carry the crates (E on a truck)', 32, 220)
     ctx.fillStyle = '#94a3b8'
     ctx.fillText(`Collected: ${wh.collected} crates · $${wh.earned}   Fines: $${wh.fines}`, 32, 272)
     ctx.font = '600 24px system-ui, sans-serif'
-    ctx.fillText('Process loads at the receiving desk. Not everything is what it says.', 32, 340)
+    ctx.fillText('Open a crate at the receiving desk. Not everything is what it says.', 32, 340)
   }
 
-  /** The receiving desk: a pedestal with a screen facing north (you stand on the dock side), tagged so you can aim at it. */
   private buildDesk(): void {
-    const x = 16.2
-    const z = -21.7
+    const { x, z } = WAREHOUSE.desk
     const body = mat(0x1f2937, 0.5, 0.4)
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.95, 0.36), body)
     pedestal.position.set(x, 0.475, z)
@@ -489,7 +515,7 @@ export class Warehouse {
 
   private drawDesk(game: GameManager): void {
     const wh = game.warehouse
-    const loads = wh.receiving.length
+    const loads = wh.loads.length
     const signature = [loads, wh.autoLevel, wh.scanner].join('|')
     if (signature === this.desk.signature) return
     this.desk.signature = signature
@@ -503,16 +529,16 @@ export class Warehouse {
     ctx.fillStyle = '#fbbf24'
     ctx.font = '800 38px system-ui, sans-serif'
     ctx.fillText('RECEIVING', 28, 44)
-    ctx.fillStyle = loads > 0 && wh.autoLevel === 0 ? '#f59e0b' : '#22c55e'
-    ctx.font = '800 54px system-ui, sans-serif'
-    ctx.fillText(`${loads} on the dock`, 28, 118)
+    ctx.fillStyle = loads > 0 ? '#f59e0b' : '#22c55e'
+    ctx.font = '800 50px system-ui, sans-serif'
+    ctx.fillText(`${loads} load${loads === 1 ? '' : 's'} parked`, 28, 116)
     ctx.fillStyle = '#e2e8f0'
     ctx.font = '600 30px system-ui, sans-serif'
-    ctx.fillText(wh.autoLevel > 0 ? `Robots level ${wh.autoLevel} on duty` : 'Manual: you decide', 28, 184)
-    ctx.fillText(wh.scanner ? 'Scanner: contents shown' : 'No scanner: trust the label?', 28, 230)
+    ctx.fillText(wh.scanner ? 'Scanner: contents shown' : 'Open a crate to be sure', 28, 184)
+    ctx.fillText(wh.autoLevel > 0 ? `Robots level ${wh.autoLevel} on duty` : 'Refuse a load you do not want', 28, 230)
     ctx.fillStyle = '#94a3b8'
     ctx.font = '600 26px system-ui, sans-serif'
-    ctx.fillText('Press E to process loads', 28, 306)
+    ctx.fillText('Press E for the loads', 28, 306)
   }
 
   // ------------------------------------------------------------------ building blocks
@@ -521,84 +547,119 @@ export class Warehouse {
     return new THREE.Vector3(x, level + 0.03 + CRATE.h / 2, z)
   }
 
-  /** Slots on the floor and on one shelf (0.9 m up) in a grid of columns (x) and rows (z). */
-  private gridSlots(section: Section, _rect: Rect, xs: number[], zs: number[]): void {
-    for (const level of [0.0, 0.92]) for (const x of xs) for (const z of zs) this.slots[section].push(this.slot(x, level, z))
+  /** Slots of a rack row along x (crates in the middle of each bay). */
+  private rowSlotsAt(z: number, x0: number, bays: number, pitch: number, levels: readonly number[]): THREE.Vector3[] {
+    const out: THREE.Vector3[] = []
+    for (const level of levels) for (let b = 0; b < bays; b++) out.push(this.slot(x0 + pitch * (b + 0.5), level, z))
+    return out
   }
 
-  /** A pallet rack running along z: posts, beams, boards and a collider. */
-  private rackAlongZ(rx: number, northZ: number, length: number, bays: number, pitch: number): void {
-    const { racks } = WAREHOUSE
+  private rowSlots(z: number): THREE.Vector3[] {
+    const { rows, racks } = WAREHOUSE
+    return this.rowSlotsAt(z, rows.x0, rows.bays, rows.pitch, racks.levels)
+  }
+
+  /** Slots of a rack along z (the hidden room's), from the south end. */
+  private zSlotsAt(x: number, z0: number, bays: number, pitch: number, levels: readonly number[]): THREE.Vector3[] {
+    const out: THREE.Vector3[] = []
+    for (const level of levels) for (let b = 0; b < bays; b++) out.push(this.slot(x, level, z0 + pitch * (b + 0.5)))
+    return out
+  }
+
+  /**
+   * A pallet rack running along z, from `northZ` southwards: posts, beams, boards, a collider, and an invisible box tagged with its section
+   * (aim at the rack to store a crate on it, or to take one for a collection). Returns its slots (base racks only use them).
+   */
+  private rackAlongZ(rx: number, northZ: number, bays: number, pitch: number, levels: readonly number[], section: Section): THREE.Vector3[] {
     const post = mat(0x1d4ed8, 0.5, 0.3)
     const beam = mat(0xf59e0b, 0.5, 0.3)
     const board = mat(0x9ca3af, 0.7, 0.2)
+    const length = bays * pitch
     const zMid = northZ - length / 2
-    for (let i = 0; i <= bays; i++) for (const dx of [-0.55, 0.55]) this.deco(0.08, 3.2, 0.08, post, rx + dx, 1.6, northZ - i * pitch)
-    for (const level of racks.levels) {
-      this.deco(1.2, 0.06, length, board, rx, level, zMid)
-      for (const dx of [-0.55, 0.55]) this.deco(0.06, 0.12, length, beam, rx + dx, level - 0.05, zMid)
+    const top = levels[levels.length - 1]! + 1.0
+    for (let i = 0; i <= bays; i++) for (const dx of [-0.52, 0.52]) this.deco(0.08, top, 0.08, post, rx + dx, top / 2, northZ - i * pitch)
+    for (const level of levels) {
+      this.deco(1.12, 0.05, length, board, rx, level, zMid)
+      for (const dx of [-0.52, 0.52]) this.deco(0.05, 0.1, length, beam, rx + dx, level - 0.08, zMid)
     }
-    this.physicsBox(rx, 1.6, zMid, 0.62, 1.6, length / 2)
-    this.blocker(rx, 1.6, zMid, 1.24, 3.2, length)
+    this.physicsBox(rx, top / 2, zMid, 0.58, top / 2, length / 2)
+    this.sectionProxy(section, rx, top / 2, zMid, 1.3, top, length + 0.1)
+    const out: THREE.Vector3[] = []
+    for (const level of levels) for (let b = 0; b < bays; b++) out.push(this.slot(rx, level, northZ - pitch * (b + 0.5)))
+    return out
   }
 
-  /** A pallet rack running along x (the extra rows along the north and south walls). */
-  private rackAlongX(z: number, x0: number, x1: number): void {
-    const { racks } = WAREHOUSE
+  /** A pallet rack running along x, from `x0` eastwards (the extra rows and the racks in the rooms). */
+  private rackAlongX(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], section: Section): void {
     const post = mat(0x1d4ed8, 0.5, 0.3)
     const beam = mat(0xf59e0b, 0.5, 0.3)
     const board = mat(0x9ca3af, 0.7, 0.2)
-    const len = x1 - x0
-    const xMid = (x0 + x1) / 2
-    for (let x = x0; x <= x1 + 0.01; x += 0.9) for (const dz of [-0.55, 0.55]) this.deco(0.08, 3.2, 0.08, post, x, 1.6, z + dz)
-    for (const level of racks.levels) {
-      this.deco(len, 0.06, 1.2, board, xMid, level, z)
-      for (const dz of [-0.55, 0.55]) this.deco(len, 0.12, 0.06, beam, xMid, level - 0.05, z + dz)
+    const len = bays * pitch
+    const xMid = x0 + len / 2
+    const top = levels[levels.length - 1]! + 1.0
+    for (let i = 0; i <= bays; i++) for (const dz of [-0.52, 0.52]) this.deco(0.08, top, 0.08, post, x0 + i * pitch, top / 2, z + dz)
+    for (const level of levels) {
+      this.deco(len, 0.05, 1.12, board, xMid, level, z)
+      for (const dz of [-0.52, 0.52]) this.deco(len, 0.1, 0.05, beam, xMid, level - 0.08, z + dz)
     }
-    this.physicsBox(xMid, 1.6, z, len / 2, 1.6, 0.62)
-    this.blocker(xMid, 1.6, z, len, 3.2, 1.24)
+    this.physicsBox(xMid, top / 2, z, len / 2, top / 2, 0.58)
+    this.sectionProxy(section, xMid, top / 2, z, len + 0.1, top, 1.3)
   }
 
-  /** A walled room in a corner (cold room, vault, hidden room): four walls with a doorway, a floor, a sign and a light. */
-  private room(rect: Rect, door: { side: 'west' | 'north'; at: number; width: number }, wallColour: number, text: string, textColour: string, floorColour: number, glow: number): void {
+  private sectionProxy(section: Section, x: number, y: number, z: number, w: number, h: number, d: number): void {
+    const proxy = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ visible: false }))
+    proxy.position.set(x, y, z)
+    tag(proxy, { kind: 'section', section })
+    this.root.add(proxy)
+  }
+
+  /** A walled room (cold room, vault, hidden room): walls with a wide doorway, a floor, a ceiling, a sign and a light. */
+  private room(rect: Rect, door: { side: 'west' | 'north'; at: number; width: number }, wallColour: number, text: string, textColour: string, floorColour: number, section: Section): void {
     const { minX, maxX, minZ, maxZ } = rect
-    const h = 2.9
-    const wallMat = mat(wallColour, 0.7, 0.2)
+    const h = 3.4
+    const wallMat = lit(wallColour, 0.7, 0.2)
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    this.deco(maxX - minX, 0.04, maxZ - minZ, mat(floorColour, 0.8), cx, 0.04, cz)
+    this.deco(maxX - minX, 0.02, maxZ - minZ, lit(floorColour, 0.8, 0, 0.25), cx, 0.045, cz)
     const wallZ = (z: number, from: number, to: number) => {
       if (to - from > 0.01) this.solid(to - from, h, T, wallMat, (from + to) / 2, h / 2, z)
     }
     const wallX = (x: number, from: number, to: number) => {
       if (to - from > 0.01) this.solid(T, h, to - from, wallMat, x, h / 2, (from + to) / 2)
     }
-    // Wall on the north edge (z = maxZ), the south edge (z = minZ), the west edge (x = minX) and the east edge (x = maxX), with the doorway on one.
-    const doorLo = door.at - door.width / 2
-    const doorHi = door.at + door.width / 2
-    if (door.side === 'north') {
-      wallZ(maxZ, minX, doorLo)
-      wallZ(maxZ, doorHi, maxX)
-      this.solid(door.width, h - 2.2, T, wallMat, door.at, 2.2 + (h - 2.2) / 2, maxZ)
-    } else wallZ(maxZ, minX, maxX)
-    wallZ(minZ, minX, maxX)
-    if (door.side === 'west') {
-      wallX(minX, minZ, doorLo)
-      wallX(minX, doorHi, maxZ)
-      this.solid(T, h - 2.2, door.width, wallMat, minX, 2.2 + (h - 2.2) / 2, door.at)
-    } else wallX(minX, minZ, maxZ)
-    wallX(maxX, minZ, maxZ)
-    this.deco(maxX - minX, 0.1, maxZ - minZ, wallMat, cx, h + 0.05, cz) // ceiling
-    const light = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: textColour === '#38bdf8' ? 0x7dd3fc : 0xfff8e7, emissiveIntensity: glow })
+    const lo = door.at - door.width / 2
+    const hi = door.at + door.width / 2
+    const doorH = 2.4
+    // Only the sides that face the inside of the shed are built (the others are the shed's own walls).
+    const onNorth = maxZ >= WAREHOUSE.maxZ - 0.3
+    const onSouth = minZ <= WAREHOUSE.minZ + 0.3
+    const onWest = minX <= WAREHOUSE.minX + 0.3
+    const onEast = maxX >= WAREHOUSE.maxX - 0.3
+    if (!onNorth) {
+      if (door.side === 'north') {
+        wallZ(maxZ + T / 2, minX - T, lo)
+        wallZ(maxZ + T / 2, hi, maxX + (onEast ? 0 : T))
+        this.solid(door.width, h - doorH, T, wallMat, door.at, doorH + (h - doorH) / 2, maxZ + T / 2)
+      } else wallZ(maxZ + T / 2, minX - T, maxX + (onEast ? 0 : T))
+    }
+    if (!onSouth) wallZ(minZ - T / 2, minX - T, maxX + (onEast ? 0 : T))
+    if (!onWest) {
+      if (door.side === 'west') {
+        wallX(minX - T / 2, minZ, lo)
+        wallX(minX - T / 2, hi, maxZ)
+        this.solid(T, h - doorH, door.width, wallMat, minX - T / 2, doorH + (h - doorH) / 2, door.at)
+      } else wallX(minX - T / 2, minZ, maxZ)
+    }
+    if (!onEast) wallX(maxX + T / 2, minZ, maxZ)
+    this.deco(maxX - minX + T, 0.1, maxZ - minZ + T, wallMat, cx, h + 0.05, cz).castShadow = true // ceiling
+    const light = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: section === 'cold' ? 0x7dd3fc : 0xfff8e7, emissiveIntensity: section === 'cold' ? 1.5 : 1.1 })
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.4), light)
-    fixture.position.set(cx, h - 0.06, cz)
+    fixture.position.set(cx, h - 0.04, cz)
     this.root.add(fixture)
     const sign = makeSign(text, 1.4, 0.24, '#0f172a', textColour)
-    if (door.side === 'north') {
-      sign.position.set(door.at, 2.6, maxZ - 0.12)
-      sign.position.z = maxZ + T / 2 + 0.03 // on the outside of the north wall, facing north (+z)
-    } else {
-      sign.position.set(minX - T / 2 - 0.03, 2.6, door.at)
+    if (door.side === 'north') sign.position.set(door.at, doorH + 0.35, maxZ + T + 0.03)
+    else {
+      sign.position.set(minX - T - 0.03, doorH + 0.35, door.at)
       sign.rotation.y = -Math.PI / 2
     }
     this.root.add(sign)
@@ -614,22 +675,16 @@ export class Warehouse {
     this.physicsBox(x, y, z, w / 2, h / 2, d / 2)
   }
 
-  private blocker(x: number, y: number, z: number, w: number, h: number, d: number): void {
-    const blocker = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ visible: false }))
-    blocker.position.set(x, y, z)
-    markBlocker(blocker)
-    this.root.add(blocker)
-  }
-
   private physicsBox(x: number, y: number, z: number, hx: number, hy: number, hz: number): void {
     this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(x, y, z), new THREE.Vector3(hx, hy, hz)))
   }
 
-  private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
+  private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)
+    return mesh
   }
 
   private decoYard(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
@@ -640,47 +695,40 @@ export class Warehouse {
   }
 }
 
-/** The rack rows that come with the capacity upgrades: along the north and south walls. */
-const ROW_NORTH_Z = -14.4
-const ROW_SOUTH_Z = -25.0
-const ROW_X = [12.55, 13.45, 14.35, 15.25]
-/** The rooms (interior rectangles) in the corners of the shed. */
-const COLD: Rect = { minX: 16.0, maxX: 19.4, minZ: -16.0, maxZ: -13.2 }
-const VAULT: Rect = { minX: 16.5, maxX: 19.4, minZ: -25.8, maxZ: -22.6 }
-const HIDDEN: Rect = { minX: 9.7, maxX: 11.6, minZ: -25.8, maxZ: -22.0 }
-/** Where the loads on the dock stand (by the shutter), and the x of the pallets. */
-const DOCK_X = 17.7
-const DOCK_Z = [-16.6, -18.2, -19.8]
+/** A material that glows faintly in its own colour, for surfaces under the roof (a fresh one: `mat()` materials are shared). */
+function lit(color: number, roughness: number, metalness = 0, glow = 0.3): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive: color, emissiveIntensity: glow })
+}
 
 const easeOut = (x: number): number => 1 - (1 - Math.min(1, Math.max(0, x))) ** 2
 const easeIn = (x: number): number => Math.min(1, Math.max(0, x)) ** 2
 
 const nameTextures = new Map<string, THREE.CanvasTexture>()
 
-/** A name on a dark pill that always faces the camera. */
+/** A label on a dark pill that always faces the camera. */
 function makeNameSprite(text: string): THREE.Sprite {
   let texture = nameTextures.get(text)
   if (!texture) {
     const canvas = document.createElement('canvas')
-    canvas.width = 512
+    canvas.width = 640
     canvas.height = 80
     const ctx = canvas.getContext('2d')
     if (ctx) {
       ctx.fillStyle = 'rgba(15, 23, 42, 0.8)'
       ctx.beginPath()
-      ctx.roundRect(4, 6, 504, 68, 26)
+      ctx.roundRect(4, 6, 632, 68, 26)
       ctx.fill()
       ctx.fillStyle = '#fbbf24'
-      ctx.font = '700 36px system-ui, sans-serif'
+      ctx.font = '700 34px system-ui, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(text, 256, 42, 480)
+      ctx.fillText(text, 320, 42, 600)
     }
     texture = new THREE.CanvasTexture(canvas)
     texture.colorSpace = THREE.SRGBColorSpace
     nameTextures.set(text, texture)
   }
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }))
-  sprite.scale.set(2.6, 0.41, 1)
+  sprite.scale.set(3.2, 0.4, 1)
   return sprite
 }

@@ -5,8 +5,8 @@ const SECTION_NAME: Record<Section, string> = { shelves: 'Shelves', cold: 'Cold 
 const label = (c: CargoType) => CONFIG.warehouse.cargo[c].label
 
 /**
- * The receiving desk: every load that has been unloaded at the dock and is waiting for a decision. Pick one with W/S, then press 1 to store
- * it where it looks like it belongs, 2 to open the crates and see what is really inside (it takes a few seconds), or 3 to send it back.
+ * The receiving desk: every load parked beside the warehouse. Pick one with W/S, then press 1 to open a crate and see what is really inside
+ * (it takes a few seconds), or 2 to send the load back (only before you have unloaded any of it). You carry the crates in yourself.
  * What a load LOOKS like is what the driver says it is: contraband is declared as something harmless until you open it (or buy a scanner).
  */
 export function ReceivingPanel({ view }: { view: ReceivingView }) {
@@ -16,7 +16,7 @@ export function ReceivingPanel({ view }: { view: ReceivingView }) {
   return (
     <div className="catalogue" role="dialog" aria-label="Receiving desk">
       <div className="catalogue-head">
-        <p className="catalogue-title">Receiving desk · the dock</p>
+        <p className="catalogue-title">Receiving desk · parked loads</p>
         <p className="catalogue-wallet">
           {view.autoLevel > 0 && <span>Robots {view.autoLevel} on duty ·</span>} {view.scanner && <span>Scanner ·</span>}
           {view.sections.map((s) => (
@@ -28,9 +28,9 @@ export function ReceivingPanel({ view }: { view: ReceivingView }) {
         </p>
       </div>
       {view.loads.length === 0 ? (
-        <p className="terminal-empty">Nothing on the dock. Trucks bring loads now and then.</p>
+        <p className="terminal-empty">No trucks parked. They come now and then and park outside the shutter.</p>
       ) : (
-        <ol className="catalogue-items" role="listbox" aria-label="Loads on the dock">
+        <ol className="catalogue-items" role="listbox" aria-label="Parked loads">
           {view.loads.map((load, i) => {
             const lie = load.known && load.declared !== load.looksLike
             return (
@@ -39,7 +39,7 @@ export function ReceivingPanel({ view }: { view: ReceivingView }) {
                   <kbd>{i + 1}</kbd>
                   <span className="catalogue-name">
                     <strong>
-                      {load.owner} · {load.crates} crates · {label(load.looksLike)}
+                      {load.owner} · {load.onTruck} of {load.crates} crates on the truck · {label(load.looksLike)}
                     </strong>
                     <span>
                       {load.opening
@@ -52,13 +52,18 @@ export function ReceivingPanel({ view }: { view: ReceivingView }) {
                       {load.spoiled ? ' · SPOILED' : ''}
                       {load.vip ? ' · VIP deal' : ''}
                       {' · '}
-                      {load.goesTo ? `goes: ${SECTION_NAME[load.goesTo].toLowerCase()}` : 'no room!'}
+                      {load.goesTo ? `belongs in: ${SECTION_NAME[load.goesTo].toLowerCase()}` : 'no room!'}
                     </span>
                   </span>
                   <span className="receiving-actions">
-                    {(['store', 'inspect', 'refuse'] as const).map((action, n) => (
-                      <button key={action} type="button" onClick={() => patch({ pendingReceive: { id: load.id, action } })} disabled={load.opening}>
-                        <kbd>{n + 1}</kbd> {action === 'store' ? 'Store' : action === 'inspect' ? 'Open' : 'Refuse'}
+                    {(['inspect', 'refuse'] as const).map((action, n) => (
+                      <button
+                        key={action}
+                        type="button"
+                        onClick={() => patch({ pendingReceive: { id: load.id, action } })}
+                        disabled={load.opening || (action === 'inspect' ? load.known : load.onTruck < load.crates)}
+                      >
+                        <kbd>{n + 1}</kbd> {action === 'inspect' ? 'Open a crate' : 'Send it back'}
                       </button>
                     ))}
                   </span>
@@ -70,7 +75,7 @@ export function ReceivingPanel({ view }: { view: ReceivingView }) {
       )}
       <p className="dialogue-keys">
         <kbd>W</kbd>
-        <kbd>S</kbd> or scroll to pick a load · <kbd>1</kbd> store · <kbd>2</kbd> open the crates · <kbd>3</kbd> send it back · <kbd>Q</kbd> close
+        <kbd>S</kbd> or scroll to pick a load · <kbd>1</kbd> open a crate · <kbd>2</kbd> send it back · <kbd>Q</kbd> close · carry the crates in from the truck
       </p>
     </div>
   )

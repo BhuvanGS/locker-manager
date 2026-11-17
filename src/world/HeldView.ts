@@ -22,7 +22,7 @@ export class HeldView {
 
     const hands = game.hands
     const labels = game.hasLabels
-    const sig = hands ? `${hands.kind}:${hands.kind === 'item' ? hands.itemId : hands.keyId}:${labels}` : ''
+    const sig = hands ? `${hands.kind}:${hands.kind === 'item' ? hands.itemId : hands.kind === 'key' ? hands.keyId : game.warehouse.carrying?.loadId}:${labels}` : ''
     if (sig === this.shown) return
     this.shown = sig
     this.anchor.clear()
@@ -33,6 +33,16 @@ export class HeldView {
       setKeyLabel(key, labels ? game.lockers.get(game.keys.get(hands.keyId).lockerId).number : null)
       key.rotation.set(0.3, -0.5, 0.4)
       this.anchor.add(key)
+      return
+    }
+    if (hands.kind === 'crate') {
+      // A cardboard crate held low in both hands.
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.3), new THREE.MeshStandardMaterial({ color: 0xb08a5a, roughness: 0.85 }))
+      const tape = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.245, 0.305), new THREE.MeshStandardMaterial({ color: 0xd6c39a, roughness: 0.6 }))
+      crate.add(tape)
+      crate.position.set(-0.3, -0.16, -0.12)
+      crate.rotation.y = -0.15
+      this.anchor.add(crate)
       return
     }
     const item = game.customers.item(hands.itemId)

@@ -172,7 +172,7 @@ export const CONSOLES = {
   /** In the north-west corner of every tall hall, by the west window, angled out into the room (clear of the stairs, the corridor and the bay). */
   hall: { x: -5.5, z: -9.9, rotY: (3 * Math.PI) / 4 },
   /** Inside the warehouse, by the west door, facing east into the shed. */
-  warehouse: { x: 10.5, z: -16.0, rotY: Math.PI / 2 },
+  warehouse: { x: 10.4, z: -15.6, rotY: Math.PI / 2 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
@@ -209,16 +209,26 @@ export const OFFICE = {
 export const WAREHOUSE = {
   door: { z: -18.2, halfWidth: 0.8, height: 2.2 },
   minX: 9.6,
-  maxX: 19.6,
-  minZ: -26,
+  maxX: 24.0,
+  minZ: -31,
   maxZ: -13,
-  height: 4.4,
-  /** The shutter on the east wall, and where a truck stops beside it (its cargo area faces the shutter). */
-  shutter: { z: -18.2, halfWidth: 1.8, height: 3.0 },
-  bay: { x: 22.6, z: -18.2 },
-  road: { minX: 20.6, maxX: 27, minZ: -52, maxZ: 10.2 },
-  /** The racks: x of each, the z of the first bay and the bay pitch, and the heights of the shelves. */
-  racks: { x: [12.4, 14.9], firstZ: -16.9, pitch: 2.0, bays: 4, levels: [0.12, 1.02, 1.92] },
+  height: 5.0,
+  /** The big roller shutter in the east wall: you carry crates through it to and from the parked trucks (it opens as you walk up). */
+  shutter: { z: -22.0, halfWidth: 2.6, height: 3.4 },
+  /** Parking spots beside the shed, between it and the road: trucks park here (facing −z) while their crates are carried. */
+  parking: { x: 27.6, z: [-15.5, -22.0, -28.5] },
+  /** The service road: trucks drive down it from the main street, pull into a spot, and leave by the far end. */
+  road: { minX: 31, maxX: 37, minZ: -64, maxZ: 10.2, laneX: 33.2 },
+  /** The two base racks run along z (4 bays of 2 m, 3 shelves): 24 slots. */
+  racks: { x: [13.4, 17.0], northZ: -17.0, pitch: 2.0, bays: 4, levels: [0.12, 1.02, 1.92] },
+  /** The rack rows that come with the capacity upgrades run along x by the north and south walls (4 bays of 0.9 m, 3 shelves): 12 slots each. */
+  rows: { northZ: -14.8, southZ: -27.6, x0: 13.2, bays: 4, pitch: 0.9 },
+  /** The rooms in the corners (interiors), each with its racks. */
+  cold: { minX: 19.8, maxX: 23.8, minZ: -17.6, maxZ: -13.2 },
+  vault: { minX: 19.8, maxX: 23.8, minZ: -30.8, maxZ: -26.4 },
+  hidden: { minX: 9.8, maxX: 12.6, minZ: -30.8, maxZ: -26.0 },
+  /** The receiving desk, between the shutter and the vault. */
+  desk: { x: 19.0, z: -25.2 },
 }
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
@@ -311,6 +321,8 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
   if (feetY > FLOOR_HEIGHT - 0.9) return 'floor1'
   if (z < ROOM.minZ - 0.2 && x > ROOM.minX - 0.2 && x < ROOM.maxX + 0.2) return 'south'
   if (x < ROOM.minX - 0.2) return 'west'
+  // Outside, east of the east annex: the yard, the road and the parking, which belong to the warehouse.
+  if (x > ANNEX.east.maxX + 0.2) return 'warehouse'
   if (x > ROOM.maxX + 0.2) return z > OFFICE.minZ - 0.2 ? 'office' : z < ROOM.minZ - 0.4 ? 'warehouse' : 'east'
   return 'main'
 }
@@ -318,13 +330,14 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
 /** Zones you can see into from each zone (through doorways and stairwells). */
 export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
   main: ['west', 'east', 'south', 'office'],
-  office: ['main'],
+  office: ['main', 'warehouse'],
   west: ['main'],
-  east: ['main'],
+  east: ['main', 'warehouse'],
   // The three halls are one tower: the floor of floor 1 is the ceiling slab of the south hall, and you look down stairwells
   // to the floors below, so anywhere in the tower you must be able to see all of it.
   south: ['main', 'floor1', 'floor2', 'warehouse'],
-  warehouse: ['south'],
+  // From the shed and its yard you can see the halls (through the door) and the east side of the shop.
+  warehouse: ['south', 'east', 'office'],
   floor1: ['south', 'floor2'],
   floor2: ['floor1', 'south'],
 }

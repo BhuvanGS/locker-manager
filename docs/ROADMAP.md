@@ -211,8 +211,19 @@ Requested as "the next major upgrade: automation".
 - [x] **Warehouse upgrades** (`WAREHOUSE_UPGRADES`, bought at the warehouse console, scope `warehouse`): rack rows, cold room, vault, licence, scanner, hidden compartments (2 levels), receiving robots (2 levels, `autoSeconds`).
       The view builds each rack row / room when it is bought.
 - [x] Tests: `sim/Warehouse.test.ts` rewritten (dock, cargo, spoilage, theft, police, robots, upgrades); `Fuzz.test.ts` plays the receiving desk and the upgrades too.
-- **Next:** hand-moving crates (a trolley, then a forklift), a second bay and dock, insurance and a claims desk, customs inspections of imports, a **bribe** option for the police, truckers who come back angry
-      after a refusal, night shifts, and a bigger shed (the road and the lot have room).
+- **Next:** see the next section.
+
+## Interim work: a bigger warehouse, parked trucks and carrying crates by hand (done)
+
+- [x] **Bigger shed** (`WAREHOUSE` in `layout.ts`: 14.4 × 18 m, 5 m high, wide aisles), the road moved east, three **parking spots** beside the shed (`CONFIG.warehouse.parkingSpots`).
+- [x] **Carrying crates:** trucks park and wait; you take one crate at a time off a truck (`takeCrateFromTruck`) and store it on a rack or in a room (`storeCrate`), and carry an owner's crates back out to their parked truck
+      (`takeCrateFrom`, `loadCrate`). `hands: { kind: 'crate' }` + `WarehouseManager.carrying`; the held crate is drawn by `HeldView`. Ignored deliveries give up after `parkedPatience`.
+- [x] **Racks in the cold room, vault and hidden room** (aim at a rack to use that section); the receiving desk now only opens crates and refuses loads (keys 1 / 2).
+- [x] **The roller shutter opens when you walk up to it**; the yard counts as the warehouse zone, so the shed is drawn from the road.
+- [x] **Render fixes:** the sun's shadow box follows the player (`Facility.followSun`), the shed roof and room ceilings cast shadows, the shed fascia is no longer a false ceiling, and the inside is lit evenly.
+- [x] Tests: `Warehouse.test.ts` rewritten for the carry model (parking, carrying in and out, wrong truck, full sections, give-up, robots finishing a started load); `Fuzz.test.ts` carries crates at random and checks that a
+      crate is in exactly one place.
+- **Next:** a hand trolley (carry 4 crates), then a forklift; a second parking row; insurance and a claims desk; customs inspections; a **bribe** option for the police; night shifts.
 
 ## Interim work: mod menu (done)
 

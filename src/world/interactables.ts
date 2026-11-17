@@ -1,4 +1,5 @@
 import type * as THREE from 'three'
+import type { Section } from '../sim/config'
 import type { CustomerId, LockerId } from '../sim/types'
 
 /** What a 3D object is, for the interaction raycast. Stored on `object.userData.interact`. */
@@ -17,8 +18,12 @@ export type Interactable =
   | { kind: 'dealDesk' }
   /** An automation upgrade console: `hub` or the zone whose arms it controls. */
   | { kind: 'console'; scope: 'hub' | 'warehouse' | 'main' | 'east' | 'south' | 'floor1' | 'floor2' }
-  /** The receiving desk at the warehouse dock. */
+  /** The receiving desk at the warehouse. */
   | { kind: 'receivingDesk' }
+  /** A truck parked beside the warehouse (take a crate off it, or load one onto it). */
+  | { kind: 'truck'; truckId: number }
+  /** A warehouse rack or room: store the crate you carry there, or take one out for a collection. */
+  | { kind: 'section'; section: Section }
 
 export function tag(object: THREE.Object3D, data: Interactable): void {
   object.userData.interact = data

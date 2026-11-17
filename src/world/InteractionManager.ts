@@ -3,6 +3,7 @@ import type { GameManager } from '../sim/GameManager'
 import type { ActionResult } from '../sim/types'
 import { findInteractable, type Interactable } from './interactables'
 import { REACH } from './layout'
+import type { Section } from '../sim/config'
 
 export type Aim = {
   target: Interactable
@@ -16,6 +17,8 @@ export type Aim = {
  * Finds what is under the crosshair and turns it into a context action against the simulation.
  * One button (E or left click) does the obvious thing for whatever you are looking at.
  */
+const SECTION_NAMES: Record<Section, string> = { shelves: 'racks', cold: 'cold room', vault: 'vault', hidden: 'hidden room' }
+
 export class InteractionManager {
   private readonly raycaster = new THREE.Raycaster()
   private readonly center = new THREE.Vector2(0, 0)
@@ -61,6 +64,10 @@ export class InteractionManager {
         return game.openConsole(t.scope)
       case 'receivingDesk':
         return game.openReceiving()
+      case 'truck':
+        return game.hands?.kind === 'crate' ? game.loadCrate(t.truckId) : game.takeCrateFromTruck(t.truckId)
+      case 'section':
+        return game.hands?.kind === 'crate' ? game.storeCrate(t.section) : game.takeCrateFrom(t.section)
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -101,8 +108,33 @@ export class InteractionManager {
       case 'console':
         return { action: t.scope === 'hub' ? 'Use the control hub' : t.scope === 'warehouse' ? 'Upgrade the warehouse' : 'Upgrade the robot arms here', hint: null }
       case 'receivingDesk': {
-        const n = game.warehouse.receiving.length
-        return { action: n > 0 ? `Process the ${n} load${n === 1 ? '' : 's'} on the dock` : 'Receiving desk', hint: null }
+        const n = game.warehouse.loads.length
+        return { action: n > 0 ? `Check the ${n} parked load${n === 1 ? '' : 's'}` : 'Receiving desk', hint: null }
+      }
+      case 'truck': {
+        const wh = game.warehouse
+        const truck = wh.truck(t.truckId)
+        if (!truck) return none()
+        const name = truck.owner.split(' (')[0]
+        if (truck.phase !== 'parked') return none(truck.phase === 'arriving' ? `${name} is parking…` : `${name} is leaving`)
+        if (wh.autoLevel > 0) return none('The robots handle the trucks')
+        if (truck.job === 'collect') {
+          if (hands?.kind !== 'crate') return none(hands ? 'Hands full' : `${name} is collecting: bring their crates here`)
+          return wh.carrying?.loadId === truck.loadId ? { action: `Load the crate onto ${name}'s truck`, hint: null } : none(`Not ${name}'s crate`)
+        }
+        if (hands) return none(hands.kind === 'crate' ? 'Store the crate you carry first' : 'Hands full')
+        return truck.onBoard > 0 ? { action: `Take a crate off ${name}'s truck (${truck.onBoard} left)`, hint: null } : none('Empty')
+      }
+      case 'section': {
+        const wh = game.warehouse
+        const name = SECTION_NAMES[t.section]
+        if (hands?.kind === 'crate') {
+          return wh.sectionFree(t.section) > 0 ? { action: `Store the crate in the ${name}`, hint: null } : none(`The ${name} is full`)
+        }
+        if (hands) return none('Hands full')
+        const c = wh.collectionFrom(t.section)
+        if (c) return { action: `Take ${c.owner.split(' (')[0]}'s crate for their truck`, hint: null }
+        return none(`${name[0]!.toUpperCase()}${name.slice(1)}: ${wh.sectionStored(t.section)} / ${wh.sectionCapacity(t.section)}`)
       }
       case 'customer': {
         const c = game.customers.get(t.customerId)

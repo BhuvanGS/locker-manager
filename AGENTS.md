@@ -119,17 +119,22 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
-- **Cargo, the dock, sections, police** (`sim/WarehouseManager.ts`; `CONFIG.warehouse`, `WAREHOUSE_UPGRADES`, `CargoType`, `Section` in `config.ts`): a truck's delivery does not store anything: it becomes a `PendingLoad` on
-  `receiving` (the dock). `visibleCargo` is what it looks like (the real type only if `inspected` or the scanner); `placeFor(visible, crates)` picks the section (falling back to the shelves); `store / inspect / refuse` are
-  the desk actions (`GameManager.receive`) and the robots (`autoLevel`, `updateAuto`) do the same by themselves. `consignments` hold stored crates by `section`, with `spoiled` (food after `foodShelfLife`, cold
-  chain outside the cold room after `coldSpoilSeconds`), theft (metals outside the vault) and collection pay `cargo fee × crates` (0 if spoiled). `updatePolice` starts visits only once `stored ≥ police.minCrates`;
-  `inspectBuilding` fines and seizes. `GameManager.handleWarehouseEvents` turns events into money, reputation and toasts. Upgrades are bought through `buyAutomation('wh-…')` (console scope `warehouse`) and applied with
-  `WarehouseManager.applyUpgrade`. The 3D side (`world/Warehouse.ts`) builds rack rows and rooms when a flag appears, draws crates per section, pallets on the dock by what they LOOK like, the receiving desk (tag
-  `receivingDesk`) and the police car. **Add to `Fuzz.test.ts` and `check()` when you add a new way for crates to move.**
-- **Warehouse and trucks** (`kind: 'warehouse'`, `sim/WarehouseManager.ts`, `world/Warehouse.ts`): `warehouse.update` (from `GameManager.update`) schedules kei truckers, VIP deliveries (from `deals.signed`) and
-  collections into a queue; ONE truck works the bay at a time (`arriving → unloading → leaving`, `CONFIG.warehouse` seconds); `finishWork` stores or turns away a load and returns events that `GameManager`
-  turns into money, reputation and toasts (`alert` for bad news). The view draws the truck from `warehouse.truck`, the crates from `warehouse.consignments`, and rolls the shutter while a truck works. The door in the
-  south hall is `Hall.openWarehouseDoor`; `WAREHOUSE` in `layout.ts` has every position; `world/Warehouse.ts` has two roots: `root` (the shed, zone-culled) and `yard` (road and trucks, always drawn).
+- **Cargo, parked trucks, carrying crates, sections, police** (`sim/WarehouseManager.ts`; `CONFIG.warehouse`, `WAREHOUSE_UPGRADES`, `CargoType`, `Section` in `config.ts`): trucks queue, then take one of
+  `parkingSpots` (`Truck.spot`, `arriving → parked → leaving`). A delivery is a `Load` (`crates`, `taken`, `truckId`) while its crates are on the truck. **A crate is always in exactly one place:** on a truck
+  (`truck.onBoard`), in a section (`consignments`, by `loadId` + `section`), or in your hands (`WarehouseManager.carrying`, mirrored by `game.hands = { kind: 'crate' }`). Carry actions (`GameManager.takeCrateFromTruck /
+  storeCrate / takeCrateFrom / loadCrate` → `takeFromTruck / storeCarried / takeForCollection / loadCarried`) move one crate at a time. An emptied delivery truck leaves; owners come back per load (`collectAt`) once
+  none of it is on a truck or in your hands, and `finishCollection` pays when the last crate is loaded. A delivery parked longer than `parkedPatience` gives up (`refused` with `gaveUp`). The desk (`GameManager.receive`)
+  only does `inspect` and `refuse` (refuse only while `taken === 0`). `visibleCargo` is what a load looks like (real type only if `inspected` or the scanner); `placeFor(visible, crates)` says where it belongs. The robots
+  (`autoLevel`, `updateAuto`) move a whole collection or the rest of a load at once. Spoilage (food after `foodShelfLife`, cold chain outside the cold room after `coldSpoilSeconds`), theft (metals outside the vault),
+  collection pay `cargo fee × crates` (0 if spoiled), and the police (`updatePolice`, only once `stored ≥ police.minCrates`; `inspectBuilding` fines and seizes). `GameManager.handleWarehouseEvents` turns events into
+  money, reputation and toasts. Upgrades: `buyAutomation('wh-…')` (console scope `warehouse`) → `WarehouseManager.applyUpgrade`. **Add to `Fuzz.test.ts` and `check()` when you add a new way for crates to move.**
+- **Warehouse view** (`kind: 'warehouse'`, `world/Warehouse.ts`, `WAREHOUSE` in `layout.ts`): two roots, `root` (the shed, zone `warehouse`) and `yard` (road, parking, trucks, police car); BOTH are interaction targets.
+  Racks are built by `rackAlongZ` / `rackAlongX`, each with an invisible proxy tagged `{ kind: 'section', section }`; the cold room, vault and hidden room (`room()`) each get their own rack, and every section has crate
+  slots (`slots`) that fill in order. Trucks are one view per `Truck`, tagged `{ kind: 'truck', truckId }`, driving down `road.laneX` and sliding into `parking.x` at their spot. The shutter rolls up (and its collider goes)
+  when the player is within `SHUTTER_REACH` or the robots are working. The roof and room ceilings cast shadows, so the inside uses faintly glowing materials (`lit()`) rather than lights. The yard (east of the east annex)
+  is zone `warehouse` too (`zoneAt`). The door in the south hall is `Hall.openWarehouseDoor`.
+- **Sun shadow** (`Facility.followSun`, called by the Engine every frame): the directional light's shadow box (±`SHADOW_HALF` m) is centred on the player, snapped to texel steps, so far rooms get proper shadows without
+  shimmering. Anything with a roof must cast shadows (`castShadow`) or the sun shines through it.
 - **VIP cars** (`world/VipCar.ts`): follows `game.deals.offer` (`readyAt` is when the VIP reaches the desk). **Names:** `CustomerAgents` keeps a name sprite per agent.
 - **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): one `CounterJob` at a time (take or give); an item is `withArm` from the grab (progress 0.4 / 0.35) until the job ends; the take job
   reserves its locker up front and loads the belt at the end, the give job removes the ready bag from the tray at the grab and pays through `finishReturn`. A job is dropped (before the grab) if you start talking

@@ -233,7 +233,7 @@ export class Engine {
     if (animate) warehouse.appear()
     this.warehouse = warehouse
     this.scene.add(warehouse.root, warehouse.yard)
-    this.interactionTargets.push(warehouse.root)
+    this.interactionTargets.push(warehouse.root, warehouse.yard)
     this.addConsole('warehouse', CONSOLES.warehouse.x, 0, CONSOLES.warehouse.z, CONSOLES.warehouse.rotY, 'warehouse')
   }
 
@@ -634,6 +634,7 @@ export class Engine {
 
     // Views.
     this.agents.update(playing ? dt : 0, this.game, playerPos, camera)
+    this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
     this.facility.update(dt, this.agents.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
     for (const rack of this.keyRacks) rack.update(dt, this.game)
@@ -643,7 +644,7 @@ export class Engine {
     this.office?.update(dt, this.game)
     this.counterArm?.update(dt, this.game, (id) => this.agents.position(id)?.x ?? null)
     this.vipCar?.update(dt, this.game)
-    this.warehouse?.update(dt, this.game)
+    this.warehouse?.update(dt, this.game, playerPos)
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)
@@ -743,7 +744,7 @@ export class Engine {
       if (input.menuMove !== 0) this.receivingIndex = (this.receivingIndex + input.menuMove + n) % n
       this.receivingIndex = Math.min(this.receivingIndex, n - 1)
     }
-    const actions = ['store', 'inspect', 'refuse'] as const
+    const actions = ['inspect', 'refuse'] as const
     let act: { id: number; action: (typeof actions)[number] } | null = null
     if (store.pendingReceive) {
       act = store.pendingReceive
@@ -751,7 +752,7 @@ export class Engine {
     } else if (input.cancelPressed) {
       this.game.closeReceiving()
       return
-    } else if (input.choice !== null && input.choice <= 3) {
+    } else if (input.choice !== null && input.choice <= 2) {
       const load = loads[this.receivingIndex]
       if (load) act = { id: load.id, action: actions[input.choice - 1]! }
     }
@@ -845,7 +846,9 @@ export class Engine {
       ? null
       : hands.kind === 'key'
         ? 'A locker key'
-        : game.customers.item(hands.itemId).label
+        : hands.kind === 'crate'
+          ? (game.carryingLabel() ?? 'A crate')
+          : game.customers.item(hands.itemId).label
 
     // Dialogue view: rebuild only when it changes so React does not re-render every frame.
     let dialogue: DialogueView | null = null

@@ -112,6 +112,8 @@ describe('Zones', () => {
     expect(zoneAt(0, -5, 0)).toBe('main')
     expect(zoneAt(-10, -5, 0)).toBe('west')
     expect(zoneAt(10, -5, 0)).toBe('east')
+    expect(zoneAt(33, -5, 0)).toBe('warehouse') // the road and the parking beside the shed
+    expect(zoneAt(20, -20, 0)).toBe('warehouse')
     expect(zoneAt(0, -15, 0)).toBe('south')
     expect(zoneAt(-2.15, -9.5, 0)).toBe('south')
     expect(zoneAt(5, -12, 3.5)).toBe('floor1')

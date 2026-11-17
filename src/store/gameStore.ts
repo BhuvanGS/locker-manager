@@ -107,7 +107,7 @@ export type GameStoreState = {
   /** Deal option clicked in the UI, consumed by the Engine. */
   pendingDeal: 'accept' | 'haggle' | 'decline' | null
   /** A button on a dock load clicked in the UI, consumed by the Engine. */
-  pendingReceive: { id: number; action: 'store' | 'inspect' | 'refuse' } | null
+  pendingReceive: { id: number; action: 'inspect' | 'refuse' } | null
   /** Console row clicked in the UI, consumed by the Engine. */
   pendingConsoleBuy: string | null
 

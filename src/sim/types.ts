@@ -133,7 +133,8 @@ export interface Key {
 
 // ------------------------------------------------------------------ player & interaction
 
-export type Hands = { kind: 'item'; itemId: ItemId } | { kind: 'key'; keyId: KeyId } | null
+/** What you are holding. A warehouse crate's details live in `WarehouseManager.carrying`. */
+export type Hands = { kind: 'item'; itemId: ItemId } | { kind: 'key'; keyId: KeyId } | { kind: 'crate' } | null
 
 export interface DialogueLine {
   who: string

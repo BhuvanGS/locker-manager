@@ -27,7 +27,16 @@ function check(g: GameManager): void {
   for (const section of ['shelves', 'cold', 'vault', 'hidden'] as const) {
     expect(wh.sectionStored(section), `${section} is over its capacity`).toBeLessThanOrEqual(wh.sectionCapacity(section))
   }
-  expect(new Set(wh.receiving.map((l) => l.id)).size).toBe(wh.receiving.length)
+  expect(new Set(wh.loads.map((l) => l.id)).size).toBe(wh.loads.length)
+  // A crate is in exactly one place: on a truck, in a section, or in your hands (and your hands agree with the warehouse).
+  expect(g.hands?.kind === 'crate', 'crate in hands vs warehouse.carrying').toBe(wh.carrying !== null)
+  for (const load of wh.loads) {
+    expect(load.taken).toBeLessThanOrEqual(load.crates)
+    const truck = wh.truck(load.truckId)
+    expect(truck, `load ${load.id} has no truck`).toBeDefined()
+    expect(truck!.onBoard).toBe(load.crates - load.taken)
+  }
+  expect(new Set(wh.trucks.map((t) => t.spot)).size, 'two trucks in one parking spot').toBe(wh.trucks.length)
   for (const d of g.deals.signed) {
     expect(d.delivered + d.inTransit, `${d.name}'s deal is over-delivered`).toBeLessThanOrEqual(d.crates)
     expect(d.inTransit).toBeGreaterThanOrEqual(0)
@@ -135,10 +144,20 @@ function play(seed: number, setup: string[]): void {
       else if (a < 0.85) g.openDeal()
       else if (a < 0.93) g.chooseDeal(pick(['accept', 'haggle', 'decline'] as const)!)
       else {
-        const load = pick(g.warehouse.receiving)
-        if (load) g.receive(load.id, pick(['store', 'store', 'inspect', 'refuse'] as const)!)
+        const load = pick(g.warehouse.loads)
+        if (load) g.receive(load.id, pick(['inspect', 'refuse'] as const)!)
       }
-    } else if (roll < 0.88) {
+    } else if (roll < 0.86) {
+      // Carrying crates: off a truck, into a section, out of a section, onto a truck.
+      const wh = g.warehouse
+      const truck = pick(wh.trucks)
+      const section = pick(['shelves', 'shelves', 'cold', 'vault', 'hidden'] as const)!
+      const a = Math.floor(rand() * 4)
+      if (a === 0 && truck) g.takeCrateFromTruck(truck.id)
+      else if (a === 1) g.storeCrate(section)
+      else if (a === 2) g.takeCrateFrom(section)
+      else if (truck) g.loadCrate(truck.id)
+    } else if (roll < 0.9) {
       const d = pick(AUTOMATION_UPGRADES.filter((u) => u.kind !== 'line'))
       if (d) g.buyAutomation(d.id)
       const z = pick(['main', 'east', 'south'] as const)

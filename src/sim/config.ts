@@ -197,8 +197,8 @@ export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
   { id: 'wh-permit', title: 'Special goods licence', description: 'Special metals become fully legal: no fine when the police check', cost: 1500, level: 9 },
   { id: 'wh-scanner', title: 'Scanner arch', description: 'Every load that arrives shows what is really in it (and what it was declared as)', cost: 1200, level: 9 },
   { id: 'wh-hidden-1', title: 'Hidden compartments', description: 'A false-walled room with 8 slots for contraband. The police find what is hidden 40 % of the time instead of always', cost: 2000, level: 10 },
-  { id: 'wh-hidden-2', title: 'Deeper hiding', description: '+8 hidden slots, and the police find hidden loads only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
-  { id: 'wh-auto-1', title: 'Receiving robots', description: 'Robots store each load that arrives, by what it looks like, one every 12 s. You no longer have to go to the receiving desk', cost: 2500, level: 10, requires: 'wh-cap-1' },
+  { id: 'wh-hidden-2', title: 'Deeper hiding', description: '+4 hidden slots (12 in all), and the police find hidden loads only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
+  { id: 'wh-auto-1', title: 'Receiving robots', description: 'Robots carry each parked load in (to where it looks like it belongs) and each collection out, one every 12 s. No more carrying crates', cost: 2500, level: 10, requires: 'wh-cap-1' },
   { id: 'wh-auto-2', title: 'Fast receiving robots', description: 'The robots work every 5 s. With the scanner they refuse contraband (or hide it, if you have the room)', cost: 3500, level: 11, requires: 'wh-auto-1' },
 ]
 
@@ -598,11 +598,12 @@ export const CONFIG = {
     firstDeliveryDelay: 10,
     deliveryGap: 30,
     vipStay: 240,
-    /** Seconds a truck takes to drive up to the bay, to unload or load, and to drive away. */
+    /** Seconds a truck takes to drive in and park, and to pull out and drive away. */
     arriveSeconds: 8,
-    unloadSeconds: 6,
     leaveSeconds: 8,
     turnedAwayReputation: -1,
+    /** Seconds a parked delivery truck waits to be unloaded before its driver gives up and drives off with what is still on board (so ignored trucks never block the parking for good). */
+    parkedPatience: 180,
     vipTurnedAwayReputation: -2,
     /** What a crate of each kind earns per crate when the owner collects (a VIP's load earns `vipFeeFactor` of it, on top of the retainer). */
     cargo: {
@@ -615,8 +616,8 @@ export const CONFIG = {
     vipFeeFactor: 0.7,
     /** What a kei trucker's load is, at random (metals only ever come from VIP deals). Contraband is declared as general goods. */
     keiMix: { general: 0.5, food: 0.25, cold: 0.15, illegal: 0.1 },
-    /** Loads that can wait at the receiving dock; a full dock holds the trucks back. */
-    dockSlots: 3,
+    /** Parking spots beside the shed: trucks park there while their crates are carried in or out; with all spots taken, the next truck waits in the road. */
+    parkingSpots: 3,
     /** Food spoils this long after it arrives; cold-chain goods spoil this soon anywhere but in the cold room (the dock counts). */
     foodShelfLife: 240,
     coldSpoilSeconds: 90,

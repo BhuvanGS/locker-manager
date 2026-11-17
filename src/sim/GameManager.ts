@@ -62,6 +62,8 @@ export interface ReceivingLoad {
   id: number
   owner: string
   crates: number
+  /** Crates still on the truck. */
+  onTruck: number
   /** What it looks like: its real contents if you know them, otherwise what the driver says. */
   looksLike: CargoType
   /** You know what is really inside (you opened it, or the scanner did). */
@@ -71,7 +73,7 @@ export interface ReceivingLoad {
   opening: boolean
   spoiled: boolean
   vip: boolean
-  /** The section it would be stored in, or null if there is no room for it. */
+  /** Where its crates belong (the section a crate of it would go in), or null if there is no room. */
   goesTo: Section | null
 }
 
@@ -720,13 +722,22 @@ export class GameManager {
     for (const e of events) {
       if (e.type === 'arrived') {
         const auto = this.warehouse.autoLevel > 0
-        this.notify({ type: 'message', text: `${e.owner} unloaded ${e.crates} crates of ${label(e.declared)} at the dock${auto ? '.' : ': process them at the receiving desk.'}` })
+        const text =
+          e.job === 'deliver'
+            ? `${e.owner} parked by the warehouse with ${e.crates} crates of ${label(e.declared)}${auto ? '.' : ': carry them in.'}`
+            : `${e.owner} parked by the warehouse to collect ${e.crates} crates${auto ? '.' : ': carry them out to the truck.'}`
+        this.notify({ type: 'message', text })
       } else if (e.type === 'stored') {
         if (this.warehouse.autoLevel === 0) continue
         this.notify({ type: 'message', text: `The robots stored ${e.owner}'s ${e.crates} crates (${e.section}).` })
       } else if (e.type === 'refused') {
         if (e.vip) this.economy.adjustReputation(w.vipTurnedAwayReputation)
-        this.notify({ type: 'message', text: `${e.owner}'s load was sent back.` })
+        else if (e.gaveUp) this.economy.adjustReputation(w.turnedAwayReputation)
+        this.notify(
+          e.gaveUp
+            ? { type: 'alert', text: `${e.owner} waited too long and drove off with ${e.crates} crate${e.crates === 1 ? '' : 's'}.` }
+            : { type: 'message', text: `${e.owner}'s load was sent back.` },
+        )
       } else if (e.type === 'collected') {
         this.economy.earn(e.paid)
         this.economy.adjustReputation(e.spoiled ? -1 : e.vip ? 1 : 0)
@@ -773,47 +784,86 @@ export class GameManager {
     this.receivingOpen = false
   }
 
-  /** The loads waiting at the dock as you see them: what each looks like (not necessarily what it is), and what you can do. */
+  /** The loads parked beside the warehouse as you see them: what each looks like (not necessarily what it is), and how much is still on the truck. */
   receivingLoads(): ReceivingLoad[] {
     const wh = this.warehouse
-    return wh.receiving.map((l) => {
+    return wh.loads.map((l) => {
       const visible = wh.visibleCargo(l)
       return {
         id: l.id,
         owner: l.owner,
         crates: l.crates,
+        onTruck: l.crates - l.taken,
         looksLike: visible,
         known: l.inspected || wh.scanner,
         declared: l.declared,
         opening: l.inspectDone !== null,
         spoiled: l.spoiled,
         vip: l.kind === 'vip',
-        goesTo: wh.placeFor(visible, l.crates),
+        goesTo: wh.placeFor(visible, 1),
       }
     })
   }
 
-  /** Do something with a load on the dock: store it, open it to see what is really inside, or send it back. */
-  receive(loadId: number, action: 'store' | 'inspect' | 'refuse'): ActionResult {
+  /** At the receiving desk: open a crate of a parked load to see what is really inside, or send the load back before it is unloaded. */
+  receive(loadId: number, action: 'inspect' | 'refuse'): ActionResult {
     if (!this.hasWarehouse) return fail('There is no warehouse yet.')
     const wh = this.warehouse
-    const load = wh.receiving.find((l) => l.id === loadId)
+    const load = wh.loads.find((l) => l.id === loadId)
     if (!load) return fail('That load has gone.')
     if (action === 'inspect') {
       if (load.inspected || wh.scanner) return fail('You already know what is in it.')
-      return wh.inspect(loadId, this.now) ? ok('Opening the crates…') : fail('They are already opening it.')
+      return wh.inspect(loadId, this.now) ? ok('Opening a crate…') : fail('They are already opening one.')
     }
-    if (action === 'refuse') {
-      const refused = wh.refuse(loadId, this.deals)
-      if (!refused) return fail('That load has gone.')
-      if (refused.kind === 'vip') this.economy.adjustReputation(CONFIG.warehouse.vipTurnedAwayReputation)
-      return ok(`You sent ${refused.owner}'s load back.`)
-    }
-    const result = wh.store(loadId, this.now, this.rand())
-    if (!result.ok) return fail(result.reason)
-    wh.afterStored(result.load, this.deals)
-    const where = result.section === 'shelves' ? 'on the shelves' : result.section === 'cold' ? 'in the cold room' : result.section === 'vault' ? 'in the vault' : 'in the hidden compartments'
-    return ok(`Stored ${result.load.crates} crates ${where}.`)
+    if (load.taken > 0) return fail('Some of it is already unloaded: you cannot send it back now.')
+    const refused = wh.refuse(loadId, this.deals)
+    if (!refused) return fail('That load has gone.')
+    if (refused.kind === 'vip') this.economy.adjustReputation(CONFIG.warehouse.vipTurnedAwayReputation)
+    return ok(`You sent ${refused.owner}'s load back.`)
+  }
+
+  // ------------------------------------------------------------------ carrying crates
+
+  /** Take a crate off a parked delivery truck. */
+  takeCrateFromTruck(truckId: number): ActionResult {
+    if (this.hands) return fail('Your hands are full.')
+    const r = this.warehouse.takeFromTruck(truckId, this.now)
+    if (r.ok) this.hands = { kind: 'crate' }
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** Store the crate you are carrying on the shelves or in a room. */
+  storeCrate(section: Section): ActionResult {
+    if (this.hands?.kind !== 'crate') return fail('You are not carrying a crate.')
+    const r = this.warehouse.storeCarried(section, this.deals)
+    if (r.ok) this.hands = null
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** Take a crate out of a section for the collection truck that is waiting for it. */
+  takeCrateFrom(section: Section): ActionResult {
+    if (this.hands) return fail('Your hands are full.')
+    const r = this.warehouse.takeForCollection(section)
+    if (r.ok) this.hands = { kind: 'crate' }
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** Put the crate you are carrying onto its owner's collection truck. */
+  loadCrate(truckId: number): ActionResult {
+    if (this.hands?.kind !== 'crate') return fail('You are not carrying a crate.')
+    const events: WarehouseEvent[] = []
+    const r = this.warehouse.loadCarried(truckId, events)
+    if (r.ok) this.hands = null
+    this.handleWarehouseEvents(events)
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** What the crate in your hands is, in words (for the HUD). */
+  carryingLabel(): string | null {
+    const c = this.warehouse.carrying
+    if (!c) return null
+    const what = this.warehouse.scanner || this.warehouse.loads.find((l) => l.id === c.loadId)?.inspected ? CONFIG.warehouse.cargo[c.cargo].label : 'crate'
+    return `${c.owner.split(' (')[0]}'s ${what.toLowerCase()}${c.spoiled ? ' (spoiled)' : ''}`
   }
 
   private warehouseItems(): CatalogueItem[] {
@@ -1491,8 +1541,17 @@ export class GameManager {
       return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
-    if (this.hasWarehouse && this.warehouse.autoLevel === 0 && this.warehouse.receiving.length > 0) {
-      return `${this.warehouse.receiving.length} load${this.warehouse.receiving.length === 1 ? '' : 's'} waiting at the warehouse dock: go to the receiving desk.`
+    if (this.hasWarehouse) {
+      const wh = this.warehouse
+      if (hands?.kind === 'crate' && wh.carrying) {
+        const truck = wh.trucks.find((t) => t.job === 'collect' && t.phase === 'parked' && t.loadId === wh.carrying?.loadId)
+        return truck ? `Load the crate onto ${truck.owner}'s truck, parked outside the shutter.` : 'Store the crate: on a rack, or in the right room.'
+      }
+      if (wh.autoLevel === 0) {
+        const collecting = wh.trucks.find((t) => t.job === 'collect' && t.phase === 'parked')
+        if (collecting) return `${collecting.owner} has come to collect: carry their crates out to the truck.`
+        if (wh.loads.some((l) => l.taken < l.crates && wh.truck(l.truckId)?.phase === 'parked')) return 'A truck is parked by the warehouse: carry its crates in.'
+      }
     }
     if (this.deals.offer) {
       return this.now < this.deals.offer.readyAt
