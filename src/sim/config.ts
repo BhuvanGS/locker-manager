@@ -393,6 +393,8 @@ export const CONFIG = {
     /** From this many wrong tries they are furious and demand a discount on the fee. */
     furiousAt: 3,
     furiousDiscount: 0.5,
+    /** Satisfaction every waiting customer loses when you pull out a bag that is not for any of them. */
+    rummageSatisfaction: -4,
   },
   /** Levels, and what levelling up gives. Level n needs 100·n XP. */
   progression: {

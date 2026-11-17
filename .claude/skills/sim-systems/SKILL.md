@@ -74,6 +74,8 @@ Confirming a deposit is guarded by `storedBlocker`: bag in a locker, door shut, 
 
 ### Customer return order
 
+**Invariants and the stress test:** `src/sim/Fuzz.test.ts` plays randomly and checks that records agree after every step. When you add an action, state or place an item can be, extend `check()` and the random player; run a long hunt (`FUZZ_SEEDS=150`) before you commit anything that touches lockers, items, hands or customers.
+
 **Automation levels:** coverage, speed and arm count live in `ConveyorSystem` and are set only by `applyAutomation`; add a new level by extending `buildAutomationUpgrades` in `config.ts`, and test it in `AutomationLevels.test.ts` (step the sim with small `dt`).
 
 **Automation** (`sim/ConveyorSystem.ts`): a bag is a `Parcel` in a phase; one arm does one job at a time and mutates lockers, items and customers together at the `ARM_STEPS`

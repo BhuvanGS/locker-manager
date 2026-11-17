@@ -125,6 +125,13 @@ part of the building has an **arm console** (in the halls, in the north-west cor
 up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). Bags are
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
+**Customers and bags (the rules that keep the shop honest).** Every bag in the shop looks different, so a customer can always tell which is theirs. Load a
+bag on the belt and the customer **leaves at once** (the belt does the "it is stored" step for you); with hand-stored bags you still tell them, and one who
+has waited too long for that leaves on their own, annoyed. If something goes wrong in a deposit you can **give their bag back** (they go, and you lose a little
+reputation). **Rummaging costs:** pulling a bag out of a locker that nobody waiting is here for makes every waiting customer less happy, so know which locker
+is theirs (or use the register and terminal). The robot arm owns a locker while it works on it: you cannot open, shut, fill or empty it. A big queue spreads out
+across the lobby (up to 19 people) instead of piling up on one spot.
+
 **Routine maintenance.** Robot arms wear out. Every job costs an arm 3 % (more with faster motors); below 60 % it works 25 % slower, and below 25 % it
 can **jam** as it starts a job and stops until you fix it (a warning appears and your objective points at it). At the zone's arm console, **Routine
 service** puts every arm back to 100 % (cheap, by how worn they are) and **Repair** frees a jammed arm ($80 each) but leaves it half-fit, so service it

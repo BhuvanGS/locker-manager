@@ -119,6 +119,10 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
+- **Deposit and return rules** (`GameManager`): `finishDeposit(c)` is the single "it is stored" step (telling them, loading the belt, or a customer's patience running out while
+  their bag is in a locker). A deposit visit has `giveBack`. `takeItem` applies the rummaging penalty. A locker with `state: 'reserved'` belongs to the arm: `openLocker`, `closeLocker`,
+  `putItem` and `takeItem` refuse it, and `ConveyorSystem` keeps it reserved from the moment a job takes it until the job is done. `CustomerFactory.item(..., avoid)` keeps bag descriptions unique.
+  **`Fuzz.test.ts` is the safety net:** when you add an action or a state, add it to the random player and to `check()`.
 - **Maintenance** (`CONFIG.automation.maintenance`, `ConveyorSystem.armHealth`): each arm has `condition` 0–100 and `jammed`. A finished job wears it (`wear`), the job duration
   is scaled by `slowdown(condition)` (`jobDuration`), and `rollJam` runs when a job starts using the host's seeded `random()`. A jammed arm's job does not advance (`update` skips it).
   `service` / `repair` are bought through `buyAutomation` with the ids `service-<zone>` / `repair-<zone>`, shown first in a zone console by `maintenanceItems`. The `jam` notice

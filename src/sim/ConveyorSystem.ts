@@ -238,9 +238,12 @@ export class ConveyorSystem {
     return this.parcels.filter((p) => p.kind === 'fetch').length
   }
 
-  /** Whether a parcel (either kind) is bound for or taken from this locker. */
+  /**
+   * Whether the system still has business with this locker: a bag bound for it that the arm has not filed yet, or a fetch the arm has not
+   * finished. (Once the arm has taken a bag out and shut the door, the bag riding the belt back no longer ties the locker up.)
+   */
   isBusy(lockerId: LockerId): boolean {
-    return this.parcels.some((p) => p.lockerId === lockerId)
+    return this.parcels.some((p) => p.lockerId === lockerId && (p.kind === 'store' || p.phase === 'queued' || p.phase === 'arm'))
   }
 
   /** The oldest bag waiting on the return tray, removed from the system. Null if none. */
@@ -308,6 +311,8 @@ export class ConveyorSystem {
       }
       if (progress >= 1) {
         this.wear(job)
+        // The arm is done: the locker is back in play (holding the bag, or empty).
+        this.lockers.get(job.lockerId).state = job.kind === 'store' ? 'occupied' : 'available'
         if (job.kind === 'store') this.parcels = this.parcels.filter((p) => p !== job)
         else this.setPhase(job, job.zone === 'main' ? 'beltOut' : 'transitOut')
       }
@@ -327,7 +332,9 @@ export class ConveyorSystem {
 
   private fileAway(job: Parcel): void {
     const item = this.customers.item(job.itemId)
+    if (!this.lockers.get(job.lockerId).doorOpen) this.lockers.open(job.lockerId) // (the player cannot shut it, but never trust that)
     this.lockers.put(job.lockerId, item.id)
+    this.lockers.get(job.lockerId).state = 'reserved' // the arm is still closing the door: nobody else may touch it yet
     item.status = 'inLocker'
     item.lockerId = job.lockerId
     item.depositedAt ??= this.now()
@@ -335,7 +342,9 @@ export class ConveyorSystem {
   }
 
   private takeOut(job: Parcel): void {
+    if (!this.lockers.get(job.lockerId).doorOpen) this.lockers.open(job.lockerId)
     const item = this.customers.item(this.lockers.take(job.lockerId))
+    this.lockers.get(job.lockerId).state = 'reserved' // still the arm's until it has shut the door
     item.status = 'onConveyor'
     item.lockerId = null
     this.customers.get(item.customerId).lockerId = null

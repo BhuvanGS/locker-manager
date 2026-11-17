@@ -163,6 +163,20 @@ Requested as "the next major upgrade: automation".
 - [x] Tests: `sim/Maintenance.test.ts`.
 - Next: belts jam too (a bag falls off), a maintenance contract that services automatically for a monthly fee, spare parts, a technician NPC.
 
+## Interim work: the manual game and a logic audit (done)
+
+- [x] **Bug:** a customer whose bag was filed by the arm stayed in the deposit visit until told "it is stored", and a deposit visit had no way to hand a bag back, so a bag taken
+      out again could not be given to them. Now loading the belt finishes the deposit (`GameManager.finishDeposit`), a deposit visit has **Give their bag back**, and a customer
+      who waited too long for "it is stored" leaves on their own.
+- [x] Bags never look alike among the people currently in the shop (`CustomerFactory.item(..., avoid)`), three more colours.
+- [x] **Rummaging** (`CONFIG.wrongItem.rummageSatisfaction`): taking a bag nobody waiting is here for costs every waiting customer satisfaction and counts as a mistake.
+- [x] **Races fixed (found by the new stress test):** a locker the arm was working on could be shut, opened, filled or emptied by hand (a crash, or a locked empty locker); it is now the
+      arm's until the job ends (`reserved`), and `ConveyorSystem.isBusy` only counts what still ties a locker up.
+- [x] The lobby queue holds 19 customers, spread over three columns on each side (it used to pile everyone beyond the tenth onto one spot).
+- [x] Tests: `Flow.test.ts` (the fixes above) and `Fuzz.test.ts` (random play across every stage of the game, checking after each step that bags, lockers, hands, keys and customers agree;
+      `FUZZ_SEEDS=150 npx vitest run src/sim/Fuzz.test.ts` for a long hunt).
+- Still open from the brief: more item kinds with their own models, a notebook for the early game, customers asking for something other than their own bag (a "wrong locker" story).
+
 ## Interim work: mod menu (done)
 
 - [x] **Mod menu** (`M`): free cash, levels (+1, +100 XP, level 4, level 8), unlock any upgrade or everything (annexes included, built

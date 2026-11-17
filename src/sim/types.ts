@@ -140,7 +140,7 @@ export interface DialogueLine {
   text: string
 }
 
-export type DialogueOptionId = 'greet' | 'askName' | 'accept' | 'turnAway' | 'confirmStored' | 'handOver' | 'goodbye'
+export type DialogueOptionId = 'greet' | 'askName' | 'accept' | 'turnAway' | 'confirmStored' | 'giveBack' | 'handOver' | 'goodbye'
 
 export interface DialogueOption {
   id: DialogueOptionId

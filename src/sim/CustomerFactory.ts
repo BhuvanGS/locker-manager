@@ -18,6 +18,9 @@ const COLOURS: [string, number][] = [
   ['yellow', 0xeab308],
   ['purple', 0x6d28d9],
   ['grey', 0x6b7280],
+  ['orange', 0xea580c],
+  ['white', 0xe5e7eb],
+  ['pink', 0xdb2777],
 ]
 
 const ITEM_NAMES: Record<ItemCategory, string> = {
@@ -89,9 +92,17 @@ export class CustomerFactory {
     }
   }
 
-  item(customerId: string, category?: ItemCategory): Item {
-    const cat = category ?? pick(this.rand, Object.keys(ITEM_NAMES) as ItemCategory[])
-    const [colourName, color] = pick(this.rand, COLOURS)
+  /**
+   * A new item. `avoid` holds the labels of the bags already around: a new one never looks like one of those, so a customer can
+   * always tell which bag is theirs (two identical blue suitcases would make "wrong package" unfair).
+   */
+  item(customerId: string, category?: ItemCategory, avoid: ReadonlySet<string> = new Set()): Item {
+    let cat = category ?? pick(this.rand, Object.keys(ITEM_NAMES) as ItemCategory[])
+    let [colourName, color] = pick(this.rand, COLOURS)
+    for (let tries = 0; tries < 30 && avoid.has(`${colourName} ${ITEM_NAMES[cat]}`); tries++) {
+      if (!category) cat = pick(this.rand, Object.keys(ITEM_NAMES) as ItemCategory[])
+      ;[colourName, color] = pick(this.rand, COLOURS)
+    }
     return {
       id: `item-${++this.itemSeq}`,
       category: cat,
@@ -104,12 +115,12 @@ export class CustomerFactory {
     }
   }
 
-  customer(opts: { patience: number | null; fee: number; satisfaction: number; name?: string }): { customer: Customer; item: Item } {
+  customer(opts: { patience: number | null; fee: number; satisfaction: number; name?: string; avoid?: ReadonlySet<string> }): { customer: Customer; item: Item } {
     const id = `cust-${++this.customerSeq}`
     const name = opts.name ?? this.freshName()
     this.usedNames.add(name)
     this.usedFirst.add(name.split(' ')[0] ?? name)
-    const item = this.item(id)
+    const item = this.item(id, undefined, opts.avoid)
     const customer: Customer = {
       id,
       name,

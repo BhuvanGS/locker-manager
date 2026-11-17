@@ -39,6 +39,16 @@ export const CUSTOMER_PATH = {
     new THREE.Vector3(2.6, 0, 3.4),
     new THREE.Vector3(2.6, 0, 4.4),
     new THREE.Vector3(3.6, 0, 5.2),
+    // A busy shop: second columns on both sides, and a third on the right (still clear of the entrance walkway and the bench).
+    new THREE.Vector3(-4.1, 0, 2.9),
+    new THREE.Vector3(-4.1, 0, 3.8),
+    new THREE.Vector3(-4.1, 0, 4.7),
+    new THREE.Vector3(4.6, 0, 2.9),
+    new THREE.Vector3(4.6, 0, 3.8),
+    new THREE.Vector3(4.6, 0, 4.7),
+    new THREE.Vector3(5.3, 0, 3.4),
+    new THREE.Vector3(5.3, 0, 4.4),
+    new THREE.Vector3(5.3, 0, 5.3),
   ],
 }
 

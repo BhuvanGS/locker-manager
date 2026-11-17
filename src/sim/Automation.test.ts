@@ -116,10 +116,9 @@ describe('Conveyor and robot arm', () => {
     expect(locker.state).toBe('reserved')
     expect(g.lockers.availableCount).toBe(g.lockers.total - 1)
 
-    // The customer cannot be told "it is stored" while it is still on its way.
-    expect(g.talkTo(id).ok).toBe(true)
-    expect(g.dialogueOptions().find((o) => o.id === 'confirmStored')?.disabled).toBe('The belt is still carrying it.')
-    g.closeDialogue()
+    // The belt takes it from here: the customer does not wait to be told, they leave and their return is scheduled.
+    expect(g.customers.get(id).state).toBe('stored')
+    expect(g.customers.get(id).expectedReturnAt).not.toBeNull()
 
     d.tick(CONFIG.automation.beltSeconds + 0.5)
     expect(g.conveyor.armJobs()[0]?.itemId).toBe(item.id) // at the end of the belt, the arm has it
@@ -131,9 +130,6 @@ describe('Conveyor and robot arm', () => {
     expect(item.lockerId).toBe(locker.id)
     expect(g.customers.get(id).lockerId).toBe(locker.id)
     expect(locker).toMatchObject({ state: 'occupied', itemId: item.id, doorOpen: false, locked: true })
-
-    expect(g.talkTo(id).ok).toBe(true)
-    expect(g.choose('confirmStored').ok).toBe(true)
   })
 
   it('has one arm: bags queue, and the belt refuses more than it can hold', () => {
@@ -202,8 +198,6 @@ describe('Conveyor and robot arm', () => {
     const id = takeBag(d)
     expect(g.loadConveyor().ok).toBe(true)
     d.tick(CONFIG.automation.beltSeconds + CONFIG.automation.armSeconds + 1)
-    expect(g.talkTo(id).ok).toBe(true)
-    expect(g.choose('confirmStored').ok).toBe(true)
     d.until(() => g.customers.get(id).state === 'waitingForCollection', 1000)
 
     const entry = g.terminalEntries().find((e) => e.lockerId === g.customers.get(id).lockerId)!
@@ -233,8 +227,6 @@ describe('Conveyor and robot arm', () => {
     const first = takeBag(d)
     expect(g.loadConveyor().ok).toBe(true)
     d.tick(CONFIG.automation.beltSeconds + CONFIG.automation.armSeconds + 1)
-    expect(g.talkTo(first).ok).toBe(true)
-    expect(g.choose('confirmStored').ok).toBe(true)
     // Somebody else is at the counter holding the wrong bag.
     const other = g.spawnExtraCustomer()
     d.tick(0.5)

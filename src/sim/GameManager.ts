@@ -199,12 +199,42 @@ export class GameManager {
       satisfaction: CONFIG.customer.startingSatisfaction,
     }
     const first = this.firstCustomerId === null
-    const { customer, item } = first ? this.factory.tutorialCustomer(opts) : this.factory.customer(opts)
+    const { customer, item } = first ? this.factory.tutorialCustomer(opts) : this.factory.customer({ ...opts, avoid: this.labelsInUse() })
     this.customers.add(customer, item)
     this.scheduler.introduce(customer.id)
     if (first) this.firstCustomerId = customer.id
     this.notify({ type: 'customerSpawned', customerId: customer.id })
     this.scheduleNextArrival()
+  }
+
+  /** What the bags of everyone with business here look like ("blue suitcase"), so a new bag can look different. */
+  private labelsInUse(): Set<string> {
+    const labels = new Set<string>()
+    for (const c of this.customers.all()) {
+      const item = this.customers.itemOf(c)
+      if (item) labels.add(item.label)
+    }
+    return labels
+  }
+
+  /**
+   * The customer's bag is stored: they leave, their return is scheduled, and the deposit pays XP. This is the "it is stored" step: you do
+   * it by telling them, the belt does it for you the moment you load their bag, and a customer whose patience ran out while waiting for it
+   * does it themselves.
+   */
+  private finishDeposit(c: Customer): void {
+    if (c.state === 'waiting') this.customers.transition(c.id, 'depositing')
+    const stored = this.customers
+      .all()
+      .flatMap((other) => (other.state === 'stored' && other.expectedReturnAt !== null ? [other.expectedReturnAt] : []))
+    const delay = this.scheduler.returnDelay(this.now, stored)
+    c.depositedAt = this.now
+    c.expectedReturnAt = this.now + delay
+    this.customers.transition(c.id, 'stored')
+    this.clock.schedule(c.expectedReturnAt, { type: 'customerReturn', customerId: c.id })
+    this.gainXp(CONFIG.economy.xp.deposit)
+    this.notify({ type: 'customerLeaving', customerId: c.id })
+    if (this.dialogue?.customerId === c.id) this.dialogue = null
   }
 
   private updatePatience(dt: number): void {
@@ -217,6 +247,14 @@ export class GameManager {
       if (this.dialogue?.customerId === c.id) continue
       c.patience = Math.max(0, c.patience - dt * (waiting ? 1 : CONFIG.customer.servingDrainFactor))
       if (c.patience > 0) continue
+      // A customer whose bag is already in a locker and who has waited and waited for you to say so just goes: it is stored, after all.
+      if (c.state === 'depositing' && this.customers.itemOf(c)?.status === 'inLocker' && this.dialogue?.customerId !== c.id) {
+        c.satisfaction = Math.max(0, c.satisfaction - 30)
+        this.economy.adjustReputation(-1)
+        this.finishDeposit(c)
+        this.notify({ type: 'message', text: `${c.name} got tired of waiting for you to say it was stored, and left.` })
+        continue
+      }
       // Out of patience. Someone still holding their bag walks out; someone whose bag you have stays,
       // but gets steadily less happy (smaller tip, worse reputation).
       if (this.customers.itemOf(c)?.status === 'withCustomer') this.walkout(c)
@@ -304,6 +342,10 @@ export class GameManager {
         add('confirmStored', 'Tell them it is stored', this.storedBlocker(item))
       }
       add('goodbye', 'Step away')
+      if (item && item.status !== 'withCustomer') {
+        const mine = this.hands?.kind === 'item' && this.hands.itemId === item.id
+        add('giveBack', 'Give their bag back (they will go)', mine ? null : 'You are not holding their bag.')
+      }
       if (item?.status === 'withCustomer') {
         add('turnAway', this.lockers.availableCount === 0 ? "Sorry, we're full" : "Sorry, we can't take it right now")
       }
@@ -376,19 +418,22 @@ export class GameManager {
         return ok('You turned the customer away.')
       }
       case 'confirmStored': {
-        if (c.state === 'waiting') this.customers.transition(c.id, 'depositing')
-        const stored = this.customers
-          .all()
-          .flatMap((other) => (other.state === 'stored' && other.expectedReturnAt !== null ? [other.expectedReturnAt] : []))
-        const delay = this.scheduler.returnDelay(this.now, stored)
-        c.depositedAt = this.now
-        c.expectedReturnAt = this.now + delay
-        this.customers.transition(c.id, 'stored')
-        this.clock.schedule(c.expectedReturnAt, { type: 'customerReturn', customerId: c.id })
-        this.gainXp(CONFIG.economy.xp.deposit)
+        this.finishDeposit(c)
+        this.dialogue = null
+        const where = this.hasConveyor ? 'Use the terminal when they are back.' : this.hasLabels ? 'Check the register board.' : 'Remember where it is.'
+        return ok(`${c.name} left. ${where}`)
+      }
+      case 'giveBack': {
+        const item = this.mustItem(c)
+        item.status = 'returned'
+        this.hands = null
+        say('You', `Actually, here's your ${item.label} back.`)
+        say(c.name, 'Oh. Alright, thanks anyway.')
+        this.customers.transition(c.id, 'leftWithoutService')
+        this.economy.adjustReputation(CONFIG.economy.turnAwayReputation)
         this.notify({ type: 'customerLeaving', customerId: c.id })
         this.dialogue = null
-        return ok(`${c.name} left. Remember where their ${this.mustItem(c).label} is.`)
+        return ok('You gave their bag back.')
       }
       case 'handOver':
         return this.handOver(c, say)
@@ -647,6 +692,7 @@ export class GameManager {
       patience: stage.patience,
       fee: CONFIG.economy.depositFee,
       satisfaction: CONFIG.customer.startingSatisfaction,
+      avoid: this.labelsInUse(),
     })
     this.customers.add(customer, item)
     this.notify({ type: 'customerSpawned', customerId: customer.id })
@@ -702,6 +748,7 @@ export class GameManager {
   closeLocker(id: LockerId): ActionResult {
     const locker = this.lockers.get(id)
     if (!locker.doorOpen) return fail('It is already shut.')
+    if (locker.state === 'reserved') return fail('The robot arm is using this locker.')
     this.lockers.close(id)
     if (this.isDigital && locker.itemId) this.lockers.setLocked(id, true) // the electronic lock engages by itself
     return ok(this.isDigital && locker.itemId ? 'Locked.' : null)
@@ -734,6 +781,15 @@ export class GameManager {
     item.lockerId = null
     this.customers.get(item.customerId).lockerId = null
     this.hands = { kind: 'item', itemId: item.id }
+    // Pulling out a bag nobody here is waiting for, while people stand watching, is rummaging: they notice.
+    const waiting = this.queue().filter((c) => RETURN_VISIT.has(c.state))
+    if (waiting.length > 0 && !waiting.some((c) => c.id === item.customerId)) {
+      for (const c of waiting) c.satisfaction = Math.max(0, c.satisfaction + CONFIG.wrongItem.rummageSatisfaction)
+      this.economy.mistakes += 1
+      const message = `The ${item.label} is nobody's here. The customers are watching you rummage…`
+      this.notify({ type: 'mistake', kind: 'wrongItem', message })
+      return { ok: true, message }
+    }
     return ok(`You took the ${item.label}.`)
   }
 
@@ -953,14 +1009,17 @@ export class GameManager {
     if (inbound.some((p) => p.phase === 'beltIn' && p.t < cfg.loadGap)) return fail('Wait for the last bag to move along.')
     const locker = this.lockers
       .all()
-      .find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId)
+      .find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId && !this.conveyor.isBusy(l.id))
     if (!locker) return fail('No free locker the robot arm can reach. Store it by hand, or extend the belts.')
     const item = this.customers.item(this.hands.itemId)
     locker.state = 'reserved'
     item.status = 'onConveyor'
     this.hands = null
     this.conveyor.load(item.id, locker.id)
-    return ok(`On its way to locker ${locker.number}.`)
+    // The belt takes it from here: the customer does not need to be told, and leaves.
+    const owner = this.customers.get(item.customerId)
+    if (owner.state === 'depositing' || owner.state === 'waiting') this.finishDeposit(owner)
+    return ok(`On its way to locker ${locker.number}. ${owner.name.split(' ')[0] ?? 'They'} has gone, and will be back.`)
   }
 
   /** Bags the terminal can ask the arm to fetch: everything stored in a locker the arm can reach. */
