@@ -74,6 +74,10 @@ Confirming a deposit is guarded by `storedBlocker`: bag in a locker, door shut, 
 
 ### Customer return order
 
+**Automation** (`sim/ConveyorSystem.ts`): a bag is a `Parcel` in a phase; one arm does one job at a time and mutates lockers, items and customers together at the `ARM_STEPS`
+moments. Reserve the locker (`state: 'reserved'`) when a job is created and guard the manual actions (`openLocker`, `putItem`, `takeItem`) against it. Tests step the
+sim in small `dt` (a single big `dt` skips whole jobs). Keep the 3D arm keyframes in `ConveyorBay.targetPose` in line with `ARM_STEPS`.
+
 `CustomerScheduler.returnDelay(now, pending)`: the return window per stage plus `CONFIG.returns` overtaking. Keep a test that
 measures first-in-first-out among customers stored at the same time (`Progression.test.ts`); plain random waits give ~80 %.
 

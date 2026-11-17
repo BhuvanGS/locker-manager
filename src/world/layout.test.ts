@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADJACENT_ZONES,
+  CONVEYOR,
   FLOOR_HEIGHT,
   LOCKER,
   LOCKER_BANKS,
+  lockerSlot,
+  PARTITION,
   ROOM,
   SLOPE_LIMITS,
   SOUTH,
@@ -49,10 +52,11 @@ describe('South expansion layout', () => {
 
   it('there is room to walk: aisles between rows, behind the last row, and round the end of each row to the stairs', () => {
     const rows = SOUTH.rowFrontZ
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3) // floor 1 uses all three, the other halls the first two
     const depth = LOCKER.depth + 0.02
     expect(rows[0]! - depth - rows[1]!).toBeGreaterThanOrEqual(2) // aisle between the rows
-    expect(rows[1]! - depth - SOUTH.minZ).toBeGreaterThanOrEqual(1.5) // behind the last row
+    expect(rows[1]! - depth - rows[2]!).toBeGreaterThanOrEqual(2)
+    expect(rows[2]! - depth - SOUTH.minZ).toBeGreaterThanOrEqual(1.5) // behind the last row
     expect(SOUTH.maxZ - rows[0]!).toBeGreaterThanOrEqual(2) // lobby between the doorway and the first row
     const rowEnd = SOUTH.bankX[2]! + BANK_HALF
     expect(STAIRS.guardX - 0.04 - rowEnd).toBeGreaterThanOrEqual(1) // corridor between the rows and the stairs
@@ -123,6 +127,39 @@ describe('Zones', () => {
     for (const zone of ['south', 'floor1', 'floor2'] as const) {
       const visible = new Set([zone, ...ADJACENT_ZONES[zone]])
       for (const part of ['south', 'floor1', 'floor2'] as const) expect(visible.has(part)).toBe(true)
+    }
+  })
+})
+
+describe('Conveyor layout', () => {
+  it('the belts fit in the staff area and the storage room, and pass through the partition hatch', () => {
+    for (const x of [CONVEYOR.inX, CONVEYOR.outX]) {
+      expect(x - CONVEYOR.width / 2).toBeGreaterThanOrEqual(CONVEYOR.hatch.minX)
+      expect(x + CONVEYOR.width / 2).toBeLessThanOrEqual(CONVEYOR.hatch.maxX)
+    }
+    expect(CONVEYOR.startZ).toBeGreaterThan(PARTITION.z)
+    expect(CONVEYOR.endZ).toBeLessThan(PARTITION.z)
+    expect(CONVEYOR.hatch.height).toBeGreaterThan(CONVEYOR.topY + 0.3) // a bag fits through
+    expect(CONVEYOR.hatch.minX).toBeGreaterThan(ROOM.minX + 0.3)
+  })
+
+  it('the belt leaves the aisle in front of the lockers clear, and the arm rail is above head height', () => {
+    expect(CONVEYOR.endZ).toBeGreaterThan(LOCKER.frontZ + 1.2) // room for the door swing and the player
+    expect(CONVEYOR.rail.y).toBeGreaterThan(2.4)
+    expect(CONVEYOR.rail.y).toBeLessThan(ROOM.height)
+    expect(CONVEYOR.rail.z).toBeGreaterThan(LOCKER.frontZ + 0.5)
+  })
+
+  it('the arm can reach every locker of the storage-room banks along its rail', () => {
+    for (let bank = 0; bank < 3; bank++) {
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 3; col++) {
+          const slot = lockerSlot(bank, row, col)
+          expect(slot.x).toBeGreaterThan(CONVEYOR.rail.minX)
+          expect(slot.x).toBeLessThan(CONVEYOR.rail.maxX)
+          expect(CONVEYOR.rail.z - slot.z).toBeLessThan(1.6) // a reach of well under two metres
+        }
+      }
     }
   })
 })

@@ -42,6 +42,7 @@ export class UpgradeManager {
   /** Whether `id` can be bought now, and if not, why. */
   state(def: UpgradeDef, level: number, money: number): { state: UpgradeState; note: string | null } {
     if (this.owned.has(def.id)) return { state: 'owned', note: 'Owned' }
+    if (def.obsoleteBy && this.owned.has(def.obsoleteBy)) return { state: 'locked', note: 'No keys any more' }
     if (level < def.level) return { state: 'locked', note: `Needs level ${def.level}` }
     if (def.requires && !this.owned.has(def.requires)) {
       const first = this.def(def.requires)

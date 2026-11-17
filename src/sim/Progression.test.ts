@@ -544,37 +544,43 @@ describe('Building expansion: annexes', () => {
     return g
   }
 
-  it('needs level 4, all the locker banks and the money, and says which is missing', () => {
+  it('the west annex is gone from the catalogue (the conveyor takes that unit)', () => {
+    const g = new GameManager(3)
+    expect(g.upgrades.def('annexWest')).toBeUndefined()
+    expect(g.buyUpgrade('annexWest').ok).toBe(false)
+  })
+
+  it('the east annex needs level 5, all the locker banks and the money, and says which is missing', () => {
     const g = new GameManager(3)
     g.economy.money = 5000
-    g.economy.xp = 300 // level 3
-    expect(g.buyUpgrade('annexWest').message).toBe('Needs level 4')
-    g.economy.xp = 600
-    expect(g.economy.level.level).toBe(4)
-    expect(g.buyUpgrade('annexWest').message).toBe('Buy Locker bank C first')
+    g.economy.xp = 600 // level 4
+    expect(g.buyUpgrade('annexEast').message).toBe('Needs level 5')
+    g.economy.xp = 1000
+    expect(g.economy.level.level).toBe(5)
+    expect(g.buyUpgrade('annexEast').message).toBe('Buy Locker bank C first')
     g.buyUpgrade('bank2')
     g.buyUpgrade('bank3')
     g.economy.money = 100
-    expect(g.buyUpgrade('annexWest').message).toMatch(/Costs \$450/)
-    expect(g.upgrades.has('annexWest')).toBe(false)
+    expect(g.buyUpgrade('annexEast').message).toMatch(/Costs \$600/)
+    expect(g.upgrades.has('annexEast')).toBe(false)
   })
 
-  it('the west annex adds a hall: two banks (12 lockers with keys) and two racks (16 hooks)', () => {
-    const g = expandable()
+  it('the east annex adds a hall: two banks (12 lockers with keys) and two racks (16 hooks)', () => {
+    const g = expandable(1000)
     const lockers = g.lockers.total
     const hooks = g.keys.hookCount
     const money = g.economy.money
     expect(g.hasAnnex()).toBe(false)
-    expect(g.buyUpgrade('annexWest').ok).toBe(true)
-    expect(g.economy.money).toBe(money - 450)
+    expect(g.buyUpgrade('annexEast').ok).toBe(true)
+    expect(g.economy.money).toBe(money - 600)
     expect(g.lockers.total).toBe(lockers + 12)
     expect(g.keys.hookCount).toBe(hooks + 16)
     expect(g.lockers.bankCount).toBe(5)
-    expect(g.hasAnnex('west')).toBe(true)
-    expect(g.hasAnnex('east')).toBe(false)
+    expect(g.hasAnnex('east')).toBe(true)
+    expect(g.hasAnnex('west')).toBe(false)
     expect(g.facilityLabel()).toBe('Expanded facility')
     const notice = g.drainNotices().find((n) => n.type === 'upgradeBought')
-    expect(notice).toMatchObject({ id: 'annexWest', kind: 'annex', side: 'west', banks: [3, 4] })
+    expect(notice).toMatchObject({ id: 'annexEast', kind: 'annex', side: 'east', banks: [3, 4] })
     if (notice?.type !== 'upgradeBought') return
     expect(notice.racks).toHaveLength(2)
     // The new hooks belong to those racks: rack n owns hooks 8n … 8n+7.
@@ -585,17 +591,6 @@ describe('Building expansion: annexes', () => {
       expect(locker.state).toBe('available')
     }
     expect(g.openLocker(g.lockers.all().at(-1)!.id).ok).toBe(true)
-  })
-
-  it('the east annex needs the west one, and the two together make 42 lockers', () => {
-    const g = expandable(1000)
-    expect(g.buyUpgrade('annexEast').message).toBe('Buy Storage annex (west) first')
-    expect(g.buyUpgrade('annexWest').ok).toBe(true)
-    expect(g.buyUpgrade('annexEast').ok).toBe(true)
-    expect(g.lockers.total).toBe(42)
-    expect(g.lockers.availableCount).toBe(42)
-    const east = g.drainNotices().filter((n) => n.type === 'upgradeBought').at(-1)
-    expect(east).toMatchObject({ id: 'annexEast', side: 'east', banks: [5, 6] })
     expect(g.buyUpgrade('annexEast').ok).toBe(false) // only once
   })
 
@@ -604,7 +599,7 @@ describe('Building expansion: annexes', () => {
     const open = CONFIG.stages.find((s) => s.maxActive !== undefined)!
     const extra = (x: GameManager) => x.lockers.total - CONFIG.facility.lockerRows * CONFIG.facility.lockerCols
     const before = open.maxActive! + extra(g)
-    g.buyUpgrade('annexWest')
+    g.buyUpgrade('annexEast')
     expect(open.maxActive! + extra(g)).toBe(before + 12)
   })
 })
@@ -615,7 +610,7 @@ describe('Building expansion, phase 2: south expansion and floors', () => {
     const g = new GameManager(3)
     g.economy.xp = 2800
     g.economy.money = 100_000
-    for (const id of ['bank2', 'bank3', 'annexWest', 'annexEast']) expect(g.buyUpgrade(id).ok).toBe(true)
+    for (const id of ['bank2', 'bank3', 'annexEast']) expect(g.buyUpgrade(id).ok).toBe(true)
     g.drainNotices()
     return g
   }
@@ -654,20 +649,20 @@ describe('Building expansion, phase 2: south expansion and floors', () => {
     if (notice?.type !== 'upgradeBought') return
     expect(notice.banks).toHaveLength(6)
     expect(notice.racks).toHaveLength(5)
-    expect(notice.banks).toEqual([7, 8, 9, 10, 11, 12]) // after the main wall (banks 0–2) and the two annexes (3–6)
+    expect(notice.banks).toEqual([5, 6, 7, 8, 9, 10]) // after the main wall (banks 0–2) and the east annex (3–4)
   })
 
-  it('floor 1 and floor 2 each add the same again, with their own banks and racks', () => {
+  it('floor 1 has an extra row of lockers; floor 2 matches the south hall, each with its own banks and racks', () => {
     const g = ready()
     g.buyUpgrade('southExpansion')
     g.buyUpgrade('floor1')
     g.buyUpgrade('floor2')
-    expect(g.lockers.total).toBe(6 + 6 + 6 + 12 + 12 + 3 * 36)
-    expect(g.keys.hookCount).toBe(8 + 16 + 16 + 3 * 40) // the start rack, both annexes and three halls (racks 2 and 3 not bought here)
+    expect(g.lockers.total).toBe(6 + 6 + 6 + 12 + 36 + 54 + 36) // floor 1 has three rows (it makes up for the missing west annex)
+    expect(g.keys.hookCount).toBe(8 + 16 + 3 * 40) // the start rack, the east annex and three halls (racks 2 and 3 not bought here)
     const halls = g.drainNotices().filter((n) => n.type === 'upgradeBought' && n.kind === 'hall')
     expect(halls.map((n) => (n.type === 'upgradeBought' ? n.hall : ''))).toEqual(['south', 'floor1', 'floor2'])
     const all = halls.flatMap((n) => (n.type === 'upgradeBought' ? (n.banks ?? []) : []))
-    expect(new Set(all).size).toBe(18) // every bank number is new
+    expect(new Set(all).size).toBe(21) // every bank number is new (6 + 9 + 6)
     expect(g.hasHall('floor2')).toBe(true)
   })
 

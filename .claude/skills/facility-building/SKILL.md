@@ -60,6 +60,10 @@ new collider must be removable (`PhysicsWorld.removeBody`) so a new game can wal
 
 ### South hall and floors
 
+**Conveyor bay** (`world/ConveyorBay.ts`): positions come from `CONVEYOR` and `lockerSlot()` in `layout.ts`. The belts cross the partition through a hatch that
+`Facility.setConveyorOpen` cuts (the staff-side partition is built in pieces so the plug can come out). Keep the aisle in front of the lockers clear (belts end
+at least 1.2 m from the locker faces) and the arm rail above head height. Status screens (`StatusScreen`) stand on top of their bank.
+
 `Hall(kind, physics)` builds one hall (walls, ceiling slab with a hatch, fixtures, signs) at `level × FLOOR_HEIGHT`; `Stairs(flight, physics)` builds a flight and its
 guard rails. Constants (`SOUTH`, `STAIRS`, `stairHole`, `FLOOR_HEIGHT`) are in `layout.ts` and checked by `layout.test.ts`: change a number there and run the
 tests. Stairs are visual steps plus one ramp collider (never step colliders: the capsule gets stuck); slope must stay under `SLOPE_LIMITS.maxClimbDeg`; each flight ends ≥ 1.5 m from the north wall. Keep these true: steps ≤ 0.38 m with a tread ≥ 0.2 m; the stairs rise exactly one `FLOOR_HEIGHT`; the stairwell hole is covered by the hatch until

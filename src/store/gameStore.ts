@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { DialogueOptionId } from '../sim/types'
 import type { ModInfo, ModRequest } from '../sim/mods'
+import type { TerminalEntry } from '../sim/GameManager'
 import type { CatalogueItem } from '../sim/UpgradeManager'
 
 export type GamePhase = 'menu' | 'playing' | 'paused'
@@ -17,6 +18,9 @@ export type Banner = { id: number; eyebrow: string; title: string; text: string 
 
 /** The supplier catalogue as the HUD shows it. */
 export type CatalogueView = { money: number; level: number; items: CatalogueItem[] }
+
+/** The conveyor terminal as the HUD shows it: the bags the robot arm can fetch. */
+export type TerminalView = { entries: TerminalEntry[]; free: number }
 
 /**
  * The HUD's view of the game. The Engine writes it every frame (only primitives or objects that keep
@@ -53,12 +57,17 @@ export type GameStoreState = {
   catalogue: CatalogueView | null
   /** Which catalogue row is highlighted (E / Enter buys it). */
   catalogueIndex: number
+  terminal: TerminalView | null
+  /** Which terminal row is highlighted (E / Enter fetches it). */
+  terminalIndex: number
   toasts: Toast[]
 
   /** Dialogue choice clicked in the UI, consumed by the Engine. */
   pendingChoice: DialogueOptionId | null
   /** Catalogue row clicked in the UI, consumed by the Engine. */
   pendingBuy: string | null
+  /** Locker id of a terminal row clicked in the UI, consumed by the Engine. */
+  pendingFetch: string | null
 
   /** Mod menu (cheats for testing; see sim/mods.ts). */
   modOpen: boolean
@@ -105,9 +114,12 @@ export const useGameStore = create<GameStoreState>((set) => ({
   dialogueIndex: 0,
   catalogue: null,
   catalogueIndex: 0,
+  terminal: null,
+  terminalIndex: 0,
   toasts: [],
   pendingChoice: null,
   pendingBuy: null,
+  pendingFetch: null,
   modOpen: false,
   modPause: true,
   modInfo: null,

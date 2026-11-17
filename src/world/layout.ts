@@ -92,6 +92,39 @@ export const ANNEX = {
 /** Annex racks hang on the inside of the hall's front wall (face z = −2.5), facing −z. */
 export const ANNEX_RACK = { z: PARTITION.z - 0.1 - 0.12, rotY: Math.PI }
 
+/**
+ * The conveyor system (Conveyor & robot arm upgrade). Two belts run side by side from the staff area, through a hatch in the
+ * partition, to the back of the storage room: the IN belt carries bags to the robot arm, the OUT belt carries fetched bags back
+ * to a tray you collect from. The arm hangs from a rail along the front of the locker banks (z = `rail.z`) and reaches
+ * forward to the pick-up spot at the end of the IN belt and back into the lockers. It serves the storage room's own three banks.
+ * `topY` is the belt surface; the staff-side end (`startZ`) is where you load and collect.
+ */
+export const CONVEYOR = {
+  inX: -5.05,
+  outX: -4.35,
+  width: 0.55,
+  topY: 0.85,
+  startZ: -0.9,
+  endZ: -6.6,
+  /** Where fetched bags wait for you on the OUT belt (bags stack back from here). */
+  trayZ: -1.25,
+  hatch: { minX: -5.45, maxX: -3.95, height: 1.25 },
+  rail: { z: -7.45, y: 2.85, minX: -5.95, maxX: 5.95 },
+  /** The terminal on the staff side. */
+  kiosk: { x: -3.05, z: -1.2 },
+} as const
+
+/** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
+export function lockerSlot(bank: number, row: number, col: number): { x: number; y: number; z: number } {
+  const pitch = LOCKER.width + LOCKER.gap
+  const cx = LOCKER_BANKS[bank]?.centerX ?? 0
+  return {
+    x: cx + (col - 1) * pitch,
+    y: LOCKER.baseY + row * pitch + LOCKER.height / 2,
+    z: LOCKER.frontZ - LOCKER.depth / 2,
+  }
+}
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 
@@ -120,7 +153,8 @@ export const SOUTH = {
   /** The doorway cut in the old back wall (between locker banks 1 and 0). */
   door: { x: -2.15, halfWidth: 0.7, height: 2.2 },
   /** Fronts (door faces) of the two rows; each row is three banks side by side. */
-  rowFrontZ: [-12.4, -15.4],
+  // Floor 1 uses all three rows (it makes up for the west annex that the conveyor replaced); the others use the first two.
+  rowFrontZ: [-12.4, -15.4, -18.4],
   bankX: [-4.5, -1.6, 1.3],
   /** Five key racks along the old back wall (they avoid the doorway). */
   rackX: [-4.7, -0.55, 0.85, 2.25, 3.65],

@@ -9,6 +9,10 @@ export type Interactable =
   | { kind: 'lockerKey'; lockerId: LockerId }
   | { kind: 'hook'; hook: number }
   | { kind: 'catalogue' }
+  /** The loading end of the IN belt, the collection tray at the end of the OUT belt, and the conveyor terminal. */
+  | { kind: 'conveyorIn' }
+  | { kind: 'conveyorOut' }
+  | { kind: 'terminal' }
 
 export function tag(object: THREE.Object3D, data: Interactable): void {
   object.userData.interact = data

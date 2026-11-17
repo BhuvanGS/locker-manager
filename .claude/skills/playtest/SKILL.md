@@ -137,23 +137,26 @@ dialogue (`__game.interact()`). "Tell them it is stored" must be greyed with "Cl
 - Board (storage room, on the partition): `__game.teleport(3.4, -5.6); __game.face(3.4, -2.5); __game.look(0, 0.05)`: "DEPOSIT REGISTER" with `number | name | item` rows. A bag taken without asking the name (skip `askName`) shows "name not taken".
   For a crowded board buy everything, call `g.onNextArrival()` 12 times, `__game.advance(30)`, and store them all (two columns).
 
-## 4e. Building expansion (annexes)
+## 4e. Building expansion (the east annex)
 
 ```js
-const g = __game.sim(); __game.grant(900, 4000); ['bank2', 'bank3', 'annexWest'].forEach(id => g.buyUpgrade(id)); __game.advance(2.5)
-__game.teleport(-3, -3.6); __game.face(-8, -3.6); __game.walk(1, 0, 2.5)   // walks through the new doorway: ends at x ≈ -11.5
+const g = __game.sim(); __game.grant(1200, 4000); ['bank2', 'bank3', 'annexEast'].forEach(id => g.buyUpgrade(id)); __game.advance(2.5)
+__game.teleport(3, -3.6); __game.face(8, -3.6); __game.walk(1, 0, 2.5)   // walks through the new doorway: ends at x ≈ +11.5
 ```
-Before buying, the same walk stops at x = −5.6 (the wall). Screenshot the doorway from the storage room (`__game.teleport(-1.8, -4.4); __game.face(-6.2, -3.6)`:
-door frame, "STORAGE ANNEX · WEST" sign, racks in the hall) and the hall (`__game.teleport(-11.5, -5.2); __game.face(-11.5, -9)`: two locker banks).
-East is the mirror image (x = +3 → +11.5). Totals after both: 42 lockers, 40+ hooks. `__game.engine.newGame()` must wall both doorways up again (walk stops at ±5.6).
+Before buying, the same walk stops at x = +5.6 (the wall). Screenshot the doorway from the storage room (`__game.teleport(1.8, -4.4); __game.face(6.2, -3.6)`:
+door frame, "STORAGE ANNEX · EAST" sign) and the hall (`__game.teleport(11.5, -5.2); __game.face(11.5, -9)`: two locker banks). There is no west annex any more
+(the conveyor took its unit). Totals after bank B, C and the east annex: 30 lockers. `__game.engine.newGame()` must wall the doorway up again (walk stops at +5.6).
 
 ## 4f. South expansion and floors
 
-Use the mod menu (M → "Unlock everything", or unlock one at a time) or `__game.grant(2800, 100000)` and buy `bank2, bank3, annexWest, annexEast, southExpansion, floor1, floor2`.
+Use the mod menu (M → "Unlock everything", or unlock one at a time) or `__game.grant(2800, 100000)` and buy `bank2, bank3, annexEast, southExpansion, floor1, floor2` (floor 1 has three rows).
 - Doorway: stand in the storage room at about (−2.15, −7) facing the back wall: a 1.4 m opening between the first two locker banks, "SOUTH EXPANSION" sign above.
 - South hall: two rows of lockers facing the doorway, an aisle between them, five key racks on the old back wall, "SOUTH EXPANSION" on the far wall.
 - Stairs: walk to (5.25, −16.3) in the south hall and walk north (+z): a smooth climb to floor 1, step straight off onto the landing. On floor 1 go to
   (5.25, −20.5) and walk north up flight 2 to floor 2. Space jumps. From floor 2 look down the stairwell: no gap in floor 1. Check for falling through gaps, the guard wall, and the rail round the stairwell.
+- Automation: `g=__game.sim(); g.grantUpgrade('conveyor')` (pulls in labels, register and digital), then spawn a customer, `g.customerReachedCounter(id)`, `g.talkTo(id)`,
+  `g.choose('greet')`, `g.choose('accept')`, stand at (−5.05, −0.2) facing the LOAD belt (−5.05, −1.5) and `__game.interact()`. To watch the arm mid-move step the sim in
+  small slices (`for (...) g.update(0.05)`) then `__game.advance(0.1)` a few times; a single large `update` skips the whole job. The terminal is at (−3.05, −1.2).
 - `__game.walk(forward, right, seconds)` walks relative to the camera; `__game.teleport(x, z)` keeps the current height.
 - Only the current zone and its neighbours are drawn: from floor 2 the ground floor should be hidden, and from the main room floor 1 and 2 hidden.
 - The deposit register shows "page 1/2" when more than 42 bags are stored.

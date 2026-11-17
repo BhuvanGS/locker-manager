@@ -46,20 +46,19 @@ describe('Mod menu actions', () => {
   it('unlocking an annex gives the banks, racks and notices exactly like buying it', () => {
     const g = new GameManager(3)
     expect(applyMod(g, { type: 'unlock', id: 'annexEast' }).ok).toBe(true)
-    for (const id of ['bank2', 'bank3', 'annexWest', 'annexEast']) expect(g.upgrades.has(id)).toBe(true)
-    expect(g.lockers.total).toBe(6 + 6 + 6 + 12 + 12)
-    expect(g.keys.hookCount).toBe(8 + 16 + 16)
+    for (const id of ['bank2', 'bank3', 'annexEast']) expect(g.upgrades.has(id)).toBe(true)
+    expect(g.lockers.total).toBe(6 + 6 + 6 + 12)
+    expect(g.keys.hookCount).toBe(8 + 16)
     const annex = g.drainNotices().filter((n) => n.type === 'upgradeBought' && n.kind === 'annex')
-    expect(annex).toHaveLength(2)
-    expect(annex[0]).toMatchObject({ side: 'west', banks: [3, 4] })
-    expect(annex[1]).toMatchObject({ side: 'east', banks: [5, 6] })
+    expect(annex).toHaveLength(1)
+    expect(annex[0]).toMatchObject({ side: 'east', banks: [3, 4] })
   })
 
   it('unlock everything leaves nothing to buy, and says so the second time', () => {
     const g = new GameManager(3)
     expect(applyMod(g, { type: 'unlockAll' }).ok).toBe(true)
     expect(CONFIG.upgrades.every((def) => g.upgrades.has(def.id))).toBe(true)
-    expect(g.lockers.total).toBe(42 + 3 * 36) // both annexes, the south expansion and two floors
+    expect(g.lockers.total).toBe(30 + 36 + 54 + 36) // the east annex, the south expansion and two floors (floor 1 has three rows)
     expect(g.catalogueItems().every((i) => i.state === 'owned')).toBe(true)
     expect(applyMod(g, { type: 'unlockAll' }).ok).toBe(false)
   })

@@ -97,6 +97,18 @@ Rules:
   (south, floor1, floor2) all see each other, since one floor is the next one's ceiling. Space jumps (`PlayerController`, `JUMP_SPEED`, `GRAVITY`);
   `player/stairs.physics.test.ts` runs real Rapier. `LockerWall` takes a `BankPlacement` (`centerX`, `frontZ`, `floorY`) and `KeyRack` an optional `y`. Everything in a hall is
   positioned relative to the hall's floor (`root.position.y`) so it can rise in place, while colliders use world y.
+- **Digital lockers** (`kind: 'digital'`, `game.isDigital`): `goDigital` puts every key back in its lock, clears the player's key, and sets `locked` = bag inside and shut.
+  Afterwards `closeLocker` locks a locker holding a bag by itself, `openLocker` unlocks it for staff, key actions fail ("no keys any more"), and
+  `storedBlocker` no longer asks for a key. The Engine removes the key racks, hides the KEYS sign, builds one `StatusScreen` per bank (`bankSpots` remembers each
+  bank's placement) and the `LockerWall` door LEDs show locker state. Racks bought later are skipped. Key-rack upgrades have `obsoleteBy: 'digital'`.
+- **Conveyor and robot arm** (`kind: 'conveyor'`, `sim/ConveyorSystem.ts`, `world/ConveyorBay.ts`, `CONFIG.automation`): the system owns `Parcel`s
+  (store: `beltIn → waitingForArm → arm`; fetch: `queued → arm → beltOut → ready`) and ONE arm that takes the oldest ready parcel. `ARM_STEPS` are the moments in the
+  arm job when the door opens, the bag moves and the door shuts; **lockers, items and customers are changed there together** (door, lock, `item.status`
+  `'onConveyor'`, `locker.state` `'reserved'` while a job holds it). Player actions: `loadConveyor` (picks the lowest free robot locker), `openTerminal` /
+  `requestBag(lockerId)`, `takeFromConveyor`. The arm only serves banks `< CONFIG.automation.robotBanks` (the storage room's three). `ConveyorBay` draws it all
+  from `game.conveyor` and steers the arm to a pose from `armProgress()` with keyframes that match `ARM_STEPS`; change one, change the other. The belts pass through
+  a hatch in the partition (`Facility.setConveyorOpen`) and `CONVEYOR`/`lockerSlot` in `layout.ts` hold the positions (tested in `layout.test.ts`).
+  There is **no west annex**: the upgrade was removed and the conveyor takes its place; floor 1 has a third row (`SOUTH.rowFrontZ` has three entries; floors use the rows they need).
 - **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
   `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles
   materials); the halls use emissive fixtures and no point lights.

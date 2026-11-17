@@ -5,7 +5,8 @@ import { GameManager } from '../sim/GameManager'
 import type { ActionResult, DialogueOptionId } from '../sim/types'
 import { CONFIG } from '../sim/config'
 import { applyMod, modInfo } from '../sim/mods'
-import { useGameStore, type CatalogueView, type DialogueView } from '../store/gameStore'
+import { useGameStore, type CatalogueView, type DialogueView, type TerminalView } from '../store/gameStore'
+import { ConveyorBay } from '../world/ConveyorBay'
 import { CustomerAgents } from '../world/CustomerAgents'
 import { Annex, type AnnexSide } from '../world/Annex'
 import { Facility } from '../world/Facility'
@@ -16,6 +17,7 @@ import { KeyRack } from '../world/KeyBoard'
 import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
 import { Stairs } from '../world/Stairs'
+import { StatusScreen } from '../world/StatusScreen'
 import {
   ADJACENT_ZONES,
   ANNEX,
@@ -58,6 +60,12 @@ export class Engine {
   private stairs: Stairs[] = []
   /** The deposit register board, once bought. */
   private registerBoard: RegisterBoard | null = null
+  /** Digital lockers: one status screen per bank (they replace the key racks). */
+  private statusScreens = new Map<number, StatusScreen>()
+  /** Where each bank stands and which part of the building it is in, so a screen can be added to it later. */
+  private readonly bankSpots = new Map<number, { placement: BankPlacement; zone: Zone }>()
+  /** The conveyor belts, robot arm and terminal, once bought. */
+  private conveyorBay: ConveyorBay | null = null
   /** Everything the crosshair can hit; extended when upgrades add walls and racks. */
   private readonly interactionTargets: THREE.Object3D[] = []
   private readonly agents = new CustomerAgents()
@@ -75,6 +83,9 @@ export class Engine {
   private catalogueSig = ''
   private catalogueView: CatalogueView | null = null
   private catalogueIndex = 0
+  private terminalSig = ''
+  private terminalView: TerminalView | null = null
+  private terminalIndex = 0
   private modSig = ''
   private modView: ReturnType<typeof modInfo> | null = null
   /** Whether the mod menu was open last frame (to release / regain the mouse on the change). */
@@ -148,6 +159,39 @@ export class Engine {
     this.lockerWalls.push(wall)
     this.scene.add(wall.root)
     this.interactionTargets.push(wall.root)
+    this.bankSpots.set(bank, { placement, zone })
+    if (this.game.isDigital) this.addStatusScreen(bank, animate)
+  }
+
+  /** A status screen on top of a bank (digital lockers). One per bank. */
+  private addStatusScreen(bank: number, animate: boolean): void {
+    const spot = this.bankSpots.get(bank)
+    if (!spot || this.statusScreens.has(bank)) return
+    const rows = Math.max(...this.game.lockers.all().filter((l) => l.bank === bank).map((l) => l.row)) + 1
+    const screen = new StatusScreen(bank, spot.placement, rows)
+    screen.root.userData.zone = spot.zone
+    if (animate) screen.appear()
+    this.statusScreens.set(bank, screen)
+    this.scene.add(screen.root)
+  }
+
+  /** The keys are gone: take the key racks down (and the sign) and put a status screen on every bank. */
+  private goDigital(): void {
+    for (const rack of this.keyRacks) this.discard(rack.root)
+    this.keyRacks = []
+    this.facility?.setKeysSignVisible(false)
+    for (const bank of this.bankSpots.keys()) this.addStatusScreen(bank, true)
+  }
+
+  /** Cut the hatch through the partition and install the belts, the robot arm and the terminal. */
+  private addConveyor(animate: boolean): void {
+    if (this.conveyorBay) return
+    this.facility?.setConveyorOpen(true)
+    const bay = new ConveyorBay(this.physics)
+    if (animate) bay.appear()
+    this.conveyorBay = bay
+    this.scene.add(bay.root)
+    this.interactionTargets.push(bay.root)
   }
 
   private addRegisterBoard(animate: boolean): void {
@@ -216,6 +260,8 @@ export class Engine {
     }
     for (const wall of this.lockerWalls) show(wall.root)
     for (const rack of this.keyRacks) show(rack.root)
+    for (const screen of this.statusScreens.values()) show(screen.root)
+    if (this.conveyorBay) show(this.conveyorBay.root)
     for (const annex of this.annexes) show(annex.root)
     for (const hall of this.halls) show(hall.root)
     for (const flight of this.stairs) show(flight.root)
@@ -227,6 +273,7 @@ export class Engine {
     placement?: { x: number; y?: number; z: number; rotY: number },
     zone: Zone = 'main',
   ): void {
+    if (this.game.isDigital) return // no keys any more: nothing to hang on a rack
     const rack = new KeyRack(index, CONFIG.facility.hooksPerRack, placement)
     rack.root.userData.zone = zone
     if (animate) rack.appear()
@@ -242,6 +289,16 @@ export class Engine {
       wall.dispose(this.physics)
     }
     for (const rack of this.keyRacks) this.discard(rack.root)
+    for (const screen of this.statusScreens.values()) this.discard(screen.root)
+    this.statusScreens.clear()
+    this.bankSpots.clear()
+    if (this.conveyorBay) {
+      this.discard(this.conveyorBay.root)
+      this.conveyorBay.dispose()
+      this.conveyorBay = null
+    }
+    this.facility?.setConveyorOpen(false)
+    this.facility?.setKeysSignVisible(true)
     if (this.registerBoard) {
       this.discard(this.registerBoard.root)
       this.registerBoard = null
@@ -287,9 +344,11 @@ export class Engine {
     this.dialogueSig = ''
     this.catalogueSig = ''
     this.catalogueView = null
+    this.terminalSig = ''
+    this.terminalView = null
     this.modSig = ''
     this.modView = null
-    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -351,7 +410,7 @@ export class Engine {
 
     // Player and camera. While you are talking or browsing the catalogue you stand still
     // (W/S/arrows choose answers instead).
-    const talking = this.game.dialogue !== null || this.game.catalogueOpen || modOpen
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
       player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
@@ -380,6 +439,8 @@ export class Engine {
         if (notice.kind === 'lockerBank') this.addLockerBank(notice.index, true)
         else if (notice.kind === 'keyRack') this.addKeyRack(notice.index, true)
         else if (notice.kind === 'register') this.addRegisterBoard(true)
+        else if (notice.kind === 'digital') this.goDigital()
+        else if (notice.kind === 'conveyor') this.addConveyor(true)
         else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
         else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
         // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
@@ -391,6 +452,8 @@ export class Engine {
     this.facility.update(dt, this.agents.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
     for (const rack of this.keyRacks) rack.update(dt, this.game)
+    for (const screen of this.statusScreens.values()) screen.update(dt, this.game)
+    this.conveyorBay?.update(dt, this.game)
     this.registerBoard?.update(dt, this.game)
     for (const annex of this.annexes) annex.update(dt)
     for (const hall of this.halls) hall.update(dt)
@@ -407,6 +470,8 @@ export class Engine {
         this.handleDialogueInput(input, playerPos)
       } else if (this.game.catalogueOpen) {
         this.handleCatalogueInput(input)
+      } else if (this.game.terminalOpen) {
+        this.handleTerminalInput(input)
       } else {
         if (store.pendingChoice) store.patch({ pendingChoice: null })
         if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
@@ -471,6 +536,35 @@ export class Engine {
     if (buy) this.report(this.game.buyUpgrade(buy))
   }
 
+  /**
+   * Terminal controls: W/S, arrows or the wheel move the highlight, 1–9 jump to a row, E / Enter / Space / a click asks the
+   * robot arm to fetch the highlighted bag, Q or Backspace closes it.
+   */
+  private handleTerminalInput(input: InputSnapshot): void {
+    const store = useGameStore.getState()
+    const entries = this.game.terminalEntries()
+    const n = entries.length
+    if (n > 0) {
+      if (input.menuMove !== 0) this.terminalIndex = (this.terminalIndex + input.menuMove + n) % n
+      if (input.choice !== null && input.choice <= n) this.terminalIndex = input.choice - 1
+      this.terminalIndex = Math.min(this.terminalIndex, n - 1)
+    }
+    let fetch: string | null = null
+    if (store.pendingFetch) {
+      fetch = store.pendingFetch
+      store.patch({ pendingFetch: null })
+    } else if (input.cancelPressed) {
+      this.game.closeTerminal()
+      return
+    } else if (input.interactPressed || input.confirmPressed) {
+      fetch = entries[this.terminalIndex]?.lockerId ?? null
+    }
+    if (!fetch) return
+    const result = this.game.requestBag(fetch)
+    this.report(result)
+    if (result.ok) this.game.closeTerminal()
+  }
+
   private report(result: ActionResult | null): void {
     if (!result?.message) return
     useGameStore.getState().pushToast(result.message, result.ok ? 'info' : 'bad')
@@ -524,6 +618,15 @@ export class Engine {
       this.catalogueView = catalogue
     }
 
+    // Terminal view, cached the same way.
+    let terminal: TerminalView | null = null
+    if (game.terminalOpen) terminal = { entries: game.terminalEntries(), free: game.robotLockersFree() }
+    const terminalSig = terminal ? JSON.stringify(terminal) : ''
+    if (terminalSig !== this.terminalSig) {
+      this.terminalSig = terminalSig
+      this.terminalView = terminal
+    }
+
     this.fpsFrames++
     this.fpsTime += dt
     let fps = useGameStore.getState().fps
@@ -549,13 +652,15 @@ export class Engine {
       queue: game.queue().length,
       objective: game.objective(),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
-      prompt: game.dialogue || game.catalogueOpen ? null : (aim?.action ?? null),
-      promptHint: game.dialogue || game.catalogueOpen ? null : (aim?.hint ?? null),
+      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen ? null : (aim?.action ?? null),
+      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen ? null : (aim?.hint ?? null),
       holding,
       dialogue: this.dialogueView,
       dialogueIndex: this.dialogueIndex,
       catalogue: this.catalogueView,
       catalogueIndex: this.catalogueIndex,
+      terminal: this.terminalView,
+      terminalIndex: this.terminalIndex,
       modInfo: this.modView,
     })
   }

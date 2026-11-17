@@ -85,7 +85,7 @@ export type ItemCategory =
   | 'box'
   | 'accessory'
 
-export type ItemStatus = 'withCustomer' | 'heldByPlayer' | 'inLocker' | 'returned'
+export type ItemStatus = 'withCustomer' | 'heldByPlayer' | 'onConveyor' | 'inLocker' | 'returned'
 
 export interface Item {
   id: ItemId
@@ -179,7 +179,7 @@ export type SimNotice =
   | {
       type: 'upgradeBought'
       id: string
-      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex' | 'hall'
+      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'annex' | 'hall'
       index: number
       title: string
       /** Annex only: which neighbouring unit was knocked through, and the new bank and rack numbers. */

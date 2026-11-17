@@ -95,7 +95,7 @@ Requested after playtesting Milestone 2.
 - [x] **The register board moved into the storage room**, onto the storage side of the partition, facing the lockers
 - [x] **Building expansion** (Stage 4 of the brief starts here: "larger storage rooms"). Two catalogue upgrades knock the shop
       through into the units next door:
-      **Storage annex (west)** (level 4, $450, needs locker bank C) and **Storage annex (east)** (level 5, $600, needs the west one).
+      **Storage annex (west)** and **Storage annex (east)**. (The west one was later replaced by the conveyor: see "digital lockers, conveyor and robot arm" below.)
       Each adds a real room: a doorway is cut through the storage room's side wall (the collider goes too), the neighbour's back half
       is replaced by a new hall that rises out of the ground (own walls, floor, ceiling, lights, signs), with **2 locker banks
       (+12 lockers)** and **2 key racks (+16 hooks)**. Both together make 42 lockers. More lockers raise the cap on customers at
@@ -122,6 +122,22 @@ Requested after playtesting Milestone 2.
   checked by the layout tests. Play-test it: walk through the new doorway, up both flights of stairs, and look for gaps or overlaps
 
 Not done yet from the brief's expansion list: specialised compartments, warehouse sections, mechanisation.
+
+## Interim work: digital lockers, conveyor and robot arm (done)
+
+Requested as "the next major upgrade: automation".
+
+- [x] **Digital lockers** (upgrade `digital`, level 4, needs the register): the keys go (`GameManager.goDigital`), doors lock themselves when shut with a
+      bag inside, staff open any locker with `E`, key racks are removed and each bank gets a **status screen** (`world/StatusScreen.ts`: green free,
+      red occupied, amber reserved) plus a door LED (`LockerWall`). Key rack upgrades become unavailable (`obsoleteBy`).
+- [x] **Conveyor and robot arm** (upgrade `conveyor`, level 5, needs digital): `sim/ConveyorSystem.ts` (belt → single arm → locker, and the reverse),
+      `GameManager.loadConveyor / requestBag / takeFromConveyor / terminalEntries`, the terminal menu (`ui/TerminalPanel.tsx`), and `world/ConveyorBay.ts`
+      (two belts through a partition hatch, a gantry rail along the lockers, the arm, the kiosk). The arm serves the storage room's three banks.
+- [x] **The conveyor replaces the west annex** (`annexWest` is gone from the catalogue; the east annex now needs bank C), and **floor 1 got a third row**
+      (+54 lockers instead of +36) to make up for it.
+- [x] Tests: `sim/Automation.test.ts` (digital, belt, arm, fetch, wrong bag, queueing), layout tests for the belts and rows.
+- Not done: the robot arm reaching the annex, south hall and floors (one arm per hall); belt jams and arm breakdowns (brief §11); automated allocation
+  beyond "lowest free locker"; the terminal does not search customers by name.
 
 ## Interim work: mod menu (done)
 
@@ -151,7 +167,8 @@ Not done yet from the brief's expansion list: specialised compartments, warehous
 
 ## Milestone 6: Automation
 
-- [ ] Conveyor, automated allocation (`findAvailable`), robotic retrieval, facility expansion
+- [x] Conveyor, automated allocation (lowest free locker), robotic retrieval (see the interim section above)
+- [ ] Jams, breakdowns, upgrades to the arm (speed, a second arm), automated item identification, arms for the other halls
 
 ## Milestone 7: Polish
 

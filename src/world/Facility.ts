@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM, SOUTH } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
 
 /**
@@ -22,6 +22,11 @@ export class Facility {
   /** The removable panel in the back wall where the south expansion's doorway is cut, and its door frame. */
   private southPlug: THREE.Mesh | null = null
   private southFrame: THREE.Group | null = null
+  /** The removable panel in the partition where the conveyor belts pass through, and its frame. */
+  private hatchPlug: THREE.Mesh | null = null
+  private hatchFrame: THREE.Group | null = null
+  /** The "KEYS" sign over the key board (it goes when the keys do). */
+  private keysSign: THREE.Object3D | null = null
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
@@ -147,6 +152,51 @@ export class Facility {
       plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
       if (this.southFrame) this.root.remove(this.southFrame)
       this.southFrame = null
+    }
+  }
+
+  /** The keys are gone (digital lockers): take the "KEYS" sign down. */
+  setKeysSignVisible(visible: boolean): void {
+    if (this.keysSign) this.keysSign.visible = visible
+  }
+
+  /** Cut (or fill in again) the hatch in the partition for the conveyor belts, with a dark frame and rubber flaps. */
+  setConveyorOpen(open: boolean): void {
+    const plug = this.hatchPlug
+    if (!plug) return
+    const isOpen = plug.parent === null
+    if (open === isOpen) return
+    if (open) {
+      this.root.remove(plug)
+      this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
+      const frame = new THREE.Group()
+      const trim = mat(0x374151, 0.6, 0.3)
+      const { minX, maxX, height } = CONVEYOR.hatch
+      const z = PARTITION.z
+      const w = maxX - minX
+      for (const [x, y, bw, bh] of [
+        [(minX + maxX) / 2, height + 0.04, w + 0.16, 0.08],
+        [minX - 0.04, height / 2, 0.08, height],
+        [maxX + 0.04, height / 2, 0.08, height],
+      ] as const) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.34), trim)
+        bar.position.set(x, y, z)
+        frame.add(bar)
+      }
+      // Rubber flaps hanging in the opening (the belts run under them).
+      const rubber = mat(0x111827, 0.9)
+      for (let i = 0; i < 6; i++) {
+        const flap = new THREE.Mesh(new THREE.BoxGeometry(w / 6 - 0.02, 0.28, 0.02), rubber)
+        flap.position.set(minX + (w / 6) * (i + 0.5), height - 0.16, z + 0.05)
+        frame.add(flap)
+      }
+      this.hatchFrame = frame
+      this.root.add(frame)
+    } else {
+      this.root.add(plug)
+      plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+      if (this.hatchFrame) this.root.remove(this.hatchFrame)
+      this.hatchFrame = null
     }
   }
 
@@ -332,9 +382,15 @@ export class Facility {
     const { z, doorHalfWidth } = PARTITION
     const t = 0.2
     const sideW = ROOM.maxX - doorHalfWidth
-    for (const s of [-1, 1]) {
-      this.solid(sideW, ROOM.height, t, wall, s * (doorHalfWidth + sideW / 2), ROOM.height / 2, z)
-    }
+    this.solid(sideW, ROOM.height, t, wall, doorHalfWidth + sideW / 2, ROOM.height / 2, z)
+    // The west half has a removable panel where the conveyor belts pass through later.
+    const { minX: hx0, maxX: hx1, height: hh } = CONVEYOR.hatch
+    const west0 = -doorHalfWidth - sideW
+    const west1 = -doorHalfWidth
+    this.solid(hx0 - west0, ROOM.height, t, wall, (west0 + hx0) / 2, ROOM.height / 2, z)
+    this.solid(west1 - hx1, ROOM.height, t, wall, (hx1 + west1) / 2, ROOM.height / 2, z)
+    this.solid(hx1 - hx0, ROOM.height - hh, t, wall, (hx0 + hx1) / 2, hh + (ROOM.height - hh) / 2, z)
+    this.hatchPlug = this.solid(hx1 - hx0, hh, t, wall, (hx0 + hx1) / 2, hh / 2, z)
     this.solid(doorHalfWidth * 2, ROOM.height - 2.3, t, wall, 0, 2.3 + (ROOM.height - 2.3) / 2, z)
 
     const storage = this.sign('STORAGE', 1.2, 0.26, '#0f172a', '#e2e8f0')
@@ -343,6 +399,7 @@ export class Facility {
     const keys = this.sign('KEYS', 0.6, 0.18, '#0f172a', '#fbbf24')
     keys.position.set(KEY_BOARD.center.x, KEY_BOARD.center.y + KEY_BOARD.height / 2 + 0.16, KEY_BOARD.center.z)
     this.root.add(keys)
+    this.keysSign = keys
 
     // Shelving in the storage room for atmosphere (future expansion space).
     const shelf = mat(0x9ca3af, 0.5, 0.5)

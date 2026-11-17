@@ -49,6 +49,12 @@ export class InteractionManager {
         return game.talkTo(t.customerId)
       case 'catalogue':
         return game.openCatalogue()
+      case 'conveyorIn':
+        return game.loadConveyor()
+      case 'conveyorOut':
+        return game.takeFromConveyor()
+      case 'terminal':
+        return game.openTerminal()
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -58,7 +64,8 @@ export class InteractionManager {
       case 'lockerDoor': {
         const locker = game.lockers.get(t.lockerId)
         if (locker.doorOpen) return game.closeLocker(t.lockerId)
-        if (locker.locked) return game.useKeyOn(t.lockerId)
+        // Digital lockers open for staff without a key.
+        if (locker.locked && !game.isDigital) return game.useKeyOn(t.lockerId)
         return game.openLocker(t.lockerId)
       }
     }
@@ -70,6 +77,17 @@ export class InteractionManager {
     switch (t.kind) {
       case 'catalogue':
         return { action: 'Browse the supplier catalogue', hint: null }
+      case 'conveyorIn': {
+        if (hands?.kind === 'item') return { action: `Put the ${game.customers.item(hands.itemId).label} on the conveyor`, hint: null }
+        return none('Loading belt: bring a bag here')
+      }
+      case 'conveyorOut': {
+        const waiting = game.conveyor.returning().length
+        if (game.conveyor.readyCount > 0) return hands ? none('Hands full') : { action: 'Take the bag from the return tray', hint: null }
+        return none(waiting > 0 ? 'Your bag is on its way…' : 'Return tray: ask the terminal for a bag')
+      }
+      case 'terminal':
+        return { action: 'Use the terminal', hint: null }
       case 'customer': {
         const c = game.customers.get(t.customerId)
         if (game.dialogue?.customerId === c.id) return none()
@@ -78,6 +96,7 @@ export class InteractionManager {
         return { action: 'Talk', hint: null }
       }
       case 'hook': {
+        if (game.isDigital) return none('No keys any more')
         const key = game.keys.onHook(t.hook)
         if (hands?.kind === 'key') return key ? none('Hook taken') : { action: 'Hang the key here', hint: null }
         if (!key) return none('Empty hook')
@@ -86,6 +105,7 @@ export class InteractionManager {
         return { action: `Take key${keyNumber}`, hint: null }
       }
       case 'lockerKey': {
+        if (game.isDigital) return none()
         const locker = game.lockers.get(t.lockerId)
         if (locker.doorOpen) return none('Close the door to lock it')
         if (hands) return none('Hands full')
@@ -109,6 +129,8 @@ export class InteractionManager {
         const locker = game.lockers.get(t.lockerId)
         const name = game.hasLabels ? `locker ${locker.number}` : 'door'
         if (locker.doorOpen) return { action: `Close ${name}`, hint: null }
+        if (locker.state === 'reserved') return none('The robot arm is using it')
+        if (locker.locked && game.isDigital) return { action: `Unlock and open ${name}`, hint: null }
         if (locker.locked) return hands?.kind === 'key' ? { action: `Try the key on ${name}`, hint: null } : none('Locked — needs its key')
         return { action: `Open ${name}`, hint: null }
       }

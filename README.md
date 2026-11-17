@@ -83,11 +83,12 @@ back-right corner of the staff area) and makes customers arrive a little faster.
 | Locker bank B | 2 | $90 | +6 lockers (left of the storage room) |
 | Key rack #3 | 3 | $70 | +8 key hooks |
 | Locker bank C | 3 | $160 | +6 lockers (right of the storage room) |
-| Storage annex (west) | 4 | $450 | **Building expansion:** knock through into the unit next door: a new hall with +12 lockers and +16 key hooks (needs bank C) |
-| Storage annex (east) | 5 | $600 | The same on the other side, for 42 lockers in total (needs the west annex) |
+| **Digital lockers** | 4 | $450 | **Digitalisation:** the keys go. Every locker locks itself electronically when you shut the door, an LED shows free/occupied, and the key racks become status screens (green free, red occupied). Needs the register |
+| Storage annex (east) | 5 | $600 | **Building expansion:** knock through into the unit next door: a new hall with +12 lockers and +16 key hooks (needs bank C) |
+| **Conveyor & robot arm** | 5 | $900 | **Automation:** replaces the west annex (there is no west storage annex). Belts run from the staff area through the partition to the lockers, and a robot arm files bags for you. Needs the digital lockers |
 | **South expansion** | 6 | $900 | Extend the storage room **backwards**: a doorway through the back wall into a big hall with lockers in **rows** (2 rows of 3 banks, +36 lockers, +40 key hooks). Needs the east annex |
-| **Floor 1** | 7 | $1,500 | A staircase up from the south hall to a new storage floor: another 36 lockers and 40 hooks |
-| **Floor 2** | 8 | $2,200 | Another staircase and storage floor on top: another 36 lockers and 40 hooks (150 lockers in total) |
+| **Floor 1** | 7 | $1,500 | A staircase up from the south hall to a new storage floor with **three rows** (+54 lockers, +40 hooks): it makes up for the west annex |
+| **Floor 2** | 8 | $2,200 | Another staircase and storage floor on top: another 36 lockers and 40 hooks (156 lockers in total) |
 
 New lockers, racks, labels and the board all appear in the shop. More lockers mean more customers can be inside at once.
 
@@ -101,7 +102,19 @@ doesn't fill it in).
 the walls; the south hall grows the shop **backwards** with the lockers in rows (aisles between them), through a new doorway in the back
 wall of the storage room, beside the first locker bank. Floors 1 and 2 are the same hall stacked on top, reached by two flights of
 stairs along the east wall of the south hall (walk up from the south end and step straight off onto a landing at the top; the halls have windows). The deposit register
-flips through pages when it holds more than 42 bags.
+flips through pages when it holds more than 42 bags. Floor 1 has an extra (third) row of lockers.
+
+**Digital lockers** end the key game: shut a locker's door and it locks itself; staff open any locker with `E`, so the thing to
+remember is now *which locker*, and that is what the register board and the screens are for. Each status screen sits on top of its
+bank, laid out like the bank (top row on top), and every door has an LED (green free, red occupied, amber reserved by the robot).
+
+**The conveyor and robot arm** change your job from carrying to feeding and fetching. Take the bag from the customer, walk to the
+**LOAD** belt (staff area, left of the counter) and press `E`: the belt carries it through the partition, and the single robot arm
+picks it up, rides its gantry rail to the lowest free locker, opens the door, places the bag and shuts it (about 10 s in all, so a
+busy shop makes bags queue). When the customer is back, use the **terminal** next to the belts, pick the bag from the list (locker,
+item, and the name if you asked), and the arm fetches it onto the return belt; take it from the **COLLECT** tray and hand it over.
+You still have to choose the right bag: hand over the wrong one and it is a wrong package. The arm serves the three storage-room
+banks (18 lockers); the other halls are still filled by hand (the lockers work the same, just without keys).
 
 **The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into
 the neighbouring unit, and a new storage hall rises out of the ground with its own locker banks and key racks.

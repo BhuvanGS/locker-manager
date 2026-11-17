@@ -5,6 +5,7 @@ import { useGameStore, type Banner, type Toast } from '../store/gameStore'
 import { CataloguePanel } from './CataloguePanel'
 import { DialoguePanel } from './DialoguePanel'
 import { ModMenu } from './ModMenu'
+import { TerminalPanel } from './TerminalPanel'
 
 /** In-game overlay. Only shows what Stage 1 has: no database, no labels, no upgrade tree yet. */
 export function HUD() {
@@ -29,6 +30,7 @@ export function HUD() {
       holding: st.holding,
       dialogue: st.dialogue,
       catalogue: st.catalogue,
+      terminal: st.terminal,
       modOpen: st.modOpen,
       modInfo: st.modInfo,
       banner: st.banner,
@@ -62,7 +64,7 @@ export function HUD() {
 
       <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />
 
-      {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && (
+      {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && !s.terminal && (
         <div className={`prompt${s.prompt ? '' : ' hint'}`}>
           {s.prompt ? (
             <>
@@ -82,6 +84,7 @@ export function HUD() {
 
       {s.dialogue && <DialoguePanel dialogue={s.dialogue} />}
       {s.catalogue && <CataloguePanel catalogue={s.catalogue} />}
+      {s.terminal && <TerminalPanel terminal={s.terminal} />}
       {s.modOpen && s.modInfo && <ModMenu info={s.modInfo} />}
       {CONFIG.modMenu.enabled && !s.modOpen && <ModChip />}
 
@@ -89,7 +92,7 @@ export function HUD() {
 
       {s.banner && <BannerCard banner={s.banner} />}
 
-      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
+      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.terminal && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
 
       <div className="controls">
         <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}

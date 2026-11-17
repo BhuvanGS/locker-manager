@@ -15,6 +15,8 @@ type LockerView = {
   keyInLock: THREE.Object3D
   /** The key mesh itself (inside `keyInLock`), so its tag can be set. */
   keyMesh: THREE.Object3D
+  /** Status light on the door (digital lockers): green free, red occupied, amber reserved by the robot. */
+  led: THREE.Mesh
   /** Number plate on the door, once the labels upgrade is bought. */
   plate: THREE.Mesh | null
   interior: THREE.Mesh
@@ -28,6 +30,12 @@ export type BankPlacement = { centerX: number; frontZ: number; floorY: number }
 const OPEN_ANGLE = -1.85
 const PLATE_GEO = new THREE.PlaneGeometry(0.26, 0.13)
 const RISE_SECONDS = 1.1
+const LED_GEO = new THREE.CircleGeometry(0.035, 16)
+const LED_MATERIALS = {
+  free: new THREE.MeshBasicMaterial({ color: 0x22c55e, toneMapped: false }),
+  taken: new THREE.MeshBasicMaterial({ color: 0xef4444, toneMapped: false }),
+  reserved: new THREE.MeshBasicMaterial({ color: 0xf59e0b, toneMapped: false }),
+}
 
 /**
  * One bank (wall) of lockers, drawn from simulation state: door swing, key in lock, and the item inside.
@@ -142,6 +150,11 @@ export class LockerWall {
       lock.position.set(width - 0.09, 0.08, 0.022)
       hinge.add(lock)
 
+      const led = new THREE.Mesh(LED_GEO, LED_MATERIALS.free)
+      led.position.set(0.14, height * 0.375 - 0.005, 0.0145)
+      led.visible = false
+      hinge.add(led)
+
       const keyInLock = makeKeyMesh()
       keyInLock.position.set(width - 0.09, 0.08, 0.05)
       keyInLock.rotation.z = Math.PI / 2
@@ -153,7 +166,7 @@ export class LockerWall {
       hinge.add(keyGroup)
 
       this.root.add(hinge)
-      this.views.set(locker.id, { id: locker.id, hinge, angle: 0, keyInLock: keyGroup, keyMesh: keyInLock, plate: null, interior, itemSlot, shownItem: null })
+      this.views.set(locker.id, { id: locker.id, hinge, angle: 0, keyInLock: keyGroup, keyMesh: keyInLock, led, plate: null, interior, itemSlot, shownItem: null })
     }
   }
 
@@ -198,7 +211,9 @@ export class LockerWall {
       view.hinge.rotation.y = view.angle
 
       const key = game.keys.get(locker.keyId)
-      view.keyInLock.visible = key.location.kind === 'inLock'
+      view.keyInLock.visible = !game.isDigital && key.location.kind === 'inLock'
+      view.led.visible = game.isDigital
+      if (game.isDigital) view.led.material = LED_MATERIALS[locker.state === 'available' ? 'free' : locker.state === 'reserved' ? 'reserved' : 'taken']
 
       if (view.shownItem !== locker.itemId) {
         view.itemSlot.clear()

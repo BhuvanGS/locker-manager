@@ -43,7 +43,7 @@ export interface UpgradeDef {
    * lockerBank / keyRack add storage; labels numbers the lockers and tags the keys; register adds the wall
    * board listing who left what.
    */
-  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex' | 'hall'
+  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'annex' | 'hall'
   title: string
   description: string
   cost: number
@@ -51,6 +51,8 @@ export interface UpgradeDef {
   level: number
   /** Another upgrade that must be owned first. */
   requires?: string
+  /** Owning this makes the upgrade pointless (key racks once the keys are gone), so it can no longer be bought. */
+  obsoleteBy?: string
   /** Annex only: which neighbouring unit the building grows into. */
   side?: 'west' | 'east'
   /** Annex and hall: how many locker banks and key racks the new hall comes with. */
@@ -70,7 +72,7 @@ export const CONFIG = {
   },
   /**
    * What the supplier catalogue sells. Bank and rack numbers are in order: bank B before bank C, rack 2
-   * before rack 3, the register board needs the labels, the east annex needs the west one, and the south expansion,
+   * before rack 3, the register board needs the labels, digital lockers need the register, the conveyor needs digital lockers, and the south expansion,
    * floor 1 and floor 2 each need the one before (`requires`). Positions are in `world/layout.ts` (LOCKER_BANKS, KEY_RACKS).
    */
   upgrades: [
@@ -98,6 +100,7 @@ export const CONFIG = {
       description: '+8 hooks for keys',
       cost: 40,
       level: 2,
+      obsoleteBy: 'digital',
     },
     {
       id: 'bank2',
@@ -115,6 +118,7 @@ export const CONFIG = {
       cost: 70,
       level: 3,
       requires: 'rack2',
+      obsoleteBy: 'digital',
     },
     {
       id: 'bank3',
@@ -125,31 +129,40 @@ export const CONFIG = {
       level: 3,
       requires: 'bank2',
     },
-    // Building expansion: the shop grows into the units next door. Each annex is a new storage hall with
-    // its own locker banks and key racks, reached through a doorway knocked through the side wall.
+    // Digitalisation: the keys go. Every locker gets an electronic lock and the key racks become status screens.
     {
-      id: 'annexWest',
-      kind: 'annex',
-      side: 'west',
-      title: 'Storage annex (west)',
-      description: 'Knock through into the unit next door: a new hall with +12 lockers and +16 key hooks',
+      id: 'digital',
+      kind: 'digital',
+      title: 'Digital lockers',
+      description: 'Scrap the keys: electronic locks engage when you shut a door, and the key racks become screens (green free, red occupied)',
       cost: 450,
       level: 4,
-      requires: 'bank3',
-      banks: 2,
-      racks: 2,
+      requires: 'register',
     },
+    // Building expansion: the shop grows into the unit next door (east). The west unit is taken by the conveyor below.
     {
       id: 'annexEast',
       kind: 'annex',
       side: 'east',
       title: 'Storage annex (east)',
-      description: 'Expand into the other neighbouring unit: another hall with +12 lockers and +16 key hooks',
+      description: 'Knock through into the unit next door: a new hall with +12 lockers and +16 key hooks',
       cost: 600,
       level: 5,
-      requires: 'annexWest',
+      requires: 'bank3',
       banks: 2,
       racks: 2,
+    },
+    // Mechanisation: a conveyor belt and a robot arm. It takes over the west unit (so there is no west storage annex), and you
+    // get a loading tray, a pick-up tray and a terminal instead of carrying bags to lockers.
+    {
+      id: 'conveyor',
+      kind: 'conveyor',
+      title: 'Conveyor & robot arm',
+      description:
+        'Replaces the west annex. Load bags on the belt and a robot arm files them in the storage-room lockers; ask the terminal for a bag and it comes back on the return belt',
+      cost: 900,
+      level: 5,
+      requires: 'digital',
     },
     // The next phase of the building: grow backwards (south) with lockers in rows, then upwards.
     // Each hall has two rows of three locker banks (+36 lockers) and five key racks (+40 hooks).
@@ -170,11 +183,11 @@ export const CONFIG = {
       kind: 'hall',
       hall: 'floor1',
       title: 'Floor 1',
-      description: 'A staircase from the south hall up to a new storage floor (+36 lockers, +40 hooks)',
+      description: 'A staircase from the south hall up to a new storage floor with three rows (+54 lockers, +40 hooks): makes up for the west annex',
       cost: 1500,
       level: 7,
       requires: 'southExpansion',
-      banks: 6,
+      banks: 9,
       racks: 5,
     },
     {
@@ -301,6 +314,21 @@ export const CONFIG = {
     servingDrainFactor: 0.4,
     /** Patience refilled by a friendly greeting. */
     greetingPatience: 10,
+  },
+  /**
+   * The conveyor and robot arm. A bag rides the belt for `beltSeconds`, then the single arm takes `armSeconds` to pick it up,
+   * carry it to its locker, open the door, place it and shut it again (a fetch does the same in reverse, then rides back).
+   */
+  automation: {
+    beltSeconds: 4.5,
+    armSeconds: 6,
+    /** Bags allowed on the way in at once, and the least time between two loads. */
+    beltCapacity: 4,
+    loadGap: 1.4,
+    /** Bags that can wait on the return belt. */
+    readyCapacity: 3,
+    /** The robot arm serves the storage room's locker banks (bank numbers below this). */
+    robotBanks: 3,
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

@@ -2,6 +2,7 @@ import { mulberry32 } from '../lib/random'
 import { CONFIG, type ArrivalStage, type UpgradeDef } from './config'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
+import { ConveyorSystem } from './ConveyorSystem'
 import { CustomerScheduler } from './CustomerScheduler'
 import { EconomyManager } from './EconomyManager'
 import { KeyManager } from './KeyManager'
@@ -31,6 +32,17 @@ const RETURN_VISIT = new Set(['waitingForCollection', 'collecting'])
 /** Customers physically inside (or walking in): the shop is "empty" when none of these exist. */
 const IN_BUILDING = new Set(['arriving', 'waiting', 'depositing', 'returning', 'waitingForCollection', 'collecting'])
 
+/** One bag the conveyor terminal can fetch. */
+export interface TerminalEntry {
+  lockerId: LockerId
+  lockerNumber: number
+  itemLabel: string
+  /** The customer's name, only if the player asked for it at the deposit. */
+  name: string | null
+  /** The arm is already on this one. */
+  fetching: boolean
+}
+
 /** A dialogue option as shown to the player. `recommended` marks the natural next step (pre-selected in the UI). */
 export type DialogueChoice = DialogueOption & { disabled: string | null; recommended: boolean }
 
@@ -50,6 +62,8 @@ export class GameManager {
   readonly economy: EconomyManager
   readonly scheduler: CustomerScheduler
   readonly upgrades = new UpgradeManager(CONFIG.upgrades)
+  /** The conveyor belt and robot arm (idle until the upgrade is bought). */
+  readonly conveyor: ConveyorSystem
   private readonly factory: CustomerFactory
   private readonly rand: () => number
 
@@ -59,6 +73,8 @@ export class GameManager {
   dialogue: Dialogue | null = null
   /** The supplier catalogue menu is open (player is browsing upgrades). */
   catalogueOpen = false
+  /** The conveyor terminal menu is open (player is picking a bag to fetch). */
+  terminalOpen = false
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
   busyUntil = 0
   firstCustomerId: CustomerId | null = null
@@ -77,6 +93,7 @@ export class GameManager {
       this.lockers.all().map((l) => ({ lockerId: l.id, keyId: l.keyId })),
       hooksPerRack,
     )
+    this.conveyor = new ConveyorSystem(this.lockers, this.customers, () => this.now)
     this.economy = new EconomyManager(CONFIG.economy.startingMoney, CONFIG.economy.startingReputation)
     this.scheduler = new CustomerScheduler(stages, this.rand)
     this.scheduleNextArrival()
@@ -93,6 +110,7 @@ export class GameManager {
       if (event.type === 'nextArrival') this.onNextArrival()
       else this.onReturn(event.customerId)
     }
+    this.conveyor.update(dt)
     this.updatePatience(dt)
     this.updateIdleGuard(dt)
   }
@@ -270,7 +288,7 @@ export class GameManager {
       if (this.hands?.kind === 'item') {
         add('handOver', `Hand over the ${this.customers.item(this.hands.itemId).label}`)
       } else {
-        add('handOver', 'Hand over their item', 'Fetch it from the lockers first.')
+        add('handOver', 'Hand over their item', this.hasConveyor ? 'Fetch it at the terminal first.' : 'Fetch it from the lockers first.')
       }
       add('goodbye', 'Step away')
     }
@@ -446,6 +464,16 @@ export class GameManager {
     return this.upgrades.has('labels')
   }
 
+  /** Keys are gone: every locker has an electronic lock and the key racks are status screens. */
+  get isDigital(): boolean {
+    return this.upgrades.has('digital')
+  }
+
+  /** The conveyor belt, robot arm and terminal are installed. */
+  get hasConveyor(): boolean {
+    return this.upgrades.has('conveyor')
+  }
+
   /** Whether the shop has grown into the unit next door (building expansion). */
   hasAnnex(side?: 'west' | 'east'): boolean {
     if (side) return this.upgrades.has(side === 'west' ? 'annexWest' : 'annexEast')
@@ -459,6 +487,8 @@ export class GameManager {
 
   /** HUD label: basic → organised (labels or register) → expanded (an annex, the south hall or a floor). */
   facilityLabel(): string {
+    if (this.hasConveyor) return 'Automated facility'
+    if (this.isDigital) return 'Digital facility'
     if (this.hasAnnex() || this.hasHall('south')) return 'Expanded facility'
     return this.hasLabels || this.upgrades.has('register') ? 'Organised facility' : 'Basic facility'
   }
@@ -489,10 +519,12 @@ export class GameManager {
    * door is shut and whose key is out of the lock: a locker left open with its key in it has nothing to remember.
    */
   private storedBlocker(item: Item | null): string | null {
-    if (item?.status !== 'inLocker' || !item.lockerId) return 'Store it in a locker first.'
+    if (item?.status === 'onConveyor') return 'The belt is still carrying it.'
+    if (item?.status !== 'inLocker' || !item.lockerId) return this.hasConveyor ? 'Put it on the conveyor first.' : 'Store it in a locker first.'
     const locker = this.lockers.get(item.lockerId)
     if (locker.doorOpen) return 'Close the locker door first.'
-    if (!locker.locked) return 'Take the key out of the lock to lock it.'
+    // With digital lockers the door locks itself when it shuts, so there is no key to take.
+    if (!locker.locked) return this.isDigital ? 'Close the locker door first.' : 'Take the key out of the lock to lock it.'
     return null
   }
 
@@ -548,10 +580,23 @@ export class GameManager {
         racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
       }
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, hall: def.hall, banks, racks })
+    } else if (def.kind === 'digital') {
+      this.goDigital()
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
     } else {
-      // labels / register: no new records; the 3D views react to `upgrades.has(...)`.
+      // labels / register / conveyor: no new records; the 3D views react to `upgrades.has(...)`.
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
     }
+  }
+
+  /**
+   * Scrap the keys. Every key goes back into its lock (and out of the player's hand), and every locker's lock matches what it
+   * holds: a shut locker with a bag is locked, anything else is not.
+   */
+  private goDigital(): void {
+    for (const key of this.keys.all()) this.keys.move(key.id, { kind: 'inLock' })
+    if (this.hands?.kind === 'key') this.hands = null
+    for (const locker of this.lockers.all()) locker.locked = locker.itemId !== null && !locker.doorOpen
   }
 
   // ------------------------------------------------------------------ mod menu hooks (see mods.ts)
@@ -611,15 +656,21 @@ export class GameManager {
   openLocker(id: LockerId): ActionResult {
     const locker = this.lockers.get(id)
     if (locker.doorOpen) return fail('It is already open.')
-    if (locker.locked) return fail('Locked. You need its key from the key board.')
+    if (locker.state === 'reserved') return fail('The robot arm is using this locker.')
+    if (locker.locked) {
+      if (!this.isDigital) return fail('Locked. You need its key from the key board.')
+      this.lockers.setLocked(id, false) // the electronic lock lets staff in
+    }
     this.lockers.open(id)
     return ok()
   }
 
   closeLocker(id: LockerId): ActionResult {
-    if (!this.lockers.get(id).doorOpen) return fail('It is already shut.')
+    const locker = this.lockers.get(id)
+    if (!locker.doorOpen) return fail('It is already shut.')
     this.lockers.close(id)
-    return ok()
+    if (this.isDigital && locker.itemId) this.lockers.setLocked(id, true) // the electronic lock engages by itself
+    return ok(this.isDigital && locker.itemId ? 'Locked.' : null)
   }
 
   putItem(id: LockerId): ActionResult {
@@ -627,6 +678,7 @@ export class GameManager {
     if (this.hands?.kind !== 'item') return fail('You are not carrying an item.')
     if (!locker.doorOpen) return fail('Open the door first.')
     if (locker.itemId) return fail('This locker is already in use.')
+    if (locker.state === 'reserved') return fail('The robot arm has reserved this locker.')
     const item = this.customers.item(this.hands.itemId)
     this.lockers.put(id, item.id)
     item.status = 'inLocker'
@@ -634,7 +686,7 @@ export class GameManager {
     item.depositedAt ??= this.now
     this.customers.get(item.customerId).lockerId = id
     this.hands = null
-    return ok(`Stored the ${item.label}. Close the door and take the key.`)
+    return ok(this.isDigital ? `Stored the ${item.label}. Close the door.` : `Stored the ${item.label}. Close the door and take the key.`)
   }
 
   takeItem(id: LockerId): ActionResult {
@@ -642,6 +694,7 @@ export class GameManager {
     if (this.hands) return fail('Your hands are full.')
     if (!locker.doorOpen) return fail('Open the door first.')
     if (!locker.itemId) return fail('It is empty.')
+    if (locker.state === 'reserved') return fail('The robot arm is fetching this one.')
     const item = this.customers.item(this.lockers.take(id))
     item.status = 'heldByPlayer'
     item.lockerId = null
@@ -652,6 +705,7 @@ export class GameManager {
 
   /** Pull the key out of a shut locker's lock. This locks it. */
   takeKeyFromLock(id: LockerId): ActionResult {
+    if (this.isDigital) return fail('There are no keys any more.')
     const locker = this.lockers.get(id)
     const key = this.keys.get(locker.keyId)
     if (key.location.kind !== 'inLock') return fail('Its key is not here.')
@@ -685,6 +739,7 @@ export class GameManager {
   }
 
   hangKey(hook: number): ActionResult {
+    if (this.isDigital) return fail('There are no keys any more.')
     if (this.hands?.kind !== 'key') return fail('You are not holding a key.')
     if (this.keys.onHook(hook)) return fail('That hook is taken.')
     this.keys.move(this.hands.keyId, { kind: 'hook', hook })
@@ -693,6 +748,7 @@ export class GameManager {
   }
 
   takeKeyFromHook(hook: number): ActionResult {
+    if (this.isDigital) return fail('There are no keys any more.')
     const busy = this.busy()
     if (busy) return busy
     const key = this.keys.onHook(hook)
@@ -701,6 +757,91 @@ export class GameManager {
     this.keys.move(key.id, { kind: 'player' })
     this.hands = { kind: 'key', keyId: key.id }
     return ok()
+  }
+
+  // ------------------------------------------------------------------ conveyor and robot arm
+
+  /** Lockers the robot arm can reach: the storage room's own banks. */
+  isRobotLocker(id: LockerId): boolean {
+    return this.lockers.get(id).bank < CONFIG.automation.robotBanks
+  }
+
+  /** Free lockers the arm could file a bag in right now. */
+  robotLockersFree(): number {
+    return this.lockers.all().filter((l) => l.state === 'available' && this.isRobotLocker(l.id)).length
+  }
+
+  /** Put the bag in your hands on the loading belt. The robot arm picks the locker (the lowest free number). */
+  loadConveyor(): ActionResult {
+    if (!this.hasConveyor) return fail('There is no conveyor yet.')
+    if (this.hands?.kind !== 'item') return fail('You are not carrying a bag.')
+    const cfg = CONFIG.automation
+    const inbound = this.conveyor.inbound()
+    if (inbound.length >= cfg.beltCapacity) return fail('The belt is full. Give it a moment.')
+    if (inbound.some((p) => p.phase === 'beltIn' && p.t < cfg.loadGap)) return fail('Wait for the last bag to move along.')
+    const locker = this.lockers
+      .all()
+      .find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId)
+    if (!locker) return fail('No free locker for the robot arm. Store it by hand in another hall.')
+    const item = this.customers.item(this.hands.itemId)
+    locker.state = 'reserved'
+    item.status = 'onConveyor'
+    this.hands = null
+    this.conveyor.load(item.id, locker.id)
+    return ok(`On its way to locker ${locker.number}.`)
+  }
+
+  /** Bags the terminal can ask the arm to fetch: everything stored in a locker the arm can reach. */
+  terminalEntries(): TerminalEntry[] {
+    const out: TerminalEntry[] = []
+    for (const locker of this.lockers.all()) {
+      if (!this.isRobotLocker(locker.id) || !locker.itemId) continue
+      const item = this.customers.item(locker.itemId)
+      const customer = this.customers.get(item.customerId)
+      out.push({
+        lockerId: locker.id,
+        lockerNumber: locker.number,
+        itemLabel: item.label,
+        name: customer.nameTaken ? customer.name : null,
+        fetching: this.conveyor.isBusy(locker.id),
+      })
+    }
+    return out
+  }
+
+  openTerminal(): ActionResult {
+    if (!this.hasConveyor) return fail('There is no terminal yet.')
+    if (this.dialogue) return fail('Finish talking first.')
+    this.terminalOpen = true
+    return ok()
+  }
+
+  closeTerminal(): void {
+    this.terminalOpen = false
+  }
+
+  /** Ask the robot arm to bring the bag in `lockerId` to the return tray. */
+  requestBag(lockerId: LockerId): ActionResult {
+    if (!this.hasConveyor) return fail('There is no conveyor yet.')
+    const locker = this.lockers.get(lockerId)
+    if (!this.isRobotLocker(lockerId) || !locker.itemId) return fail('There is nothing to fetch there.')
+    if (locker.state === 'reserved' || this.conveyor.isBusy(lockerId)) return fail('The robot is already on it.')
+    if (this.conveyor.fetchesInProgress() >= CONFIG.automation.readyCapacity) return fail('The return belt is full. Collect a bag first.')
+    const item = this.customers.item(locker.itemId)
+    locker.state = 'reserved'
+    this.conveyor.request(item.id, lockerId)
+    return ok(`Fetching the ${item.label} from locker ${locker.number}.`)
+  }
+
+  /** Pick up the oldest bag waiting on the return tray. */
+  takeFromConveyor(): ActionResult {
+    if (this.hands) return fail('Your hands are full.')
+    const parcel = this.conveyor.takeReady()
+    if (!parcel) return fail('Nothing has arrived yet.')
+    const item = this.customers.item(parcel.itemId)
+    item.status = 'heldByPlayer'
+    this.hands = { kind: 'item', itemId: item.id }
+    return ok(`You took the ${item.label}.`)
   }
 
   // ------------------------------------------------------------------ HUD queries
@@ -726,16 +867,21 @@ export class GameManager {
     if (hands?.kind === 'item') {
       const item = this.customers.item(hands.itemId)
       const owner = this.customers.get(item.customerId)
-      return RETURN_VISIT.has(owner.state) ? `Hand the ${item.label} back to its owner.` : `Store the ${item.label} in an empty locker.`
+      if (RETURN_VISIT.has(owner.state)) return `Hand the ${item.label} back to its owner.`
+      return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
     const lockers = this.lockers.all()
     if (lockers.some((l) => l.doorOpen && l.itemId)) return 'Close the open locker.'
-    if (lockers.some((l) => l.itemId && !l.locked)) return 'An occupied locker is unlocked — take its key.'
+    if (!this.isDigital && lockers.some((l) => l.itemId && !l.locked)) return 'An occupied locker is unlocked — take its key.'
+    if (this.conveyor.readyCount > 0) return 'A bag has arrived on the return belt. Pick it up.'
     const queue = this.queue()
     const toConfirm = queue.find((c) => c.state === 'depositing' && this.customers.itemOf(c)?.status === 'inLocker')
     if (toConfirm) return 'Tell the waiting customer their item is stored.'
     const collecting = queue.filter((c) => RETURN_VISIT.has(c.state))
+    if (collecting.length > 0 && this.hasConveyor) {
+      return collecting.length === 1 ? 'A customer is back. Ask the terminal to fetch their bag.' : `${collecting.length} customers are back. Use the terminal to fetch their bags.`
+    }
     if (collecting.length > 0) {
       return collecting.length === 1
         ? 'A customer is back to collect. Which locker was theirs?'

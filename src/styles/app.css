@@ -782,3 +782,9 @@ kbd {
   padding-top: 0.6rem;
   border-top: 1px solid rgba(148, 163, 184, 0.15);
 }
+
+.terminal-empty {
+  margin: 14px 4px;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
