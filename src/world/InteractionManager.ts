@@ -21,6 +21,7 @@ export class InteractionManager {
   private readonly center = new THREE.Vector2(0, 0)
   private readonly targets: THREE.Object3D[]
 
+  /** `targets` is kept by reference: push new roots onto it (e.g. a bought locker bank) and they become usable. */
   constructor(targets: THREE.Object3D[]) {
     this.targets = targets
   }
@@ -46,6 +47,8 @@ export class InteractionManager {
     switch (t.kind) {
       case 'customer':
         return game.talkTo(t.customerId)
+      case 'catalogue':
+        return game.openCatalogue()
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -65,6 +68,8 @@ export class InteractionManager {
     const hands = game.hands
     const none = (hint: string | null = null) => ({ action: null, hint })
     switch (t.kind) {
+      case 'catalogue':
+        return { action: 'Browse the supplier catalogue', hint: null }
       case 'customer': {
         const c = game.customers.get(t.customerId)
         if (game.dialogue?.customerId === c.id) return none()
@@ -77,13 +82,15 @@ export class InteractionManager {
         if (hands?.kind === 'key') return key ? none('Hook taken') : { action: 'Hang the key here', hint: null }
         if (!key) return none('Empty hook')
         if (hands) return none('Hands full')
-        return { action: 'Take key', hint: null }
+        const keyNumber = game.hasLabels ? ` ${game.lockers.get(key.lockerId).number}` : ''
+        return { action: `Take key${keyNumber}`, hint: null }
       }
       case 'lockerKey': {
         const locker = game.lockers.get(t.lockerId)
         if (locker.doorOpen) return none('Close the door to lock it')
         if (hands) return none('Hands full')
-        return { action: 'Take key (locks it)', hint: null }
+        const keyNumber = game.hasLabels ? ` ${locker.number}` : ''
+        return { action: `Take key${keyNumber} (locks it)`, hint: null }
       }
       case 'lockerInterior': {
         const locker = game.lockers.get(t.lockerId)
@@ -100,9 +107,10 @@ export class InteractionManager {
       }
       case 'lockerDoor': {
         const locker = game.lockers.get(t.lockerId)
-        if (locker.doorOpen) return { action: 'Close door', hint: null }
-        if (locker.locked) return hands?.kind === 'key' ? { action: 'Try the key', hint: null } : none('Locked — needs its key')
-        return { action: 'Open door', hint: null }
+        const name = game.hasLabels ? `locker ${locker.number}` : 'door'
+        if (locker.doorOpen) return { action: `Close ${name}`, hint: null }
+        if (locker.locked) return hands?.kind === 'key' ? { action: `Try the key on ${name}`, hint: null } : none('Locked — needs its key')
+        return { action: `Open ${name}`, hint: null }
       }
     }
   }

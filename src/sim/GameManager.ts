@@ -1,11 +1,12 @@
 import { mulberry32 } from '../lib/random'
-import { CONFIG } from './config'
+import { CONFIG, type ArrivalStage, type UpgradeDef } from './config'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { CustomerScheduler } from './CustomerScheduler'
 import { EconomyManager } from './EconomyManager'
 import { KeyManager } from './KeyManager'
 import { LockerManager } from './LockerManager'
+import { UpgradeManager, type CatalogueItem } from './UpgradeManager'
 import { SimulationClock } from './SimulationClock'
 import type {
   ActionResult,
@@ -17,6 +18,7 @@ import type {
   Hands,
   Item,
   LockerId,
+  RegisterEntry,
   SimEvent,
   SimNotice,
 } from './types'
@@ -26,8 +28,14 @@ const fail = (message: string): ActionResult => ({ ok: false, message })
 
 const DEPOSIT_VISIT = new Set(['waiting', 'depositing'])
 const RETURN_VISIT = new Set(['waitingForCollection', 'collecting'])
+/** Customers physically inside (or walking in): the shop is "empty" when none of these exist. */
+const IN_BUILDING = new Set(['arriving', 'waiting', 'depositing', 'returning', 'waitingForCollection', 'collecting'])
 
-export type DialogueChoice = DialogueOption & { disabled: string | null }
+/** A dialogue option as shown to the player. `recommended` marks the natural next step (pre-selected in the UI). */
+export type DialogueChoice = DialogueOption & { disabled: string | null; recommended: boolean }
+
+/** Order of the "natural" conversation flow: the first enabled option in this list is recommended. */
+const FLOW: DialogueOptionId[] = ['greet', 'askName', 'accept', 'confirmStored', 'handOver', 'goodbye']
 
 /**
  * The simulation root. Owns every manager and exposes the actions the player can take.
@@ -41,28 +49,36 @@ export class GameManager {
   readonly keys: KeyManager
   readonly economy: EconomyManager
   readonly scheduler: CustomerScheduler
+  readonly upgrades = new UpgradeManager(CONFIG.upgrades)
   private readonly factory: CustomerFactory
   private readonly rand: () => number
 
+  /** Switches the mod menu can flip. */
+  readonly mods = { noPatienceLoss: false }
   hands: Hands = null
   dialogue: Dialogue | null = null
+  /** The supplier catalogue menu is open (player is browsing upgrades). */
+  catalogueOpen = false
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
   busyUntil = 0
   firstCustomerId: CustomerId | null = null
   tutorialComplete = false
   private notices: SimNotice[] = []
+  /** Seconds the building has had nobody in it (for the idle guard). */
+  private emptyFor = 0
 
-  constructor(seed = 1) {
+  /** `stages` defaults to the real traffic plan; tests pass their own. */
+  constructor(seed = 1, stages: readonly ArrivalStage[] = CONFIG.stages) {
     this.rand = mulberry32(seed)
     this.factory = new CustomerFactory(this.rand)
-    const { lockerRows, lockerCols, keyHooks } = CONFIG.facility
+    const { lockerRows, lockerCols, hooksPerRack } = CONFIG.facility
     this.lockers = new LockerManager(lockerRows, lockerCols)
     this.keys = new KeyManager(
       this.lockers.all().map((l) => ({ lockerId: l.id, keyId: l.keyId })),
-      keyHooks,
+      hooksPerRack,
     )
     this.economy = new EconomyManager(CONFIG.economy.startingMoney, CONFIG.economy.startingReputation)
-    this.scheduler = new CustomerScheduler(CONFIG.stages, this.rand)
+    this.scheduler = new CustomerScheduler(stages, this.rand)
     this.scheduleNextArrival()
   }
 
@@ -74,9 +90,33 @@ export class GameManager {
 
   update(dt: number): void {
     for (const event of this.clock.advance(dt)) {
-      if (event.type === 'customerArrive') this.onArrive(event.customerId)
+      if (event.type === 'nextArrival') this.onNextArrival()
       else this.onReturn(event.customerId)
     }
+    this.updatePatience(dt)
+    this.updateIdleGuard(dt)
+  }
+
+  /**
+   * Never leave the player bored: if the shop has been empty for the stage's `maxIdle` seconds, pull the
+   * next scheduled arrival or return forward. Arrival times stay random (and tests can disable it).
+   */
+  private updateIdleGuard(dt: number): void {
+    const maxIdle = this.scheduler.stage.maxIdle
+    if (maxIdle === undefined || dt <= 0) return
+    if (this.customers.all().some((c) => IN_BUILDING.has(c.state))) {
+      this.emptyFor = 0
+      return
+    }
+    this.emptyFor += dt
+    if (this.emptyFor < maxIdle) return
+    this.emptyFor = 0
+    const [min, max] = CONFIG.idlePullIn
+    const at = this.now + min + (max - min) * this.rand()
+    const next = this.clock.peekEarliest()
+    if (!next || next.at <= at + 1) return // something is about to happen anyway
+    const event = this.clock.retimeEarliest(at)
+    if (event?.type === 'customerReturn') this.customers.get(event.customerId).expectedReturnAt = at
   }
 
   drainNotices(): SimNotice[] {
@@ -90,19 +130,65 @@ export class GameManager {
   }
 
   private scheduleNextArrival(): void {
+    // Customers come a little faster with every level you have earned.
+    this.scheduler.pace = 1 + CONFIG.progression.paceBonusPerLevel * (this.economy.level.level - 1)
     const delay = this.scheduler.nextArrivalDelay()
     if (delay === null) return
-    const opts = { patience: CONFIG.customer.patience, fee: CONFIG.economy.depositFee }
+    this.clock.scheduleIn(delay, { type: 'nextArrival' })
+  }
+
+  /** Customers with business here: in the building, or with an item stored. */
+  activeCustomers(): number {
+    return this.customers.all().filter((c) => c.state !== 'completed' && c.state !== 'leftWithoutService').length
+  }
+
+  private onNextArrival(): void {
+    const stage = this.scheduler.stage
+    // More lockers means room for more customers with business here.
+    const extraLockers = this.lockers.total - CONFIG.facility.lockerRows * CONFIG.facility.lockerCols
+    if (stage.maxActive !== undefined && this.activeCustomers() >= stage.maxActive + extraLockers) {
+      this.clock.scheduleIn(CONFIG.arrivalRetry, { type: 'nextArrival' })
+      return
+    }
+    const opts = {
+      patience: stage.patience,
+      fee: CONFIG.economy.depositFee,
+      satisfaction: CONFIG.customer.startingSatisfaction,
+    }
     const first = this.firstCustomerId === null
     const { customer, item } = first ? this.factory.tutorialCustomer(opts) : this.factory.customer(opts)
     this.customers.add(customer, item)
+    this.scheduler.introduce(customer.id)
     if (first) this.firstCustomerId = customer.id
-    this.clock.scheduleIn(delay, { type: 'customerArrive', customerId: customer.id })
+    this.notify({ type: 'customerSpawned', customerId: customer.id })
+    this.scheduleNextArrival()
   }
 
-  private onArrive(id: CustomerId): void {
-    this.notify({ type: 'customerSpawned', customerId: id })
-    this.scheduleNextArrival()
+  private updatePatience(dt: number): void {
+    if (this.mods.noPatienceLoss) return // mod menu: customers never lose patience
+    for (const c of this.customers.all()) {
+      if (!c.patienceDrains || dt <= 0) continue
+      const waiting = c.state === 'waiting' || c.state === 'waitingForCollection'
+      const serving = c.state === 'depositing' || c.state === 'collecting'
+      if (!waiting && !serving) continue
+      if (this.dialogue?.customerId === c.id) continue
+      c.patience = Math.max(0, c.patience - dt * (waiting ? 1 : CONFIG.customer.servingDrainFactor))
+      if (c.patience > 0) continue
+      // Out of patience. Someone still holding their bag walks out; someone whose bag you have stays,
+      // but gets steadily less happy (smaller tip, worse reputation).
+      if (this.customers.itemOf(c)?.status === 'withCustomer') this.walkout(c)
+      else c.satisfaction = Math.max(0, c.satisfaction - dt * CONFIG.customer.impatientSatisfactionPerSecond)
+    }
+  }
+
+  private walkout(c: Customer): void {
+    if (this.dialogue?.customerId === c.id) this.dialogue = null
+    this.customers.transition(c.id, 'leftWithoutService')
+    c.satisfaction = 0
+    this.economy.adjustReputation(CONFIG.economy.walkoutReputation)
+    const who = c.visit.askedName ? c.name : 'A customer'
+    this.notify({ type: 'walkout', customerId: c.id, message: `${who} got tired of waiting and left.` })
+    this.notify({ type: 'customerLeaving', customerId: c.id })
   }
 
   private onReturn(id: CustomerId): void {
@@ -121,9 +207,13 @@ export class GameManager {
   /** The agent walked out of the door. Finished customers are dropped from the live set. */
   customerExited(id: CustomerId): void {
     const c = this.customers.get(id)
-    if (c.state === 'completed' || c.state === 'leftWithoutService') {
-      if (id === this.firstCustomerId && c.state === 'completed') this.tutorialComplete = true
-      this.customers.forget(id)
+    if (c.state !== 'completed' && c.state !== 'leftWithoutService') return
+    if (id === this.firstCustomerId && c.state === 'completed') this.tutorialComplete = true
+    this.customers.forget(id)
+    if (this.scheduler.finish(id)) {
+      const stage = this.scheduler.stage
+      this.notify({ type: 'stageStarted', title: stage.title, text: stage.intro })
+      this.scheduleNextArrival()
     }
   }
 
@@ -155,29 +245,39 @@ export class GameManager {
     const c = this.customers.get(d.customerId)
     const item = this.customers.itemOf(c)
     const out: DialogueChoice[] = []
-    const add = (id: DialogueOptionId, label: string, disabled: string | null = null) => out.push({ id, label, disabled })
+    const add = (id: DialogueOptionId, label: string, disabled: string | null = null) =>
+      out.push({ id, label, disabled, recommended: false })
 
+    // Slots stay put for the whole visit, so the same number key always means the same thing:
+    // 1 greet · 2 ask name · 3 the main action · then step away (and, before taking the bag, turn away).
+    // Finished steps stay in place, greyed out, instead of shifting the others up.
+    const done = 'Done'
     if (DEPOSIT_VISIT.has(c.state)) {
-      if (!c.visit.greeted) add('greet', 'Greet them')
-      if (!c.visit.askedName) add('askName', 'Ask their name')
+      add('greet', 'Greet them', c.visit.greeted ? done : null)
+      add('askName', 'Ask their name', c.visit.askedName ? done : null)
       if (item?.status === 'withCustomer') {
         add('accept', `Accept their ${item.label}`, this.hands ? 'Your hands are full.' : c.visit.greeted ? null : 'Greet them first.')
+      } else {
+        add('confirmStored', 'Tell them it is stored', this.storedBlocker(item))
       }
-      if (item?.status === 'heldByPlayer') {
-        add('confirmStored', 'Tell them it is stored', 'Store it in a locker first.')
+      add('goodbye', 'Step away')
+      if (item?.status === 'withCustomer') {
+        add('turnAway', this.lockers.availableCount === 0 ? "Sorry, we're full" : "Sorry, we can't take it right now")
       }
-      if (item?.status === 'inLocker') add('confirmStored', 'Tell them it is stored')
     } else {
-      if (!c.visit.greeted) add('greet', 'Greet them')
-      if (!c.visit.askedName) add('askName', 'Ask what name it is under')
+      add('greet', 'Greet them', c.visit.greeted ? done : null)
+      add('askName', 'Ask what name it is under', c.visit.askedName ? done : null)
       if (this.hands?.kind === 'item') {
-        const held = this.customers.item(this.hands.itemId)
-        add('handOver', `Hand over the ${held.label}`)
+        add('handOver', `Hand over the ${this.customers.item(this.hands.itemId).label}`)
       } else {
         add('handOver', 'Hand over their item', 'Fetch it from the lockers first.')
       }
+      add('goodbye', 'Step away')
     }
-    add('goodbye', 'Step away')
+    // Recommend the first enabled step of the usual flow. When the only thing left is blocked (e.g. the bag
+    // is still in your hands), that is "Step away": go and do it, then come back.
+    const next = FLOW.map((id) => out.find((o) => o.id === id)).find((o) => o && !o.disabled)
+    if (next) next.recommended = true
     return out
   }
 
@@ -196,6 +296,8 @@ export class GameManager {
     switch (optionId) {
       case 'greet':
         c.visit.greeted = true
+        c.patience = Math.min(c.maxPatience, c.patience + CONFIG.customer.greetingPatience)
+        c.satisfaction = Math.min(100, c.satisfaction + 3)
         if (c.state === 'waitingForCollection') {
           this.customers.transition(c.id, 'collecting')
           say('You', 'Welcome back!')
@@ -207,6 +309,8 @@ export class GameManager {
         return ok()
       case 'askName':
         c.visit.askedName = true
+        // Only a name taken when the bag is dropped off makes it onto the deposit register.
+        if (DEPOSIT_VISIT.has(c.state)) c.nameTaken = true
         say('You', RETURN_VISIT.has(c.state) ? 'What name is it under?' : 'Can I take your name?')
         say(c.name, `It's ${c.name}.`)
         return ok()
@@ -219,15 +323,26 @@ export class GameManager {
         say(c.name, c.personality.handOver)
         return ok(`You took the ${item.label}. Store it in an empty locker.`)
       }
+      case 'turnAway': {
+        say('You', this.lockers.availableCount === 0 ? "Sorry, we're full at the moment." : "Sorry, we can't take it right now.")
+        say(c.name, 'Oh. Alright, another time then.')
+        this.customers.transition(c.id, 'leftWithoutService')
+        this.economy.adjustReputation(CONFIG.economy.turnAwayReputation)
+        this.notify({ type: 'customerLeaving', customerId: c.id })
+        this.dialogue = null
+        return ok('You turned the customer away.')
+      }
       case 'confirmStored': {
         if (c.state === 'waiting') this.customers.transition(c.id, 'depositing')
-        const delay = this.scheduler.returnDelay()
+        const stored = this.customers
+          .all()
+          .flatMap((other) => (other.state === 'stored' && other.expectedReturnAt !== null ? [other.expectedReturnAt] : []))
+        const delay = this.scheduler.returnDelay(this.now, stored)
         c.depositedAt = this.now
         c.expectedReturnAt = this.now + delay
         this.customers.transition(c.id, 'stored')
         this.clock.schedule(c.expectedReturnAt, { type: 'customerReturn', customerId: c.id })
-        this.economy.addXp(CONFIG.economy.xp.deposit)
-        this.notify({ type: 'xp', amount: CONFIG.economy.xp.deposit })
+        this.gainXp(CONFIG.economy.xp.deposit)
         this.notify({ type: 'customerLeaving', customerId: c.id })
         this.dialogue = null
         return ok(`${c.name} left. Remember where their ${this.mustItem(c).label} is.`)
@@ -248,33 +363,233 @@ export class GameManager {
       this.customers.transition(c.id, 'collecting')
     }
     say('You', `Here's your ${held.label}.`)
-    if (held.customerId !== c.id) {
-      const theirs = this.mustItem(c)
-      say(c.name, `That's not mine! Mine is a ${theirs.label}.`)
-      c.satisfaction = Math.max(0, c.satisfaction + CONFIG.economy.wrongItemSatisfaction)
-      this.economy.mistakes += 1
-      this.economy.adjustReputation(CONFIG.economy.wrongItemReputation)
-      const message = `Wrong item — that ${held.label} belongs to someone else.`
-      this.notify({ type: 'mistake', kind: 'wrongItem', message })
-      return fail(message)
-    }
-    say(c.name, c.personality.thanks)
+    if (held.customerId !== c.id) return this.wrongPackage(c, say)
+
+    const retried = c.visit.wrongAttempts > 0
+    say(c.name, retried ? 'Finally! That one is mine.' : c.personality.thanks)
     held.status = 'returned'
     this.hands = null
-    c.satisfaction = Math.min(100, c.satisfaction + 15)
+    // Someone you kept getting wrong does not warm up just because you finally got it right.
+    if (!retried) c.satisfaction = Math.min(100, c.satisfaction + 15)
     const tip = Math.round((CONFIG.economy.maxTip * c.satisfaction) / 100)
-    const paid = c.fee + tip
+    const w = CONFIG.wrongItem
+    const furious = c.visit.wrongAttempts >= w.furiousAt
+    const fee = furious ? Math.round(c.fee * w.furiousDiscount) : c.fee
+    const paid = fee + tip
     this.economy.earn(paid)
-    this.economy.addXp(CONFIG.economy.xp.correctReturn)
+    this.gainXp(CONFIG.economy.xp.correctReturn)
     this.economy.served += 1
-    this.economy.adjustReputation(2)
+    this.economy.adjustReputation(c.satisfaction >= 60 ? 2 : c.satisfaction >= 35 ? 0 : -2)
     this.customers.transition(c.id, 'completed')
     this.notify({ type: 'payment', amount: paid })
-    this.notify({ type: 'xp', amount: CONFIG.economy.xp.correctReturn })
     this.notify({ type: 'customerLeaving', customerId: c.id })
     this.dialogue = null
-    return ok(`${c.name} paid $${paid}${tip > 0 ? ` (incl. $${tip} tip)` : ''}.`)
+    const extras = [furious ? 'half price after the mix-ups' : '', tip > 0 ? `$${tip} tip` : ''].filter(Boolean)
+    return ok(`${c.name} paid $${paid}${extras.length ? ` (${extras.join(', ')})` : ''}.`)
   }
+
+  /**
+   * The player handed over someone else's package. The customer says so, and every further wrong try makes
+   * them angrier: more lost satisfaction and reputation, less patience, and from `furiousAt` tries a discount.
+   */
+  private wrongPackage(c: Customer, say: (who: string, text: string) => void): ActionResult {
+    const w = CONFIG.wrongItem
+    c.visit.wrongAttempts += 1
+    const tries = c.visit.wrongAttempts
+    say(c.name, wrongPackageLine(tries, this.mustItem(c).label))
+    c.satisfaction = Math.max(0, c.satisfaction + w.satisfaction)
+    if (c.patienceDrains) c.patience = Math.max(0, c.patience - c.maxPatience * w.patienceFraction)
+    this.economy.mistakes += 1
+    this.economy.adjustReputation(w.reputation[Math.min(tries, w.reputation.length) - 1] ?? 0)
+    const who = c.visit.askedName ? (c.name.split(' ')[0] ?? c.name) : 'The customer'
+    const message =
+      tries === 1
+        ? `${who}: "That's not my package."`
+        : tries < w.furiousAt
+          ? `Wrong again (${tries}). ${who} is getting angry.`
+          : `Wrong again (${tries}). ${who} is furious!`
+    this.notify({ type: 'mistake', kind: 'wrongItem', message })
+    return fail(message)
+  }
+
+  /** XP, with a cash bonus and a notice when it crosses into a new level. */
+  private gainXp(amount: number): void {
+    const before = this.economy.level.level
+    this.economy.addXp(amount)
+    this.notify({ type: 'xp', amount })
+    const after = this.economy.level.level
+    if (after === before) return
+    let bonus = 0
+    const unlocked: string[] = []
+    for (let level = before + 1; level <= after; level++) {
+      bonus += CONFIG.progression.levelUpBonus * level
+      for (const def of this.upgrades.unlockedAt(level)) unlocked.push(def.title)
+    }
+    this.economy.earn(bonus)
+    this.notify({ type: 'levelUp', level: after, bonus, unlocked })
+  }
+
+  // ------------------------------------------------------------------ catalogue (storage and key rack upgrades)
+
+  openCatalogue(): ActionResult {
+    if (this.dialogue) return fail('Finish talking first.')
+    this.catalogueOpen = true
+    return ok()
+  }
+
+  closeCatalogue(): void {
+    this.catalogueOpen = false
+  }
+
+  /** Numbers on the lockers and a tag on every key. */
+  get hasLabels(): boolean {
+    return this.upgrades.has('labels')
+  }
+
+  /** Whether the shop has grown into the unit next door (building expansion). */
+  hasAnnex(side?: 'west' | 'east'): boolean {
+    if (side) return this.upgrades.has(side === 'west' ? 'annexWest' : 'annexEast')
+    return this.upgrades.has('annexWest') || this.upgrades.has('annexEast')
+  }
+
+  /** HUD label: basic → organised (labels or register) → expanded (an annex). The brief's stages 1, 2 and the start of 4. */
+  facilityLabel(): string {
+    if (this.hasAnnex()) return 'Expanded facility'
+    return this.hasLabels || this.upgrades.has('register') ? 'Organised facility' : 'Basic facility'
+  }
+
+  /**
+   * The deposit register board: every bag currently sitting in a locker, oldest first. Empty until the board
+   * is bought. It updates itself as you store and collect, so you no longer have to remember who is where.
+   */
+  registerEntries(): RegisterEntry[] {
+    if (!this.upgrades.has('register')) return []
+    const rows: (RegisterEntry & { at: number })[] = []
+    for (const c of this.customers.all()) {
+      const item = this.customers.itemOf(c)
+      if (!item || item.status !== 'inLocker' || !item.lockerId) continue
+      rows.push({
+        customerId: c.id,
+        name: c.nameTaken ? c.name : null,
+        lockerNumber: this.lockers.get(item.lockerId).number,
+        itemLabel: item.label,
+        at: item.depositedAt ?? 0,
+      })
+    }
+    return rows.sort((a, b) => a.at - b.at).map(({ at: _at, ...entry }) => entry)
+  }
+
+  /**
+   * Why you cannot tell the customer "it is stored" yet, or null if you can. The bag must be in a locker whose
+   * door is shut and whose key is out of the lock: a locker left open with its key in it has nothing to remember.
+   */
+  private storedBlocker(item: Item | null): string | null {
+    if (item?.status !== 'inLocker' || !item.lockerId) return 'Store it in a locker first.'
+    const locker = this.lockers.get(item.lockerId)
+    if (locker.doorOpen) return 'Close the locker door first.'
+    if (!locker.locked) return 'Take the key out of the lock to lock it.'
+    return null
+  }
+
+  catalogueItems(): CatalogueItem[] {
+    return this.upgrades.items(this.economy.level.level, this.economy.money)
+  }
+
+  /** Buy an upgrade: pay, then apply it (new lockers and keys, or more hooks). */
+  buyUpgrade(id: string): ActionResult {
+    const def = this.upgrades.def(id)
+    if (!def) return fail('Not in the catalogue.')
+    const status = this.upgrades.state(def, this.economy.level.level, this.economy.money)
+    if (status.state !== 'available') return fail(status.note ?? 'Not available.')
+    this.economy.spend(def.cost)
+    this.applyUpgrade(def)
+    return ok(`Bought ${def.title}: ${def.description}.`)
+  }
+
+  /**
+   * Mod menu: get an upgrade for free, ignoring level and cost, after first granting anything it requires.
+   * It goes through the same code as a purchase, so banks, racks and annexes appear exactly as if bought.
+   */
+  grantUpgrade(id: string): ActionResult {
+    const def = this.upgrades.def(id)
+    if (!def) return fail('Not in the catalogue.')
+    if (this.upgrades.has(id)) return fail(`${def.title} is already owned.`)
+    if (def.requires && !this.upgrades.has(def.requires)) this.grantUpgrade(def.requires)
+    this.applyUpgrade(def)
+    return ok(`Unlocked ${def.title}.`)
+  }
+
+  /** Apply an upgrade's effect to the records and tell the 3D side what to build. */
+  private applyUpgrade(def: UpgradeDef): void {
+    this.upgrades.markOwned(def.id)
+    if (def.kind === 'lockerBank') {
+      const added = this.lockers.addBank(CONFIG.facility.lockerRows, CONFIG.facility.lockerCols)
+      for (const locker of added) this.keys.addKey(locker.id, locker.keyId)
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: this.lockers.bankCount - 1, title: def.title })
+    } else if (def.kind === 'keyRack') {
+      this.keys.addHooks(CONFIG.facility.hooksPerRack)
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: this.keys.hookCount / CONFIG.facility.hooksPerRack - 1, title: def.title })
+    } else if (def.kind === 'annex') {
+      // A new hall: its banks and racks are ordinary records, the 3D side builds the room around them.
+      const banks: number[] = []
+      for (let i = 0; i < (def.banks ?? 0); i++) {
+        const added = this.lockers.addBank(CONFIG.facility.lockerRows, CONFIG.facility.lockerCols)
+        for (const locker of added) this.keys.addKey(locker.id, locker.keyId)
+        banks.push(this.lockers.bankCount - 1)
+      }
+      const racks: number[] = []
+      for (let i = 0; i < (def.racks ?? 0); i++) {
+        this.keys.addHooks(CONFIG.facility.hooksPerRack)
+        racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
+      }
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, banks, racks })
+    } else {
+      // labels / register: no new records; the 3D views react to `upgrades.has(...)`.
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
+    }
+  }
+
+  // ------------------------------------------------------------------ mod menu hooks (see mods.ts)
+
+  /** XP with all the usual level-up bonuses and banners. */
+  grantXp(amount: number): void {
+    this.gainXp(amount)
+  }
+
+  /** Add a customer right now, outside the traffic plan (they do not count towards finishing a stage). */
+  spawnExtraCustomer(): CustomerId {
+    const stage = this.scheduler.stage
+    const { customer, item } = this.factory.customer({
+      patience: stage.patience,
+      fee: CONFIG.economy.depositFee,
+      satisfaction: CONFIG.customer.startingSatisfaction,
+    })
+    this.customers.add(customer, item)
+    this.notify({ type: 'customerSpawned', customerId: customer.id })
+    return customer.id
+  }
+
+  /** Jump to the next traffic stage. Returns false when already on the last. */
+  skipStage(): boolean {
+    this.clock.removeWhere((e) => e.type === 'nextArrival') // the old stage's pending arrival
+    const moved = this.scheduler.skipStage()
+    if (moved) {
+      this.tutorialComplete = true
+      const stage = this.scheduler.stage
+      this.notify({ type: 'stageStarted', title: stage.title, text: stage.intro })
+    }
+    this.scheduleNextArrival()
+    return moved
+  }
+
+  /** Make every stored customer come back in a second. Returns how many. */
+  callBackStoredCustomers(): number {
+    const at = this.now + 1
+    const moved = this.clock.retimeWhere((e) => e.type === 'customerReturn', at)
+    for (const c of this.customers.all()) if (c.state === 'stored') c.expectedReturnAt = at
+    return moved
+  }
+
 
   private mustItem(c: Customer): Item {
     const item = this.customers.itemOf(c)
@@ -392,17 +707,43 @@ export class GameManager {
     }).length
   }
 
-  /** Tutorial / current objective, derived from state so it can never get out of sync. */
+  /** Current objective, derived from state so it can never get out of sync. */
   objective(): string {
-    if (this.tutorialComplete) return 'Milestone 1 complete — you served your first customer!'
     const id = this.firstCustomerId
-    if (!id) return 'Open for business.'
-    let c: Customer
-    try {
-      c = this.customers.get(id)
-    } catch {
-      return 'Open for business.'
+    if (!id) return 'Open for business. Your first customer is on the way.'
+    if (this.tutorialComplete || !this.customers.has(id)) return this.generalObjective()
+    return this.tutorialObjective(this.customers.get(id))
+  }
+
+  /** After the tutorial: point at the most useful next thing without giving away what you must remember. */
+  private generalObjective(): string {
+    const hands = this.hands
+    if (hands?.kind === 'item') {
+      const item = this.customers.item(hands.itemId)
+      const owner = this.customers.get(item.customerId)
+      return RETURN_VISIT.has(owner.state) ? `Hand the ${item.label} back to its owner.` : `Store the ${item.label} in an empty locker.`
     }
+    if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
+    const lockers = this.lockers.all()
+    if (lockers.some((l) => l.doorOpen && l.itemId)) return 'Close the open locker.'
+    if (lockers.some((l) => l.itemId && !l.locked)) return 'An occupied locker is unlocked — take its key.'
+    const queue = this.queue()
+    const toConfirm = queue.find((c) => c.state === 'depositing' && this.customers.itemOf(c)?.status === 'inLocker')
+    if (toConfirm) return 'Tell the waiting customer their item is stored.'
+    const collecting = queue.filter((c) => RETURN_VISIT.has(c.state))
+    if (collecting.length > 0) {
+      return collecting.length === 1
+        ? 'A customer is back to collect. Which locker was theirs?'
+        : `${collecting.length} customers are back to collect.`
+    }
+    if (queue.length > 0) return queue.length === 1 ? 'A customer is waiting at the counter.' : `${queue.length} customers are waiting.`
+    const upgrade = this.catalogueItems().find((i) => i.state === 'available')
+    if (upgrade) return `Quiet moment. You can afford ${upgrade.title}: browse the catalogue on the desk at the back right.`
+    if (this.activeDeposits() > 0) return 'Quiet moment. Customers will be back for their things.'
+    return 'Quiet moment. More customers are on their way.'
+  }
+
+  private tutorialObjective(c: Customer): string {
     const item = this.customers.itemOf(c)
     const label = item?.label ?? 'item'
     const first = c.name.split(' ')[0] ?? c.name
@@ -415,7 +756,7 @@ export class GameManager {
       case 'waiting':
       case 'depositing':
         if (item?.status === 'withCustomer') {
-          return this.dialogue ? 'Greet them, ask their name, then accept their item.' : 'Talk to the customer at the counter.'
+          return this.dialogue ? 'Greet them, ask their name, then accept their item. (Press E to follow the highlighted step.)' : 'Talk to the customer at the counter.'
         }
         if (item?.status === 'heldByPlayer') return `Store the ${label} in an empty locker in the back room.`
         if (item?.status === 'inLocker' && lockerOpen) return 'Close the locker door.'
@@ -444,4 +785,16 @@ export class GameManager {
         return `${first} gave up and left.`
     }
   }
+}
+
+/** What a customer says each time you hand them someone else's package: politer first, then angrier. */
+function wrongPackageLine(tries: number, theirs: string): string {
+  const lines = [
+    "Um… this isn't my package.",
+    "No, that's still not mine. Could you check again?",
+    `Seriously? That's the wrong one again. Mine is the ${theirs}!`,
+    'This is ridiculous! I want MY bag, right now!',
+    'Are you even trying?! Give me my bag!',
+  ]
+  return lines[Math.min(tries, lines.length) - 1] ?? lines[0] ?? ''
 }

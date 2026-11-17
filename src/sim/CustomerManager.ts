@@ -29,6 +29,10 @@ export class CustomerManager {
     return customer
   }
 
+  has(id: CustomerId): boolean {
+    return this.customers.has(id)
+  }
+
   item(id: ItemId): Item {
     const item = this.items.get(id)
     if (!item) throw new Error(`Unknown item ${id}`)
@@ -56,7 +60,7 @@ export class CustomerManager {
     customer.state = to
     if (to === 'waiting' || to === 'waitingForCollection') {
       customer.patience = customer.maxPatience
-      customer.visit = { greeted: false, askedName: false }
+      customer.visit = { greeted: false, askedName: false, wrongAttempts: 0 }
     }
     return customer
   }

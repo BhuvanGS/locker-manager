@@ -2,17 +2,21 @@ import * as THREE from 'three'
 import { FirstPersonCamera } from '../player/FirstPersonCamera'
 import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
-import type { ActionResult } from '../sim/types'
-import { useGameStore, type DialogueView } from '../store/gameStore'
+import type { ActionResult, DialogueOptionId } from '../sim/types'
+import { CONFIG } from '../sim/config'
+import { applyMod, modInfo } from '../sim/mods'
+import { useGameStore, type CatalogueView, type DialogueView } from '../store/gameStore'
 import { CustomerAgents } from '../world/CustomerAgents'
+import { Annex, type AnnexSide } from '../world/Annex'
 import { Facility } from '../world/Facility'
 import { HeldView } from '../world/HeldView'
 import { InteractionManager } from '../world/InteractionManager'
-import { KeyBoard } from '../world/KeyBoard'
+import { KeyRack } from '../world/KeyBoard'
 import { LockerWall } from '../world/LockerWall'
-import { PLAYER_SPAWN, REACH } from '../world/layout'
+import { RegisterBoard } from '../world/RegisterBoard'
+import { ANNEX, ANNEX_RACK, LOCKER_BANKS, PLAYER_SPAWN, REACH } from '../world/layout'
 import { isDebugEnabled } from './debug'
-import { InputManager } from './InputManager'
+import { InputManager, type InputSnapshot } from './InputManager'
 import { PhysicsWorld } from './PhysicsWorld'
 
 /**
@@ -29,8 +33,16 @@ export class Engine {
   private game = new GameManager(seedFromUrl())
   private player: PlayerController | null = null
   private facility: Facility | null = null
-  private lockerWall: LockerWall | null = null
-  private keyBoard: KeyBoard | null = null
+  /** One wall per locker bank (bank 0 at the start, more as storage upgrades are bought). */
+  private lockerWalls: LockerWall[] = []
+  /** One rack per set of key hooks. */
+  private keyRacks: KeyRack[] = []
+  /** Storage annexes built into the units next door (building expansion). */
+  private annexes: Annex[] = []
+  /** The deposit register board, once bought. */
+  private registerBoard: RegisterBoard | null = null
+  /** Everything the crosshair can hit; extended when upgrades add walls and racks. */
+  private readonly interactionTargets: THREE.Object3D[] = []
   private readonly agents = new CustomerAgents()
   private readonly held = new HeldView()
   private interaction: InteractionManager | null = null
@@ -41,6 +53,17 @@ export class Engine {
   private fpsFrames = 0
   private dialogueSig = ''
   private dialogueView: DialogueView | null = null
+  /** Highlighted dialogue option; reset to the recommended one whenever the conversation changes. */
+  private dialogueIndex = 0
+  private catalogueSig = ''
+  private catalogueView: CatalogueView | null = null
+  private catalogueIndex = 0
+  private modSig = ''
+  private modView: ReturnType<typeof modInfo> | null = null
+  /** Whether the mod menu was open last frame (to release / regain the mouse on the change). */
+  private modWasOpen = false
+  /** Debug only: forced walking input, so automation can walk through doors. */
+  private debugWalk: { forward: number; right: number } | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -60,10 +83,10 @@ export class Engine {
   async init(): Promise<void> {
     await this.physics.init()
     this.facility = new Facility(this.physics)
-    this.lockerWall = new LockerWall(this.game, this.physics)
-    this.keyBoard = new KeyBoard(this.game.keys.hookCount)
-    this.scene.add(this.facility.root, this.lockerWall.root, this.keyBoard.root, this.agents.root, this.held.root)
-    this.interaction = new InteractionManager([this.facility.root, this.lockerWall.root, this.keyBoard.root, this.agents.root])
+    this.scene.add(this.facility.root, this.agents.root, this.held.root)
+    this.interactionTargets.push(this.facility.root, this.agents.root)
+    this.buildStartingFurniture()
+    this.interaction = new InteractionManager(this.interactionTargets)
     this.player = new PlayerController(this.physics, PLAYER_SPAWN)
     this.player.buildPhysics()
     this.cameraRig.lookToward(0, 6, PLAYER_SPAWN.x, PLAYER_SPAWN.z)
@@ -90,14 +113,92 @@ export class Engine {
     this.physics.dispose()
   }
 
+  /** The locker bank and key rack every game starts with. */
+  private buildStartingFurniture(): void {
+    this.addLockerBank(0, false)
+    this.addKeyRack(0, false)
+  }
+
+  private addLockerBank(bank: number, animate: boolean, centerX = LOCKER_BANKS[bank]?.centerX ?? 0): void {
+    const wall = new LockerWall(this.game, this.physics, bank, centerX)
+    if (animate) wall.appear()
+    this.lockerWalls.push(wall)
+    this.scene.add(wall.root)
+    this.interactionTargets.push(wall.root)
+  }
+
+  private addRegisterBoard(animate: boolean): void {
+    if (this.registerBoard) return
+    const board = new RegisterBoard()
+    if (animate) board.appear()
+    this.registerBoard = board
+    this.scene.add(board.root)
+  }
+
+  /** Knock through into the next unit: open the doorway, raise the hall, and fit its banks and racks. */
+  private addAnnex(side: AnnexSide, banks: number[], racks: number[]): void {
+    this.facility?.setAnnexOpen(side, true)
+    const annex = new Annex(side, this.physics)
+    annex.appear()
+    this.annexes.push(annex)
+    this.scene.add(annex.root)
+    this.interactionTargets.push(annex.root)
+    banks.forEach((bank, i) => this.addLockerBank(bank, true, ANNEX[side].bankX[i]))
+    racks.forEach((rack, i) => this.addKeyRack(rack, true, { x: ANNEX[side].rackX[i] ?? 0, z: ANNEX_RACK.z, rotY: ANNEX_RACK.rotY }))
+  }
+
+  private addKeyRack(index: number, animate: boolean, placement?: { x: number; z: number; rotY: number }): void {
+    const rack = new KeyRack(index, CONFIG.facility.hooksPerRack, placement)
+    if (animate) rack.appear()
+    this.keyRacks.push(rack)
+    this.scene.add(rack.root)
+    this.interactionTargets.push(rack.root)
+  }
+
+  /** Remove every locker bank and key rack (a new game starts from one of each). */
+  private removeBuiltFurniture(): void {
+    for (const wall of this.lockerWalls) {
+      this.discard(wall.root)
+      wall.dispose(this.physics)
+    }
+    for (const rack of this.keyRacks) this.discard(rack.root)
+    if (this.registerBoard) {
+      this.discard(this.registerBoard.root)
+      this.registerBoard = null
+    }
+    for (const annex of this.annexes) {
+      this.discard(annex.root)
+      annex.dispose()
+      this.facility?.setAnnexOpen(annex.side, false)
+    }
+    this.annexes = []
+    this.lockerWalls = []
+    this.keyRacks = []
+  }
+
+  private discard(root: THREE.Object3D): void {
+    this.scene.remove(root)
+    const at = this.interactionTargets.indexOf(root)
+    if (at >= 0) this.interactionTargets.splice(at, 1)
+    root.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) (o as THREE.Mesh).geometry?.dispose()
+    })
+  }
+
   /** Throw away the simulation and start over (the static building is reused). */
   newGame(): void {
+    this.removeBuiltFurniture()
     this.game = new GameManager(seedFromUrl())
+    this.buildStartingFurniture()
     this.agents.clear()
     this.player?.teleport(PLAYER_SPAWN.x, PLAYER_SPAWN.z)
     this.cameraRig.lookToward(0, 6, PLAYER_SPAWN.x, PLAYER_SPAWN.z)
     this.dialogueSig = ''
-    useGameStore.setState({ toasts: [], dialogue: null, tutorialComplete: false })
+    this.catalogueSig = ''
+    this.catalogueView = null
+    this.modSig = ''
+    this.modView = null
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -116,20 +217,53 @@ export class Engine {
       store.patch({ newGameRequested: false })
     }
     const input = this.input.snapshot()
+    if (this.debugWalk) {
+      input.forward = this.debugWalk.forward
+      input.right = this.debugWalk.right
+    }
     const player = this.player
-    if (!player || !this.facility || !this.lockerWall || !this.keyBoard || !this.interaction) return
-    const playing = store.phase === 'playing'
+    if (!player || !this.facility || !this.interaction) return
 
-    if (playing && input.pausePressed) {
+    // Mod menu: M (or `) toggles it, Esc closes it instead of pausing, and it hands the mouse back while open.
+    const modsOn = CONFIG.modMenu.enabled
+    let modOpen = modsOn && store.modOpen && store.phase === 'playing'
+    let pausePressed = input.pausePressed
+    if (modsOn && store.phase === 'playing') {
+      if (input.modPressed) modOpen = !modOpen
+      else if (modOpen && pausePressed) {
+        modOpen = false
+        pausePressed = false
+      }
+    }
+    if (modOpen !== store.modOpen) store.patch({ modOpen })
+    if (modOpen !== this.modWasOpen) {
+      this.modWasOpen = modOpen
+      if (modOpen) {
+        if (document.pointerLockElement) document.exitPointerLock()
+      } else {
+        this.canvas.requestPointerLock()?.catch(() => {})
+      }
+    }
+    if (modsOn && store.modRequests.length > 0) {
+      const requests = store.modRequests
+      store.patch({ modRequests: [] })
+      for (const request of requests) this.report(applyMod(this.game, request))
+    }
+    // While the menu is open the shop can be frozen so there is time to click around.
+    const playing = store.phase === 'playing' && !(modOpen && store.modPause)
+
+    if (playing && pausePressed) {
       store.setPhase('paused')
       if (document.pointerLockElement) document.exitPointerLock()
       return
     }
 
-    // Player and camera.
+    // Player and camera. While you are talking or browsing the catalogue you stand still
+    // (W/S/arrows choose answers instead).
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
-      player.update(input, this.cameraRig.getYaw(), dt)
+      player.update(talking ? { ...input, forward: 0, right: 0, sprint: false } : input, this.cameraRig.getYaw(), dt)
       this.physics.step(dt)
       player.syncFromPhysics()
     }
@@ -144,46 +278,102 @@ export class Engine {
       else if (notice.type === 'customerLeaving') this.agents.leave(notice.customerId)
       else if (notice.type === 'payment') store.pushToast(`+$${notice.amount}`, 'good')
       else if (notice.type === 'xp') store.pushToast(`+${notice.amount} XP`, 'info')
-      else if (notice.type === 'mistake') store.pushToast(notice.message, 'bad')
-      else store.pushToast(notice.text, 'info')
+      // Mistakes are already toasted from the action's own result message, so only walk-outs need one here.
+      else if (notice.type === 'mistake') continue
+      else if (notice.type === 'walkout') store.pushToast(notice.message, 'bad')
+      else if (notice.type === 'stageStarted') store.showBanner(notice.title, notice.text)
+      else if (notice.type === 'levelUp') {
+        const unlocked = notice.unlocked.length > 0 ? `New in the catalogue: ${notice.unlocked.join(', ')}.` : 'Customers will arrive a little faster.'
+        store.showBanner(`Level ${notice.level}`, `+$${notice.bonus} bonus. ${unlocked}`, 'Level up')
+      } else if (notice.type === 'upgradeBought') {
+        if (notice.kind === 'lockerBank') this.addLockerBank(notice.index, true)
+        else if (notice.kind === 'keyRack') this.addKeyRack(notice.index, true)
+        else if (notice.kind === 'register') this.addRegisterBoard(true)
+        else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
+        // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
+      } else store.pushToast(notice.text, 'info')
     }
 
     // Views.
-    this.agents.update(playing ? dt : 0, this.game, playerPos)
+    this.agents.update(playing ? dt : 0, this.game, playerPos, camera)
     this.facility.update(dt, this.agents.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
-    this.lockerWall.update(dt, this.game)
-    this.keyBoard.update(this.game)
-    this.held.update(dt, camera, this.game, input.forward !== 0 || input.right !== 0)
+    for (const wall of this.lockerWalls) wall.update(dt, this.game)
+    for (const rack of this.keyRacks) rack.update(dt, this.game)
+    this.registerBoard?.update(dt, this.game)
+    for (const annex of this.annexes) annex.update(dt)
+    this.held.update(dt, camera, this.game, !talking && (input.forward !== 0 || input.right !== 0))
 
     // Interaction.
     let aim = null
-    if (playing) {
+    if (playing && !modOpen) {
       aim = this.interaction.aim(camera, this.game)
-      if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
-      this.handleDialogueInput(input.choice, playerPos)
+      if (this.game.dialogue) {
+        // In a conversation, E / click / Enter answer instead of poking whatever is under the crosshair.
+        this.handleDialogueInput(input, playerPos)
+      } else if (this.game.catalogueOpen) {
+        this.handleCatalogueInput(input)
+      } else {
+        if (store.pendingChoice) store.patch({ pendingChoice: null })
+        if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
+      }
     }
 
     this.syncHud(dt, aim)
   }
 
-  private handleDialogueInput(choice: number | null, playerPos: THREE.Vector3): void {
+  /**
+   * Conversation controls: W/S, arrows or the mouse wheel move the highlight; E, Enter, Space or a click
+   * confirm it; 1–6 pick an option directly; Q or Backspace steps away.
+   */
+  private handleDialogueInput(input: InputSnapshot, playerPos: THREE.Vector3): void {
     const store = useGameStore.getState()
     const d = this.game.dialogue
-    if (!d) {
-      if (store.pendingChoice) store.patch({ pendingChoice: null })
-      return
-    }
-    // Walking away ends the conversation.
+    if (!d) return
+    // Walking away (or the customer leaving) ends the conversation.
     const at = this.agents.position(d.customerId)
     if (!at || Math.hypot(at.x - playerPos.x, at.z - playerPos.z) > REACH.customer + 0.6) {
       this.game.closeDialogue()
       return
     }
     const options = this.game.dialogueOptions()
-    let pick = store.pendingChoice
-    if (pick) store.patch({ pendingChoice: null })
-    if (!pick && choice !== null) pick = options[choice - 1]?.id ?? null
-    if (pick) this.report(this.game.choose(pick))
+
+    if (input.menuMove !== 0) this.dialogueIndex = nextEnabled(options, this.dialogueIndex, input.menuMove)
+
+    let pick: string | null = null
+    if (store.pendingChoice) {
+      pick = store.pendingChoice
+      store.patch({ pendingChoice: null })
+    } else if (input.choice !== null) {
+      pick = options[input.choice - 1]?.id ?? null
+    } else if (input.cancelPressed) {
+      pick = 'goodbye'
+    } else if (input.interactPressed || input.confirmPressed) {
+      pick = options[this.dialogueIndex]?.id ?? null
+    }
+    if (pick) this.report(this.game.choose(pick as DialogueOptionId))
+  }
+
+  /**
+   * Catalogue controls: W/S, arrows or the wheel move the highlight, 1–9 jump to a row, E / Enter / Space /
+   * a click buys the highlighted upgrade, Q or Backspace closes the catalogue.
+   */
+  private handleCatalogueInput(input: InputSnapshot): void {
+    const store = useGameStore.getState()
+    const items = this.game.catalogueItems()
+    const n = items.length
+    if (input.menuMove !== 0) this.catalogueIndex = (this.catalogueIndex + input.menuMove + n) % n
+    if (input.choice !== null && input.choice <= n) this.catalogueIndex = input.choice - 1
+    let buy: string | null = null
+    if (store.pendingBuy) {
+      buy = store.pendingBuy
+      store.patch({ pendingBuy: null })
+    } else if (input.cancelPressed) {
+      this.game.closeCatalogue()
+      return
+    } else if (input.interactPressed || input.confirmPressed) {
+      buy = items[this.catalogueIndex]?.id ?? null
+    }
+    if (buy) this.report(this.game.buyUpgrade(buy))
   }
 
   private report(result: ActionResult | null): void {
@@ -208,13 +398,35 @@ export class Engine {
       dialogue = {
         speaker: c.visit.askedName ? c.name : 'Customer',
         lines: game.dialogue.lines,
-        options: game.dialogueOptions().map((o) => ({ id: o.id, label: o.label, disabled: o.disabled })),
+        options: game.dialogueOptions().map((o) => ({ id: o.id, label: o.label, disabled: o.disabled, recommended: o.recommended })),
       }
     }
     const sig = dialogue ? JSON.stringify(dialogue) : ''
     if (sig !== this.dialogueSig) {
       this.dialogueSig = sig
       this.dialogueView = dialogue ? structuredClone(dialogue) : null
+      // The conversation moved on: highlight the natural next step again.
+      this.dialogueIndex = Math.max(0, dialogue?.options.findIndex((o) => o.recommended) ?? 0)
+    }
+
+    // Mod menu view, cached the same way.
+    const modOpen = CONFIG.modMenu.enabled && useGameStore.getState().modOpen
+    const mod = modOpen ? modInfo(game) : null
+    const modSig = mod ? JSON.stringify(mod) : ''
+    if (modSig !== this.modSig) {
+      this.modSig = modSig
+      this.modView = mod
+    }
+
+    // Catalogue view, cached the same way.
+    let catalogue: CatalogueView | null = null
+    if (game.catalogueOpen) {
+      catalogue = { money: game.economy.money, level: level.level, items: game.catalogueItems() }
+    }
+    const catalogueSig = catalogue ? JSON.stringify(catalogue) : ''
+    if (catalogueSig !== this.catalogueSig) {
+      this.catalogueSig = catalogueSig
+      this.catalogueView = catalogue
     }
 
     this.fpsFrames++
@@ -241,11 +453,15 @@ export class Engine {
       activeDeposits: game.activeDeposits(),
       queue: game.queue().length,
       objective: game.objective(),
-      tutorialComplete: game.tutorialComplete,
-      prompt: game.dialogue ? null : (aim?.action ?? null),
-      promptHint: game.dialogue ? null : (aim?.hint ?? null),
+      stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
+      prompt: game.dialogue || game.catalogueOpen ? null : (aim?.action ?? null),
+      promptHint: game.dialogue || game.catalogueOpen ? null : (aim?.hint ?? null),
       holding,
       dialogue: this.dialogueView,
+      dialogueIndex: this.dialogueIndex,
+      catalogue: this.catalogueView,
+      catalogueIndex: this.catalogueIndex,
+      modInfo: this.modView,
     })
   }
 
@@ -268,6 +484,20 @@ export class Engine {
       face: (x: number, z: number) => {
         const p = this.player?.getPosition()
         if (p) this.cameraRig.lookToward(x, z, p.x, p.z)
+      },
+      /** Walk (forward, right in −1…1) for `seconds` of game time, e.g. through a doorway. Debug only. */
+      walk: (forward: number, right: number, seconds: number) => {
+        this.debugWalk = { forward, right }
+        const steps = Math.max(1, Math.round(seconds * 30))
+        for (let i = 0; i < steps; i++) this.tick(1 / 30)
+        this.debugWalk = null
+        this.renderer.render(this.scene, this.cameraRig.camera)
+        return this.player?.getPosition().toArray()
+      },
+      /** Give yourself XP and cash to try upgrades quickly. */
+      grant: (xp: number, money: number) => {
+        this.game.economy.xp += xp
+        this.game.economy.money += money
       },
       /** Fast-forward game time only (e.g. skip the two-minute wait). Views catch up next frame. */
       skip: (seconds: number) => this.game.update(seconds),
@@ -294,4 +524,14 @@ function seedFromUrl(): number {
   const param = new URLSearchParams(window.location.search).get('seed')
   const n = param ? Number.parseInt(param, 10) : Number.NaN
   return Number.isFinite(n) ? n >>> 0 : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0
+}
+
+/** Next option in `dir` (+1/−1, wrapping) that can be chosen; stays put if nothing else can. */
+function nextEnabled(options: { disabled: string | null }[], from: number, dir: number): number {
+  const n = options.length
+  for (let step = 1; step <= n; step++) {
+    const i = (((from + dir * step) % n) + n) % n
+    if (!options[i]?.disabled) return i
+  }
+  return from
 }

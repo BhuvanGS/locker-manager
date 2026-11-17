@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
-import { markBlocker } from './interactables'
-import { COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM } from './layout'
+import { markBlocker, tag } from './interactables'
+import type RAPIER from '@dimforge/rapier3d-compat'
+import { ANNEX_DOOR, CATALOGUE_DESK, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM } from './layout'
 import { mat } from './models'
 
 /**
@@ -14,6 +15,10 @@ export class Facility {
   private doorL: THREE.Mesh | null = null
   private doorR: THREE.Mesh | null = null
   private doorOpen = 0
+  /** The removable wall panel at each annex doorway, and the unit-next-door block that an annex replaces. */
+  private readonly plugs = new Map<'west' | 'east', THREE.Mesh>()
+  private readonly neighbourBack = new Map<'west' | 'east', THREE.Mesh>()
+  private readonly doorFrames = new Map<'west' | 'east', THREE.Group>()
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
@@ -22,6 +27,7 @@ export class Facility {
     this.buildLobby()
     this.buildCounter()
     this.buildStaffArea()
+    this.buildCatalogueDesk()
     this.buildLights()
   }
 
@@ -44,8 +50,68 @@ export class Facility {
     mesh.castShadow = true
     markBlocker(mesh)
     this.root.add(mesh)
-    this.physics.addStaticBox(mesh.position.clone(), new THREE.Vector3(w / 2, h / 2, d / 2))
+    // Kept so a wall panel can be taken out again (the annex doorways).
+    mesh.userData.body = this.physics.addStaticBox(mesh.position.clone(), new THREE.Vector3(w / 2, h / 2, d / 2))
+    mesh.userData.half = new THREE.Vector3(w / 2, h / 2, d / 2)
     return mesh
+  }
+
+  /**
+   * Knock through (or wall up again) the doorway into the unit next door. Opening removes the wall panel and its
+   * collider, hides the neighbour's back half (the annex room takes its place) and adds a door frame.
+   */
+  setAnnexOpen(side: 'west' | 'east', open: boolean): void {
+    const plug = this.plugs.get(side)
+    const back = this.neighbourBack.get(side)
+    if (!plug || !back) return
+    const isOpen = plug.parent === null
+    if (open === isOpen) return
+    if (open) {
+      this.root.remove(plug)
+      this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
+      this.root.remove(back)
+      const frame = this.makeDoorFrame(side)
+      this.doorFrames.set(side, frame)
+      this.root.add(frame)
+    } else {
+      this.root.add(plug)
+      plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+      this.root.add(back)
+      const frame = this.doorFrames.get(side)
+      if (frame) this.root.remove(frame)
+      this.doorFrames.delete(side)
+    }
+  }
+
+  private makeDoorFrame(side: 'west' | 'east'): THREE.Group {
+    const frame = new THREE.Group()
+    const trim = mat(0x6b7280, 0.5, 0.4)
+    const x = side === 'west' ? ROOM.minX - 0.1 : ROOM.maxX + 0.1
+    const { z, halfWidth, height } = ANNEX_DOOR
+    for (const dz of [-1, 1]) {
+      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, height, 0.1), trim)
+      jamb.position.set(x, height / 2, z + dz * (halfWidth + 0.04))
+      frame.add(jamb)
+    }
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, halfWidth * 2), mat(0x4b5563, 0.7))
+    sill.position.set(x, 0.011, z)
+    frame.add(sill)
+    return frame
+  }
+
+  /** A side wall of the storage room with a removable panel where an annex doorway can be cut. */
+  private buildSideWall(side: 'west' | 'east'): void {
+    const { minX, maxX, minZ, maxZ, height } = ROOM
+    const t = 0.2
+    const wall = mat(0xe9e4da, 0.9)
+    const x = side === 'west' ? minX - t / 2 : maxX + t / 2
+    const { z, halfWidth, height: doorH } = ANNEX_DOOR
+    const lo = z - halfWidth
+    const hi = z + halfWidth
+    this.solid(t, height, lo - minZ, wall, x, height / 2, (minZ + lo) / 2)
+    this.solid(t, height, maxZ - hi, wall, x, height / 2, (hi + maxZ) / 2)
+    this.solid(t, height - doorH, halfWidth * 2, wall, x, doorH + (height - doorH) / 2, z)
+    this.plugs.set(side, this.solid(t, doorH, halfWidth * 2, wall, x, doorH / 2, z))
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -101,8 +167,13 @@ export class Facility {
       }
     }
     // Neighbouring shops on our side.
-    this.deco(10, 4.4, 15, mat(0xb9a58f, 0.9), -11.2, 2.2, -1.5)
-    this.deco(10, 3.8, 15, mat(0xa9b6bf, 0.9), 11.2, 1.9, -1.5)
+    // Each is a front half and a back half: the back half is what an annex replaces when it is built.
+    const west = mat(0xb9a58f, 0.9)
+    const east = mat(0xa9b6bf, 0.9)
+    this.deco(10, 4.4, 8.5, west, -11.2, 2.2, 1.75)
+    this.deco(10, 3.8, 8.5, east, 11.2, 1.9, 1.75)
+    this.neighbourBack.set('west', this.deco(10, 4.4, 6.5, west, -11.2, 2.2, -5.75))
+    this.neighbourBack.set('east', this.deco(10, 3.8, 6.5, east, 11.2, 1.9, -5.75))
   }
 
   private buildShell(): void {
@@ -119,9 +190,9 @@ export class Facility {
     const ceiling = this.deco(width, 0.1, depth, mat(0xf4f2ee, 1), 0, height + 0.05, cz)
     ceiling.receiveShadow = false
 
-    // Side and back walls.
-    this.solid(t, height, depth, wall, minX - t / 2, height / 2, cz)
-    this.solid(t, height, depth, wall, maxX + t / 2, height / 2, cz)
+    // Side walls (each has a panel that can be knocked out for an annex) and the back wall.
+    this.buildSideWall('west')
+    this.buildSideWall('east')
     this.solid(width + t * 2, height, t, wall, 0, height / 2, minZ - t / 2)
 
     // Front wall with a glass entrance and two shop windows.
@@ -232,6 +303,35 @@ export class Facility {
       this.deco(0.35, 0.28, 0.3, mat(0xb08a5a, 0.85), x, 0.76, -6.6)
       this.deco(0.3, 0.22, 0.3, mat(0xb08a5a, 0.85), x, 1.43, -5.4)
     }
+  }
+
+  /** A small desk with the supplier catalogue: this is where upgrades are bought. */
+  private buildCatalogueDesk(): void {
+    const { x, z, width, depth, height } = CATALOGUE_DESK
+    const wood = mat(0x7c5a3a, 0.6)
+    const top = this.solid(width, 0.05, depth, wood, x, height - 0.025, z)
+    const body = this.solid(width - 0.12, height - 0.05, depth - 0.1, mat(0x4a3b2c, 0.8), x, (height - 0.05) / 2, z)
+    tag(top, { kind: 'catalogue' })
+    tag(body, { kind: 'catalogue' })
+
+    // The catalogue itself (red cover, white pages), slightly open, and a desk lamp.
+    const cover = this.deco(0.42, 0.04, 0.3, mat(0xb91c1c, 0.6), x - 0.2, height + 0.02, z + 0.02)
+    const pages = this.deco(0.39, 0.03, 0.27, mat(0xf5f1e6, 0.9), x - 0.2, height + 0.05, z + 0.02)
+    cover.rotation.y = pages.rotation.y = 0.3
+    tag(cover, { kind: 'catalogue' })
+    tag(pages, { kind: 'catalogue' })
+    this.deco(0.14, 0.02, 0.14, mat(0x1f2937, 0.5, 0.5), x + 0.4, height + 0.01, z - 0.12)
+    this.deco(0.02, 0.3, 0.02, mat(0x1f2937, 0.5, 0.5), x + 0.4, height + 0.16, z - 0.12)
+    const shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.1, 0.12, 14, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.35, side: THREE.DoubleSide }),
+    )
+    shade.position.set(x + 0.4, height + 0.34, z - 0.12)
+    this.root.add(shade)
+
+    const label = this.sign('SUPPLIES', 1.1, 0.24, '#0f172a', '#fbbf24')
+    label.position.set(x, 1.55, PARTITION.z + 0.11)
+    this.root.add(label)
   }
 
   private buildLights(): void {

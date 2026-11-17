@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useGameStore, type Toast } from '../store/gameStore'
+import { CONFIG } from '../sim/config'
+import { useGameStore, type Banner, type Toast } from '../store/gameStore'
+import { CataloguePanel } from './CataloguePanel'
 import { DialoguePanel } from './DialoguePanel'
+import { ModMenu } from './ModMenu'
 
 /** In-game overlay. Only shows what Stage 1 has: no database, no labels, no upgrade tree yet. */
 export function HUD() {
@@ -25,7 +28,10 @@ export function HUD() {
       promptHint: st.promptHint,
       holding: st.holding,
       dialogue: st.dialogue,
-      tutorialComplete: st.tutorialComplete,
+      catalogue: st.catalogue,
+      modOpen: st.modOpen,
+      modInfo: st.modInfo,
+      banner: st.banner,
       pointerLocked: st.pointerLocked,
     })),
   )
@@ -56,7 +62,7 @@ export function HUD() {
 
       <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />
 
-      {(s.prompt || s.promptHint) && !s.dialogue && (
+      {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && (
         <div className={`prompt${s.prompt ? '' : ' hint'}`}>
           {s.prompt ? (
             <>
@@ -75,29 +81,19 @@ export function HUD() {
       )}
 
       {s.dialogue && <DialoguePanel dialogue={s.dialogue} />}
+      {s.catalogue && <CataloguePanel catalogue={s.catalogue} />}
+      {s.modOpen && s.modInfo && <ModMenu info={s.modInfo} />}
+      {CONFIG.modMenu.enabled && !s.modOpen && <ModChip />}
 
       <Toasts />
 
-      {s.tutorialComplete && (
-        <div className="milestone-card">
-          <p className="eyebrow">Milestone 1 complete</p>
-          <h2>First customer served</h2>
-          <p>
-            You took a bag, stored it, kept track of the key and handed it back to the right person.
-          </p>
-          <p>
-            Cash <strong>${s.money}</strong> · reputation {s.reputation} · {s.mistakes} mistake
-            {s.mistakes === 1 ? '' : 's'}
-          </p>
-          <p className="muted">More customers, random arrivals and queues arrive in Milestone 2.</p>
-        </div>
-      )}
+      {s.banner && <BannerCard banner={s.banner} />}
 
-      {!s.pointerLocked && !s.dialogue && !s.tutorialComplete && <p className="click-hint">Click to look around</p>}
+      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
 
       <div className="controls">
-        <kbd>WASD</kbd> move · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>1-6</kbd> answer ·{' '}
-        <kbd>Esc</kbd> pause
+        <kbd>WASD</kbd> move · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}
+        <kbd>M</kbd> mods · <kbd>Esc</kbd> pause
       </div>
     </div>
   )
@@ -130,4 +126,29 @@ function ToastItem({ toast }: { toast: Toast }) {
     return () => window.clearTimeout(timer)
   }, [toast, dropToast])
   return <div className={`toast ${toast.tone}`}>{toast.text}</div>
+}
+
+function BannerCard({ banner }: { banner: Banner }) {
+  const patch = useGameStore((s) => s.patch)
+  useEffect(() => {
+    const timer = window.setTimeout(() => patch({ banner: null }), 6500)
+    return () => window.clearTimeout(timer)
+  }, [banner, patch])
+  return (
+    <div className="banner" role="status">
+      <p className="eyebrow">{banner.eyebrow}</p>
+      <h2>{banner.title}</h2>
+      <p>{banner.text}</p>
+    </div>
+  )
+}
+
+/** Small button for opening the mod menu with the mouse (only clickable while the mouse is free). */
+function ModChip() {
+  const patch = useGameStore((s) => s.patch)
+  return (
+    <button type="button" className="mod-chip" onClick={() => patch({ modOpen: true })}>
+      Mods <kbd>M</kbd>
+    </button>
+  )
 }

@@ -107,7 +107,59 @@ export function makeKeyMesh(): THREE.Group {
   ring.position.y = 0.028
   ring.rotation.y = Math.PI / 2
   g.add(bow, blade, bit, ring)
+  // A number tag hangs beside the key. It stays hidden until the labels upgrade is bought (see setKeyLabel).
+  const tag = new THREE.Mesh(KEY_TAG_GEO, NO_LABEL)
+  tag.position.set(0.062, -0.004, 0.006)
+  tag.visible = false
+  g.add(tag)
+  g.userData.tag = tag
   return g
+}
+
+const KEY_TAG_GEO = new THREE.PlaneGeometry(0.075, 0.055)
+const NO_LABEL = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+const numberMaterials = new Map<string, THREE.MeshBasicMaterial>()
+
+/** A flat material showing a number: a dark plate with white digits for lockers, a yellow tag for keys. */
+export function numberMaterial(n: number, style: 'door' | 'tag'): THREE.MeshBasicMaterial {
+  const key = `${style}:${n}`
+  let material = numberMaterials.get(key)
+  if (!material) {
+    const canvas = document.createElement('canvas')
+    canvas.width = 128
+    canvas.height = style === 'door' ? 64 : 96
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      const door = style === 'door'
+      ctx.fillStyle = door ? '#0f172a' : '#facc15'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.strokeStyle = door ? '#e2e8f0' : '#a16207'
+      ctx.lineWidth = 6
+      ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6)
+      ctx.fillStyle = door ? '#f8fafc' : '#1c1917'
+      ctx.font = `800 ${Math.round(canvas.height * (door ? 0.72 : 0.62))}px system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(n), canvas.width / 2, canvas.height / 2 + 3)
+    }
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 4
+    material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
+    numberMaterials.set(key, material)
+  }
+  return material
+}
+
+/** Show locker number `n` on a key's tag, or hide the tag (`null`: labels not bought, or no key here). */
+export function setKeyLabel(key: THREE.Object3D, n: number | null): void {
+  const tag = key.userData.tag as THREE.Mesh | undefined
+  if (!tag) return
+  tag.visible = n !== null
+  if (n !== null && tag.userData.n !== n) {
+    tag.material = numberMaterial(n, 'tag')
+    tag.userData.n = n
+  }
 }
 
 // ------------------------------------------------------------------ people
@@ -181,4 +233,24 @@ export function makePerson(a: Appearance): PersonRig {
       break
   }
   return { root, legL, legR, armL, armR, hand }
+}
+
+/** A flat canvas-texture sign (text on a coloured plate), facing +z. */
+export function makeSign(text: string, w: number, h: number, bg: string, fg: string): THREE.Mesh {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = Math.max(32, Math.round((512 * h) / w))
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = fg
+    ctx.font = `700 ${Math.round(canvas.height * 0.52)}px system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2)
+  }
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }))
 }

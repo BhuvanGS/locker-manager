@@ -35,7 +35,7 @@ const PERSONALITIES: Personality[] = [
   {
     hello: 'Hi! Could you look after something for me for a bit?',
     helloAgain: "Hi again! I'm back for my things.",
-    handOver: "Here you go. I'll be back in about two minutes.",
+    handOver: "Here you go. I'll be back in a little while.",
     thanks: 'Perfect, that is mine. Thank you!',
   },
   {
@@ -69,6 +69,9 @@ export class CustomerFactory {
   private readonly rand: () => number
   private customerSeq = 0
   private itemSeq = 0
+  /** Full names and first names already used this game, so customers are easy to tell apart. */
+  private readonly usedNames = new Set<string>()
+  private readonly usedFirst = new Set<string>()
 
   constructor(rand: () => number) {
     this.rand = rand
@@ -101,9 +104,11 @@ export class CustomerFactory {
     }
   }
 
-  customer(opts: { patience: number; fee: number; name?: string }): { customer: Customer; item: Item } {
+  customer(opts: { patience: number | null; fee: number; satisfaction: number; name?: string }): { customer: Customer; item: Item } {
     const id = `cust-${++this.customerSeq}`
-    const name = opts.name ?? `${pick(this.rand, FIRST)} ${pick(this.rand, LAST)}`
+    const name = opts.name ?? this.freshName()
+    this.usedNames.add(name)
+    this.usedFirst.add(name.split(' ')[0] ?? name)
     const item = this.item(id)
     const customer: Customer = {
       id,
@@ -115,17 +120,32 @@ export class CustomerFactory {
       depositedAt: null,
       expectedReturnAt: null,
       fee: opts.fee,
-      patience: opts.patience,
-      maxPatience: opts.patience,
-      satisfaction: 70,
+      patience: opts.patience ?? 0,
+      maxPatience: opts.patience ?? 0,
+      patienceDrains: opts.patience !== null,
+      satisfaction: opts.satisfaction,
       state: 'arriving',
-      visit: { greeted: false, askedName: false },
+      visit: { greeted: false, askedName: false, wrongAttempts: 0 },
+      nameTaken: false,
     }
     return { customer, item }
   }
 
+  /** Prefer an unused first name (people are remembered by first name), then any unused full name. */
+  private freshName(): string {
+    let fallback = ''
+    for (let i = 0; i < 40; i++) {
+      const first = pick(this.rand, FIRST)
+      const name = `${first} ${pick(this.rand, LAST)}`
+      if (this.usedNames.has(name)) continue
+      if (!this.usedFirst.has(first)) return name
+      fallback ||= name
+    }
+    return fallback || `${pick(this.rand, FIRST)} ${pick(this.rand, LAST)}`
+  }
+
   /** The scripted first customer: always the same so the tutorial reads the same every time. */
-  tutorialCustomer(opts: { patience: number; fee: number }): { customer: Customer; item: Item } {
+  tutorialCustomer(opts: { patience: number | null; fee: number; satisfaction: number }): { customer: Customer; item: Item } {
     const { customer, item } = this.customer({ ...opts, name: 'Maya Okafor' })
     const first = PERSONALITIES[0]
     if (first) customer.personality = first

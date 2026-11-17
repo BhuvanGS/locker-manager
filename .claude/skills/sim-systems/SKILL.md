@@ -27,21 +27,18 @@ Read `AGENTS.md` → "Simulation" for module ownership, and check `docs/design-b
 
 ## Recipes
 
-### Add a customer stage (Milestone 2+)
+### Add or tune a traffic stage
 
-```ts
-// config.ts → CONFIG.stages
-{ id: 'two-customers', customers: 2, firstArrivalDelay: 10, arrivalGap: [20, 60], returnAfter: [100, 200] }
-```
-Then decide when to call `scheduler.advanceStage()` and `scheduleNextArrival()`. For example, when the tutorial
-completes (in `customerExited`). Test that arrivals and returns are independent and not in a fixed order.
+Edit `CONFIG.stages` (see `ArrivalStage` in `config.ts`): `customers` (null = endless), `firstArrivalDelay`,
+`arrivalGap`, `returnAfter`, `patience` (null = never drains), optional `maxActive`, and the banner `title`/`intro`.
+`CustomerScheduler.finish()` advances once everyone the stage introduced has finished. `GameManager.customerExited`
+then emits `stageStarted` and schedules the next arrival. Tests: `Milestone2.test.ts` has a `Driver` class that plays
+the 3D layer's role (instant walking) with `deposit()`, `collect()` and `finishTutorial()` helpers.
 
-### Patience (Milestone 2)
+### Patience and satisfaction
 
-In `GameManager.update(dt)`, drain `patience` for customers in `waiting` / `waitingForCollection` (not while
-`dialogue.customerId` is them, if you want talking to pause it). At 0 → `transition(id, 'leftWithoutService')`,
-lower satisfaction and reputation, and notify `customerLeaving`. Decide what happens to a stored item when its
-owner leaves. Keep early-game punishment gentle (brief §9).
+All in `GameManager.updatePatience` and `walkout`, with numbers in `CONFIG.customer` / `CONFIG.economy`.
+Keep early-game punishment gentle (brief §9): only customers still holding their bag can walk out.
 
 ### Add a player action
 
@@ -54,6 +51,36 @@ owner leaves. Keep early-game punishment gentle (brief §9).
 
 Add the id to `DialogueOptionId`, offer it in `dialogueOptions()` (with a `disabled` reason when it can't be
 used yet) and handle it in `choose()`. Number keys map to the option order, so put the likely choice first.
+
+### Add a catalogue upgrade (locker banks, key racks)
+
+1. Add an entry to `CONFIG.upgrades` (`id`, `kind`, `title`, `description`, `cost`, `level`, optional `requires`).
+2. For a bank, add its `centerX` to `LOCKER_BANKS`; for a rack, its `x` to `KEY_RACKS` (both in `world/layout.ts`).
+   Check there is room (banks are 2.82 m wide; racks are 1.3 m).
+3. `GameManager.buyUpgrade` already applies `lockerBank` / `keyRack`. A new `kind` needs a branch there, a matching
+   `upgradeBought` handler in `Engine.tick`, and tests in `Progression.test.ts`.
+4. Level-ups list what they unlock from `unlockedAt(level)`, so the banner updates itself.
+
+### Labels and the register board
+
+`labels` and `register` are catalogue upgrades with no new sim records: the views check `game.hasLabels` / `game.registerEntries()`.
+Anything that tells the player which key opens which locker, or who left what, should be gated behind an upgrade; keep the
+early game manual (brief §7–8). The register needs `labels` first because its rows are locker numbers.
+
+### Deposit rules
+
+Confirming a deposit is guarded by `storedBlocker`: bag in a locker, door shut, key out (locked). Add a test in
+`Progression.test.ts` ("Bug fix: you cannot skip locking up") for any new way to bypass the memory challenge.
+
+### Customer return order
+
+`CustomerScheduler.returnDelay(now, pending)`: the return window per stage plus `CONFIG.returns` overtaking. Keep a test that
+measures first-in-first-out among customers stored at the same time (`Progression.test.ts`); plain random waits give ~80 %.
+
+### Mistakes and anger
+
+`GameManager.wrongPackage` (per-visit `wrongAttempts`, lines in `wrongPackageLine`, numbers in `CONFIG.wrongItem`). New
+mistake types should follow the same pattern: escalate with a per-visit counter, return `fail(message)`, emit a `mistake` notice.
 
 ### Upgrades and automation (Milestones 4–6)
 

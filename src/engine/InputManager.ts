@@ -5,9 +5,17 @@ export type InputSnapshot = {
   crouch: boolean
   /** E or left click (while the mouse is captured). */
   interactPressed: boolean
-  /** Number key 1–6 pressed this frame (dialogue choice), or null. */
+  /** Number key 1–9 pressed this frame (dialogue or catalogue choice), or null. */
   choice: number | null
+  /** Dialogue navigation this frame: −1 up, +1 down (W/S, arrows or mouse wheel). */
+  menuMove: number
+  /** Enter or Space: confirm the highlighted dialogue option (E and click also do, via interactPressed). */
+  confirmPressed: boolean
+  /** Q or Backspace: step away from the conversation. */
+  cancelPressed: boolean
   pausePressed: boolean
+  /** M or ` : open / close the mod menu. */
+  modPressed: boolean
   mouseDeltaX: number
   mouseDeltaY: number
 }
@@ -26,12 +34,21 @@ const GAME_KEYS = new Set([
   'ArrowLeft',
   'ArrowRight',
   'Escape',
+  'KeyM',
+  'Backquote',
+  'Enter',
+  'Space',
+  'KeyQ',
+  'Backspace',
   'Digit1',
   'Digit2',
   'Digit3',
   'Digit4',
   'Digit5',
   'Digit6',
+  'Digit7',
+  'Digit8',
+  'Digit9',
 ])
 
 /** Keyboard + pointer-lock mouse. Presses are latched so a tap between frames is never lost. */
@@ -41,6 +58,7 @@ export class InputManager {
   private mouseDeltaX = 0
   private mouseDeltaY = 0
   private clicks = 0
+  private wheel = 0
   private element: HTMLElement | null = null
   private pointerLocked = false
 
@@ -52,6 +70,7 @@ export class InputManager {
     window.addEventListener('mousemove', this.onMouseMove, true)
     window.addEventListener('mousedown', this.onMouseDown, true)
     window.addEventListener('blur', this.onBlur)
+    window.addEventListener('wheel', this.onWheel, { passive: true })
     document.addEventListener('pointerlockchange', this.onPointerLockChange)
     element.addEventListener('click', this.requestPointerLock)
   }
@@ -63,6 +82,7 @@ export class InputManager {
     window.removeEventListener('mousemove', this.onMouseMove, true)
     window.removeEventListener('mousedown', this.onMouseDown, true)
     window.removeEventListener('blur', this.onBlur)
+    window.removeEventListener('wheel', this.onWheel)
     document.removeEventListener('pointerlockchange', this.onPointerLockChange)
     this.element.removeEventListener('click', this.requestPointerLock)
     if (document.pointerLockElement === this.element) document.exitPointerLock()
@@ -74,7 +94,7 @@ export class InputManager {
     const down = (code: string) => this.keys.has(code)
     const hit = (code: string) => this.pressed.has(code)
     let choice: number | null = null
-    for (let n = 1; n <= 6; n++) if (hit(`Digit${n}`)) choice = n
+    for (let n = 1; n <= 9; n++) if (hit(`Digit${n}`)) choice = n
     const snap: InputSnapshot = {
       forward: (down('KeyW') || down('ArrowUp') ? 1 : 0) - (down('KeyS') || down('ArrowDown') ? 1 : 0),
       right: (down('KeyD') || down('ArrowRight') ? 1 : 0) - (down('KeyA') || down('ArrowLeft') ? 1 : 0),
@@ -82,12 +102,18 @@ export class InputManager {
       crouch: down('KeyC'),
       interactPressed: hit('KeyE') || this.clicks > 0,
       choice,
+      menuMove:
+        (hit('KeyS') || hit('ArrowDown') ? 1 : 0) - (hit('KeyW') || hit('ArrowUp') ? 1 : 0) + Math.sign(this.wheel),
+      confirmPressed: hit('Enter') || hit('Space'),
+      cancelPressed: hit('KeyQ') || hit('Backspace'),
       pausePressed: hit('Escape'),
+      modPressed: hit('KeyM') || hit('Backquote'),
       mouseDeltaX: this.mouseDeltaX,
       mouseDeltaY: this.mouseDeltaY,
     }
     this.pressed.clear()
     this.clicks = 0
+    this.wheel = 0
     this.mouseDeltaX = 0
     this.mouseDeltaY = 0
     return snap
@@ -116,6 +142,10 @@ export class InputManager {
     if (!this.pointerLocked) return
     this.mouseDeltaX += e.movementX
     this.mouseDeltaY += e.movementY
+  }
+
+  private readonly onWheel = (e: WheelEvent): void => {
+    if (this.pointerLocked) this.wheel += e.deltaY
   }
 
   private readonly onMouseDown = (e: MouseEvent): void => {

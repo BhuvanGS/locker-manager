@@ -15,8 +15,16 @@ export class EconomyManager {
     this.money += amount
   }
 
-  addXp(amount: number): void {
+  spend(amount: number): void {
+    this.money -= amount
+  }
+
+  /** Add XP. Returns the new level if this crossed into one (possibly skipping levels), else null. */
+  addXp(amount: number): number | null {
+    const before = this.level.level
     this.xp += amount
+    const after = this.level.level
+    return after > before ? after : null
   }
 
   adjustReputation(delta: number): void {

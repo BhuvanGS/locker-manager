@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { GameManager } from '../sim/GameManager'
-import { fitInto, makeItemMesh, makeKeyMesh } from './models'
+import { fitInto, makeItemMesh, makeKeyMesh, setKeyLabel } from './models'
 
 /** Shows whatever the player is holding in the lower-right of the view. */
 export class HeldView {
@@ -21,7 +21,8 @@ export class HeldView {
     this.anchor.position.set(0.36, -0.36 + Math.sin(this.bob) * amp, -0.75)
 
     const hands = game.hands
-    const sig = hands ? `${hands.kind}:${hands.kind === 'item' ? hands.itemId : hands.keyId}` : ''
+    const labels = game.hasLabels
+    const sig = hands ? `${hands.kind}:${hands.kind === 'item' ? hands.itemId : hands.keyId}:${labels}` : ''
     if (sig === this.shown) return
     this.shown = sig
     this.anchor.clear()
@@ -29,6 +30,7 @@ export class HeldView {
     if (hands.kind === 'key') {
       const key = makeKeyMesh()
       key.scale.setScalar(1.6)
+      setKeyLabel(key, labels ? game.lockers.get(game.keys.get(hands.keyId).lockerId).number : null)
       key.rotation.set(0.3, -0.5, 0.4)
       this.anchor.add(key)
       return

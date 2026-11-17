@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mulberry32 } from '../lib/random'
+import { CONFIG } from './config'
+import { CustomerFactory } from './CustomerFactory'
 import { GameManager } from './GameManager'
 import { SimulationClock } from './SimulationClock'
 
@@ -51,7 +54,7 @@ describe('Milestone 1: first customer', () => {
     expect(c.state).toBe('waiting')
   })
 
-  it('completes a full deposit → 2 minute wait → retrieval cycle', () => {
+  it('completes a full deposit → short wait → retrieval cycle', () => {
     const { game, id } = gameWithCustomerAtCounter()
     const startMoney = game.economy.money
     deposit(game, id)
@@ -61,10 +64,14 @@ describe('Milestone 1: first customer', () => {
     expect(c.lockerId).toBe('locker-2')
     expect(game.lockers.get('locker-2').locked).toBe(true)
     expect(game.keys.onHook(5)?.lockerId).toBe('locker-2')
-    expect(c.expectedReturnAt! - c.depositedAt!).toBe(120)
+    // The tutorial wait is fixed, and short (under 30 s).
+    const wait = CONFIG.stages[0].returnAfter[0]
+    expect(CONFIG.stages[0].returnAfter[1]).toBe(wait)
+    expect(wait).toBeLessThan(30)
+    expect(c.expectedReturnAt! - c.depositedAt!).toBe(wait)
 
-    // Exactly two minutes later, not before.
-    game.update(119.9)
+    // Exactly that long later, not before.
+    game.update(wait - 0.1)
     expect(game.customers.get(id).state).toBe('stored')
     game.update(0.2)
     expect(game.customers.get(id).state).toBe('returning')
@@ -143,5 +150,13 @@ describe('Milestone 1: first customer', () => {
     expect(game.customers.get(id).state).toBe('collecting')
     expect(game.hands).toEqual({ kind: 'item', itemId: 'item-x' })
     expect(game.economy.mistakes).toBe(1)
+  })
+})
+
+describe('CustomerFactory', () => {
+  it('does not repeat first names while unused ones remain', () => {
+    const factory = new CustomerFactory(mulberry32(11))
+    const firsts = Array.from({ length: 8 }, () => factory.customer({ patience: 100, fee: 15, satisfaction: 70 }).customer.name.split(' ')[0])
+    expect(new Set(firsts).size).toBe(8)
   })
 })

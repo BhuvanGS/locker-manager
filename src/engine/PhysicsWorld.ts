@@ -44,6 +44,11 @@ export class PhysicsWorld {
     return body
   }
 
+  /** Remove a body made by addStaticBox (e.g. an upgrade that is discarded on a new game). */
+  removeBody(body: RAPIER.RigidBody): void {
+    this.world?.removeRigidBody(body)
+  }
+
   dispose(): void {
     if (this.world) {
       this.world.free()

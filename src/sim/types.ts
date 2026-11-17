@@ -59,11 +59,18 @@ export interface Customer {
   /** Seconds of waiting they will tolerate; refills each visit. */
   patience: number
   maxPatience: number
+  /** False for the tutorial customer: their patience never drains. */
+  patienceDrains: boolean
   /** 0–100. */
   satisfaction: number
   state: CustomerState
   /** Per-visit conversation flags (reset when a visit starts). */
-  visit: { greeted: boolean; askedName: boolean }
+  visit: { greeted: boolean; askedName: boolean; wrongAttempts: number }
+  /**
+   * True once the player asked for their name when they dropped the bag off. Only then does the deposit register
+   * show who the bag belongs to. (Asking again on the return visit does not count: the board was already written.)
+   */
+  nameTaken: boolean
 }
 
 // ------------------------------------------------------------------ items
@@ -100,6 +107,8 @@ export interface Locker {
   id: LockerId
   /** Display number (only shown once locker labels are unlocked). */
   number: number
+  /** Which wall of lockers (0 = the original one). */
+  bank: number
   row: number
   col: number
   capacity: number
@@ -131,7 +140,7 @@ export interface DialogueLine {
   text: string
 }
 
-export type DialogueOptionId = 'greet' | 'askName' | 'accept' | 'confirmStored' | 'handOver' | 'goodbye'
+export type DialogueOptionId = 'greet' | 'askName' | 'accept' | 'turnAway' | 'confirmStored' | 'handOver' | 'goodbye'
 
 export interface DialogueOption {
   id: DialogueOptionId
@@ -152,8 +161,9 @@ export interface ActionResult {
 // ------------------------------------------------------------------ events
 
 export type SimEvent =
-  | { type: 'customerArrive'; customerId: CustomerId }
   | { type: 'customerReturn'; customerId: CustomerId }
+  /** Time to introduce the next new customer of the current stage (if the stage allows one). */
+  | { type: 'nextArrival' }
 
 /** Things that just happened, for the 3D world, HUD toasts and (later) audio. Drained each frame. */
 export type SimNotice =
@@ -163,3 +173,28 @@ export type SimNotice =
   | { type: 'xp'; amount: number }
   | { type: 'mistake'; kind: 'wrongKey' | 'wrongItem'; message: string }
   | { type: 'message'; text: string }
+  | { type: 'stageStarted'; title: string; text: string }
+  | { type: 'levelUp'; level: number; bonus: number; unlocked: string[] }
+  /** An upgrade was bought: `index` is the new locker bank or key rack number (0 = the original). */
+  | {
+      type: 'upgradeBought'
+      id: string
+      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex'
+      index: number
+      title: string
+      /** Annex only: which neighbouring unit was knocked through, and the new bank and rack numbers. */
+      side?: 'west' | 'east'
+      banks?: number[]
+      racks?: number[]
+    }
+  | { type: 'walkout'; customerId: CustomerId; message: string }
+
+/** One line on the deposit register board. */
+export interface RegisterEntry {
+  customerId: CustomerId
+  /** The customer's name, or null if the player never asked for it when taking the bag. */
+  name: string | null
+  /** The locker's number (only meaningful because the labels upgrade is a prerequisite). */
+  lockerNumber: number
+  itemLabel: string
+}

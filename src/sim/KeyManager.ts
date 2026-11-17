@@ -6,13 +6,24 @@ import type { Key, KeyId, KeyLocation, LockerId } from './types'
  */
 export class KeyManager {
   private readonly keys = new Map<KeyId, Key>()
-  readonly hookCount: number
+  /** Total hooks across all racks. */
+  hookCount: number
 
   constructor(lockerIds: { lockerId: LockerId; keyId: KeyId }[], hookCount: number) {
     this.hookCount = hookCount
     for (const { lockerId, keyId } of lockerIds) {
       this.keys.set(keyId, { id: keyId, lockerId, location: { kind: 'inLock' } })
     }
+  }
+
+  /** A new locker brings a new key, which starts in its lock. */
+  addKey(lockerId: LockerId, keyId: KeyId): void {
+    this.keys.set(keyId, { id: keyId, lockerId, location: { kind: 'inLock' } })
+  }
+
+  /** A new key rack (a key-rack upgrade) adds hooks. */
+  addHooks(count: number): void {
+    this.hookCount += count
   }
 
   get(id: KeyId): Key {

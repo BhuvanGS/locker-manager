@@ -8,6 +8,7 @@ export type Interactable =
   | { kind: 'lockerInterior'; lockerId: LockerId }
   | { kind: 'lockerKey'; lockerId: LockerId }
   | { kind: 'hook'; hook: number }
+  | { kind: 'catalogue' }
 
 export function tag(object: THREE.Object3D, data: Interactable): void {
   object.userData.interact = data

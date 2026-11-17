@@ -2,9 +2,10 @@ import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { GameManager } from '../sim/GameManager'
 import type { ItemId, LockerId } from '../sim/types'
+import type RAPIER from '@dimforge/rapier3d-compat'
 import { markBlocker, tag } from './interactables'
 import { LOCKER } from './layout'
-import { fitInto, makeItemMesh, makeKeyMesh, mat } from './models'
+import { fitInto, makeItemMesh, makeKeyMesh, mat, numberMaterial, setKeyLabel } from './models'
 
 type LockerView = {
   id: LockerId
@@ -12,21 +13,39 @@ type LockerView = {
   /** Current door angle in radians (0 = shut). */
   angle: number
   keyInLock: THREE.Object3D
+  /** The key mesh itself (inside `keyInLock`), so its tag can be set. */
+  keyMesh: THREE.Object3D
+  /** Number plate on the door, once the labels upgrade is bought. */
+  plate: THREE.Mesh | null
   interior: THREE.Mesh
   itemSlot: THREE.Group
   shownItem: ItemId | null
 }
 
 const OPEN_ANGLE = -1.85
+const PLATE_GEO = new THREE.PlaneGeometry(0.26, 0.13)
+const RISE_SECONDS = 1.1
 
-/** Renders the lockers from simulation state: door swing, key in lock, and the item inside. */
+/**
+ * One bank (wall) of lockers, drawn from simulation state: door swing, key in lock, and the item inside.
+ * Bank 0 is built at the start; later banks are built when the storage upgrade is bought and rise out of
+ * the floor so the expansion is visible.
+ */
 export class LockerWall {
   readonly root = new THREE.Group()
+  readonly bank: number
   private readonly views = new Map<LockerId, LockerView>()
+  private readonly bodies: RAPIER.RigidBody[] = []
+  /** 0 → 1 while a newly bought bank rises into place; 1 = fully built. */
+  private rise = 1
+  /** True once the number plates and key tags have been added (labels upgrade). */
+  private labelled = false
 
-  constructor(game: GameManager, physics: PhysicsWorld) {
-    const { width, height, depth, gap, frontZ, baseY, centerX } = LOCKER
-    const lockers = game.lockers.all()
+  /** `centerX` is where this bank stands along its wall (see LOCKER_BANKS and ANNEX in layout.ts). */
+  constructor(game: GameManager, physics: PhysicsWorld, bank: number, centerX: number) {
+    this.bank = bank
+    const { width, height, depth, gap, frontZ, baseY } = LOCKER
+    const lockers = game.lockers.all().filter((l) => l.bank === bank)
     const cols = Math.max(...lockers.map((l) => l.col)) + 1
     const rows = Math.max(...lockers.map((l) => l.row)) + 1
     const pitchX = width + gap
@@ -58,7 +77,12 @@ export class LockerWall {
       divider.position.set(leftX + c * pitchX, midY, midZ)
       this.root.add(divider)
     }
-    physics.addStaticBox(new THREE.Vector3(centerX, midY, midZ - 0.02), new THREE.Vector3((totalW + 0.08) / 2, (totalH + 0.08) / 2, depth / 2 + 0.03))
+    this.bodies.push(
+      physics.addStaticBox(
+        new THREE.Vector3(centerX, midY, midZ - 0.02),
+        new THREE.Vector3((totalW + 0.08) / 2, (totalH + 0.08) / 2, depth / 2 + 0.03),
+      ),
+    )
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(totalW + 0.08, baseY, depth), mat(0x374151, 0.6))
     plinth.position.set(centerX, baseY / 2, frontZ - depth / 2 - 0.02)
     this.root.add(plinth)
@@ -114,19 +138,50 @@ export class LockerWall {
       keyInLock.rotation.z = Math.PI / 2
       const keyProxy = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.12), new THREE.MeshBasicMaterial({ visible: false }))
       keyProxy.position.set(width - 0.09, 0.08, 0.06)
-      keyProxy.scale.setScalar(1)
       const keyGroup = new THREE.Group()
       keyGroup.add(keyInLock, keyProxy)
       tag(keyGroup, { kind: 'lockerKey', lockerId: locker.id })
       hinge.add(keyGroup)
 
       this.root.add(hinge)
-      this.views.set(locker.id, { id: locker.id, hinge, angle: 0, keyInLock: keyGroup, interior, itemSlot, shownItem: null })
+      this.views.set(locker.id, { id: locker.id, hinge, angle: 0, keyInLock: keyGroup, keyMesh: keyInLock, plate: null, interior, itemSlot, shownItem: null })
     }
   }
 
+  /** Add a number plate to every door and a matching tag to every key. */
+  private addLabels(game: GameManager): void {
+    this.labelled = true
+    for (const view of this.views.values()) {
+      const number = game.lockers.get(view.id).number
+      const plate = new THREE.Mesh(PLATE_GEO, numberMaterial(number, 'door'))
+      // Top of the door, above the vents, centred.
+      plate.position.set(LOCKER.width / 2, LOCKER.height * 0.375, 0.0145)
+      view.hinge.add(plate)
+      view.plate = plate
+      setKeyLabel(view.keyMesh, number)
+    }
+  }
+
+  /** Start the "rising out of the floor" animation (a freshly bought bank). */
+  appear(): void {
+    this.rise = 0
+    this.root.scale.y = 0.001
+  }
+
+  dispose(physics: PhysicsWorld): void {
+    for (const body of this.bodies) physics.removeBody(body)
+    this.bodies.length = 0
+  }
+
   update(dt: number, game: GameManager): void {
+    if (this.rise < 1) {
+      this.rise = Math.min(1, this.rise + dt / RISE_SECONDS)
+      const eased = 1 - (1 - this.rise) ** 3
+      this.root.scale.y = Math.max(0.001, eased)
+    }
+    if (!this.labelled && game.hasLabels) this.addLabels(game)
     for (const locker of game.lockers.all()) {
+      if (locker.bank !== this.bank) continue
       const view = this.views.get(locker.id)
       if (!view) continue
       const target = locker.doorOpen ? OPEN_ANGLE : 0

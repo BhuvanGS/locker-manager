@@ -35,6 +35,50 @@ export class SimulationClock<E> {
     return due
   }
 
+  /** Remove every pending event matching `match`. Returns how many were removed. */
+  removeWhere(match: (event: E) => boolean): number {
+    const all = this.heap.splice(0)
+    let removed = 0
+    for (const entry of all) {
+      if (match(entry.event)) {
+        removed += 1
+        continue
+      }
+      this.heap.push(entry)
+      this.siftUp(this.heap.length - 1)
+    }
+    return removed
+  }
+
+  /** Move every pending event matching `match` to time `at`. Returns how many were moved. */
+  retimeWhere(match: (event: E) => boolean, at: number): number {
+    const all = this.heap.splice(0)
+    let moved = 0
+    for (const entry of all) {
+      if (match(entry.event)) {
+        entry.at = at
+        moved += 1
+      }
+      this.heap.push(entry)
+      this.siftUp(this.heap.length - 1)
+    }
+    return moved
+  }
+
+  /** The next event due (without removing it), or null. */
+  peekEarliest(): { at: number; event: E } | null {
+    const top = this.heap[0]
+    return top ? { at: top.at, event: top.event } : null
+  }
+
+  /** Move the earliest pending event to `at` (e.g. to pull it forward). Returns it, or null if none. */
+  retimeEarliest(at: number): E | null {
+    if (this.heap.length === 0) return null
+    const { event } = this.pop()
+    this.schedule(at, event)
+    return event
+  }
+
   /** Earliest pending time for events matching `match`, or null. O(n): for HUD/debug use. */
   nextAt(match: (event: E) => boolean): number | null {
     let best: number | null = null

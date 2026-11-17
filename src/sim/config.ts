@@ -1,34 +1,223 @@
 /**
- * Tunable numbers in one place. Customer pacing is data-driven: later milestones add stages here
- * rather than hardcoding timers in code.
+ * Tunable numbers in one place. Customer pacing is data-driven: stages live here, never as timers in
+ * code. Difficulty grows through overlap and decisions, not through faster walking or harsh timers.
  */
 
 export interface ArrivalStage {
   id: string
-  /** Total customers introduced by this stage. */
-  customers: number
+  /** Shown in the banner when the stage starts (not shown for the first stage). */
+  title: string
+  intro: string
+  /** New customers introduced by this stage; null = keeps going (open trading). */
+  customers: number | null
   /** Seconds after the stage starts before the first arrival. */
   firstArrivalDelay: number
   /** Seconds between further arrivals [min, max]. */
   arrivalGap: [number, number]
-  /** Seconds between finishing a deposit and the customer coming back [min, max]. */
+  /** Chance (0–1) that an arrival comes in a quick burst after the previous one, using `burstGap`. */
+  burstChance?: number
+  burstGap?: [number, number]
+  /**
+   * Seconds between finishing a deposit and the customer coming back [min, max]. Each customer draws their
+   * own time from this window, and it is kept wide so people come back in a different order from the one
+   * they left in.
+   */
   returnAfter: [number, number]
+  /** Seconds a customer will wait to be served; null = endlessly patient (tutorial). */
+  patience: number | null
+  /**
+   * Anti-boredom: if the shop has been completely empty (nobody inside) for this many seconds, the next
+   * scheduled arrival or return is pulled forward so you are never left idle. Omit to disable.
+   */
+  maxIdle?: number
+  /**
+   * Most customers with business here at once (in the building or with an item stored). New arrivals
+   * wait outside until there is room. Defaults to unlimited.
+   */
+  maxActive?: number
+}
+
+export interface UpgradeDef {
+  id: string
+  /**
+   * lockerBank / keyRack add storage; labels numbers the lockers and tags the keys; register adds the wall
+   * board listing who left what.
+   */
+  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex'
+  title: string
+  description: string
+  cost: number
+  /** Level needed before it can be bought. */
+  level: number
+  /** Another upgrade that must be owned first. */
+  requires?: string
+  /** Annex only: which neighbouring unit the building grows into. */
+  side?: 'west' | 'east'
+  /** Annex only: how many locker banks and key racks the new hall comes with. */
+  banks?: number
+  racks?: number
 }
 
 export const CONFIG = {
   facility: {
+    /** Each locker bank is a wall of rows × cols lockers; the shop starts with one bank. */
     lockerRows: 2,
     lockerCols: 3,
-    keyHooks: 8,
+    /** Each key rack is a board of this many hooks; the shop starts with one rack. */
+    hooksPerRack: 8,
   },
-  /** Milestone 1: one tutorial customer who returns exactly two minutes after depositing. */
+  /**
+   * What the supplier catalogue sells. Bank and rack numbers are in order: bank B before bank C, rack 2
+   * before rack 3, the register board needs the labels, and the east annex needs the west one (`requires`). Positions are in `world/layout.ts` (LOCKER_BANKS, KEY_RACKS).
+   */
+  upgrades: [
+    {
+      id: 'labels',
+      kind: 'labels',
+      title: 'Locker & key labels',
+      description: 'Numbers on every locker door and a matching tag on every key',
+      cost: 60,
+      level: 2,
+    },
+    {
+      id: 'register',
+      kind: 'register',
+      title: 'Deposit register board',
+      description: 'A board in the storage room listing every stored bag: locker, item and the name you took (so ask!)',
+      cost: 150,
+      level: 2,
+      requires: 'labels',
+    },
+    {
+      id: 'rack2',
+      kind: 'keyRack',
+      title: 'Key rack #2',
+      description: '+8 hooks for keys',
+      cost: 40,
+      level: 2,
+    },
+    {
+      id: 'bank2',
+      kind: 'lockerBank',
+      title: 'Locker bank B',
+      description: '+6 lockers on the left of the storage room',
+      cost: 90,
+      level: 2,
+    },
+    {
+      id: 'rack3',
+      kind: 'keyRack',
+      title: 'Key rack #3',
+      description: '+8 hooks for keys',
+      cost: 70,
+      level: 3,
+      requires: 'rack2',
+    },
+    {
+      id: 'bank3',
+      kind: 'lockerBank',
+      title: 'Locker bank C',
+      description: '+6 lockers on the right of the storage room',
+      cost: 160,
+      level: 3,
+      requires: 'bank2',
+    },
+    // Building expansion: the shop grows into the units next door. Each annex is a new storage hall with
+    // its own locker banks and key racks, reached through a doorway knocked through the side wall.
+    {
+      id: 'annexWest',
+      kind: 'annex',
+      side: 'west',
+      title: 'Storage annex (west)',
+      description: 'Knock through into the unit next door: a new hall with +12 lockers and +16 key hooks',
+      cost: 450,
+      level: 4,
+      requires: 'bank3',
+      banks: 2,
+      racks: 2,
+    },
+    {
+      id: 'annexEast',
+      kind: 'annex',
+      side: 'east',
+      title: 'Storage annex (east)',
+      description: 'Expand into the other neighbouring unit: another hall with +12 lockers and +16 key hooks',
+      cost: 600,
+      level: 5,
+      requires: 'annexWest',
+      banks: 2,
+      racks: 2,
+    },
+  ] satisfies UpgradeDef[],
+  /**
+   * Traffic stages. Difficulty grows through overlap and decisions, not faster walking or harsh timers:
+   * more customers, shorter gaps with random bursts, and more bags to keep track of at once.
+   * A stage advances once every customer it introduced has finished (served, turned away or left).
+   */
   stages: [
     {
+      // The tutorial: one endlessly patient customer, back in 25 s so the whole lesson stays short.
       id: 'tutorial',
+      title: 'Opening day',
+      intro: 'Your first customer is on the way.',
       customers: 1,
-      firstArrivalDelay: 4,
+      firstArrivalDelay: 3,
       arrivalGap: [0, 0],
-      returnAfter: [120, 120],
+      returnAfter: [25, 25],
+      patience: null,
+    },
+    {
+      id: 'warmup',
+      title: 'Word is getting around',
+      intro: 'Three customers this time, and their visits will overlap. Keep track of who left what.',
+      customers: 3,
+      firstArrivalDelay: 4,
+      arrivalGap: [8, 22],
+      burstChance: 0.25,
+      burstGap: [2, 5],
+      returnAfter: [35, 150],
+      patience: 150,
+      maxIdle: 12,
+    },
+    {
+      id: 'busy',
+      title: 'Getting busy',
+      intro: 'Five customers, arriving at unpredictable times. Several bags will be stored at once.',
+      customers: 5,
+      firstArrivalDelay: 3,
+      arrivalGap: [6, 18],
+      burstChance: 0.3,
+      burstGap: [2, 5],
+      returnAfter: [35, 170],
+      patience: 130,
+      maxIdle: 10,
+    },
+    {
+      id: 'rush',
+      title: 'Lunchtime rush',
+      intro: 'Six customers, often arriving together. People will queue, and lose patience.',
+      customers: 6,
+      firstArrivalDelay: 3,
+      arrivalGap: [4, 14],
+      burstChance: 0.35,
+      burstGap: [1.5, 4],
+      returnAfter: [40, 190],
+      patience: 100,
+      maxIdle: 8,
+    },
+    {
+      id: 'open',
+      title: 'Open for business',
+      intro: 'Customers now come and go all day. Watch your free lockers.',
+      customers: null,
+      firstArrivalDelay: 5,
+      arrivalGap: [5, 20],
+      burstChance: 0.3,
+      burstGap: [2, 5],
+      returnAfter: [40, 200],
+      patience: 100,
+      maxIdle: 10,
+      maxActive: 8,
     },
   ] satisfies ArrivalStage[],
   economy: {
@@ -38,13 +227,60 @@ export const CONFIG = {
     maxTip: 5,
     startingReputation: 50,
     xp: { deposit: 20, correctReturn: 30 },
-    wrongItemReputation: -8,
-    wrongItemSatisfaction: -25,
+    /** Reputation change when a customer walks out unserved / is politely turned away. */
+    walkoutReputation: -3,
+    turnAwayReputation: -1,
+  },
+  /**
+   * Handing a customer someone else's package. They say "this isn't my package" and you can retry as
+   * often as you like, but every wrong try makes them angrier.
+   */
+  wrongItem: {
+    satisfaction: -20,
+    /** Reputation change for the 1st, 2nd, 3rd… wrong try with the same customer (the last value repeats). */
+    reputation: [-4, -2, -2],
+    /** Fraction of their full patience each wrong try uses up. */
+    patienceFraction: 0.2,
+    /** From this many wrong tries they are furious and demand a discount on the fee. */
+    furiousAt: 3,
+    furiousDiscount: 0.5,
+  },
+  /** Levels, and what levelling up gives. Level n needs 100·n XP. */
+  progression: {
+    /** Cash bonus on reaching a level: this × the new level. */
+    levelUpBonus: 20,
+    /** Each level above 1 makes customers arrive this much faster (0.1 = 10 % more often). */
+    paceBonusPerLevel: 0.1,
   },
   customer: {
-    /** Seconds a customer will wait at the counter (patience only drains from Milestone 2). */
-    patience: 180,
+    startingSatisfaction: 70,
+    /** Satisfaction lost per second once patience has run out (customers holding no item stay). */
+    impatientSatisfactionPerSecond: 0.6,
+    /** Patience drains at this fraction while you are serving them (item taken, fetching it). */
+    servingDrainFactor: 0.4,
+    /** Patience refilled by a friendly greeting. */
+    greetingPatience: 10,
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,
+  /**
+   * Return order. A customer who left earlier has already used up part of their wait, so with plain random
+   * waits people mostly came back in the order they left (~80 %). To break that, a new return time is
+   * sometimes set to land just before someone who is already stored.
+   */
+  returns: {
+    /** Chance that a new return time undercuts one of the customers already stored (when there is one). */
+    overtakeChance: 0.8,
+    /** How many seconds before that customer they come back [min, max]. */
+    undercut: [4, 25],
+  },
+  /** When a stage's active-customer cap is reached, check again after this many seconds. */
+  arrivalRetry: 8,
+  /** When the idle guard pulls an event forward, it fires this many seconds from now [min, max]. */
+  idlePullIn: [2, 5],
+  /**
+   * The mod menu (press M): free cash, levels and upgrades, extra customers, time skips. It exists so testing
+   * and tinkering does not mean grinding. Set `enabled: false` to remove it from a release build.
+   */
+  modMenu: { enabled: true },
 } as const

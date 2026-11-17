@@ -14,6 +14,10 @@ diagram at the top of `layout.ts`.
   walls, counters and furniture the player shouldn't walk through or reach through.
 - `Facility.deco(...)` is visual only: floors, posters, small props.
 - `Facility.sign(text, w, h, bg, fg)` makes a canvas-texture sign.
+- `RegisterBoard` (storage room, on the partition facing the lockers, `REGISTER_BOARD` in `layout.ts`) draws the deposit register onto a canvas texture.
+- `Annex` builds a storage hall next door; `Facility.setAnnexOpen(side, open)` cuts or closes the doorway. Side walls are built by `buildSideWall` with a removable `plug` panel.
+- `setKeyLabel(keyMesh, n)` and `numberMaterial(n, 'door' | 'tag')` in `models.ts` draw locker numbers and key tags.
+- `Facility.buildCatalogueDesk()` is the supplier catalogue desk (tagged `catalogue`).
 - `models.ts` has `mat(color, roughness, metalness)` (cached, so always use it), `makeItemMesh(category, color)`,
   `makeKeyMesh()`, `makePerson(appearance)`, and `fitInto(obj, w, h, d)` to shrink anything to fit a slot.
 - `interactables.ts`: `tag(mesh, {kind, ...})` makes something usable. `markBlocker(mesh)` stops reach through it.
@@ -38,12 +42,21 @@ diagram at the top of `layout.ts`.
 
 ## Recipes
 
-### Add a second locker wall (storage expansion, Milestone 4)
+### Locker banks and key racks (done)
 
-Make `LockerWall` take a placement (origin, facing, rows/cols, locker id range) so it can be instantiated per wall.
-Add the new lockers in the sim first (`LockerManager` needs an `addWall(...)`, and keys and hooks to match), then
-construct a second `LockerWall` in `Engine.init` and add its root to the interaction targets list.
-Make it *appear* when purchased (brief §12): build it hidden or under construction, and reveal it on the upgrade.
+Banks and racks are views of the sim. `LockerWall(game, physics, bank)` draws one bank at `LOCKER_BANKS[bank].centerX` and only
+updates lockers whose `bank` matches. `KeyRack(index, hooksPerRack)` draws one rack at `KEY_RACKS[index].x` and owns hooks
+`index·hooksPerRack …`. `Engine` creates them on `upgradeBought` (with `appear()` animations: banks rise out of the floor,
+racks pop onto the wall), and adds their roots to the shared `interactionTargets` array so the crosshair can use them.
+A new game removes them (`removeBuiltFurniture`: scene, targets, geometry and the physics body via `PhysicsWorld.removeBody`).
+
+### Annexes (building expansion, done)
+
+An annex is: a removable wall panel (`plugs`) + the neighbour's back half (`neighbourBack`) in `Facility`, a hall in `Annex`, and
+banks and racks placed by the Engine from `ANNEX[side]` in `layout.ts`. To add another expansion, add a footprint and doorway in
+`layout.ts`, make the matching wall panel removable the same way, and add a catalogue entry (`kind: 'annex'`, `side`, `banks`, `racks`).
+Racks on a wall that faces −z need `rotY: Math.PI` (see `ANNEX_RACK`). Remember `LockerWall` takes its `centerX` explicitly, and that every
+new collider must be removable (`PhysicsWorld.removeBody`) so a new game can wall everything back up.
 
 ### Add a room
 

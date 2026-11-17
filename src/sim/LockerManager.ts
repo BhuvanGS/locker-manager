@@ -5,16 +5,30 @@ export class LockerManager {
   private readonly lockers = new Map<LockerId, Locker>()
   private readonly order: LockerId[] = []
 
-  /** Builds a rows × cols wall. Locker `n` gets key `key-n`. */
+  private banks = 0
+  private nextNumber = 1
+
+  /** Builds the first bank: a rows × cols wall. Locker `n` gets key `key-n`. */
   constructor(rows: number, cols: number) {
-    let n = 0
+    this.addBank(rows, cols)
+  }
+
+  get bankCount(): number {
+    return this.banks
+  }
+
+  /** Add another wall of lockers (a storage upgrade). Returns the new lockers. */
+  addBank(rows: number, cols: number): Locker[] {
+    const bank = this.banks++
+    const added: Locker[] = []
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        n += 1
+        const n = this.nextNumber++
         const id = `locker-${n}`
-        this.lockers.set(id, {
+        const locker: Locker = {
           id,
           number: n,
+          bank,
           row,
           col,
           capacity: 1,
@@ -23,10 +37,13 @@ export class LockerManager {
           doorOpen: false,
           locked: false,
           keyId: `key-${n}`,
-        })
+        }
+        this.lockers.set(id, locker)
         this.order.push(id)
+        added.push(locker)
       }
     }
+    return added
   }
 
   get(id: LockerId): Locker {
