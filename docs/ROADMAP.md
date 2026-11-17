@@ -116,7 +116,9 @@ Requested after playtesting Milestone 2.
       hundreds of locker meshes do not slow the game down
 - [x] The deposit register flips through pages (42 bags per page, every 7 s) when there are more bags than that
 - [x] Layout tests (`world/layout.test.ts`) check the geometry: rows fit, the doorway fits, aisles, racks clear of the door, stair rise
-- **Written without being run in a browser:** the 3D side of this (doorway, hall, stairs, floors, culling) was only type-checked and
+- [x] Fixes after play-testing: smooth ramp-based stairs, jump (Space), straight-off landings with "↓" signs, windows in the halls, brighter lockers,
+      and the floor-1 "gap" (zone culling hid the floor below; the tower zones now see each other, with a regression test)
+- **Earlier note (before the fixes above):** the 3D side of this (doorway, hall, stairs, floors, culling) was only type-checked and
   checked by the layout tests. Play-test it: walk through the new doorway, up both flights of stairs, and look for gaps or overlaps
 
 Not done yet from the brief's expansion list: specialised compartments, warehouse sections, mechanisation.

@@ -92,7 +92,7 @@ export function HUD() {
       {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
 
       <div className="controls">
-        <kbd>WASD</kbd> move · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}
+        <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}
         <kbd>M</kbd> mods · <kbd>Esc</kbd> pause
       </div>
     </div>

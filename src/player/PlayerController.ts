@@ -2,11 +2,14 @@ import * as THREE from 'three'
 import RAPIER from '@dimforge/rapier3d-compat'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { InputSnapshot } from '../engine/InputManager'
-import { FLOOR_Y } from '../world/layout'
+import { FLOOR_Y, SLOPE_LIMITS } from '../world/layout'
 
 const PLAYER_HEIGHT = 1.75
 const PLAYER_RADIUS = 0.38
 const CROUCH_EYE_DROP = 0.55
+/** Upward speed of a jump (m/s): with gravity 20 m/s² the jump is about 0.85 m high. */
+const JUMP_SPEED = 5.8
+const GRAVITY = 20
 
 export class PlayerController {
   readonly mesh = new THREE.Group()
@@ -15,6 +18,7 @@ export class PlayerController {
   private collider: RAPIER.Collider | null = null
   private characterController: RAPIER.KinematicCharacterController | null = null
   private verticalVelocity = 0
+  private grounded = false
   private crouching = false
 
   constructor(physics: PhysicsWorld, spawn: THREE.Vector3) {
@@ -36,8 +40,8 @@ export class PlayerController {
 
     this.characterController = world.createCharacterController(0.02)
     this.characterController.enableSnapToGround(0.45)
-    this.characterController.setMaxSlopeClimbAngle((38 * Math.PI) / 180)
-    this.characterController.setMinSlopeSlideAngle((48 * Math.PI) / 180)
+    this.characterController.setMaxSlopeClimbAngle((SLOPE_LIMITS.maxClimbDeg * Math.PI) / 180)
+    this.characterController.setMinSlopeSlideAngle((SLOPE_LIMITS.minSlideDeg * Math.PI) / 180)
     this.characterController.enableAutostep(0.38, 0.2, true)
   }
 
@@ -45,6 +49,10 @@ export class PlayerController {
     if (!this.body || !this.characterController || !this.collider) return
 
     this.crouching = input.crouch
+    if (input.jumpPressed && this.grounded) {
+      this.verticalVelocity = JUMP_SPEED
+      this.grounded = false
+    }
     this.computeDesiredMove(input, cameraYaw, dt)
 
     this.characterController.computeColliderMovement(
@@ -65,10 +73,13 @@ export class PlayerController {
     }
     this.body.setNextKinematicTranslation(next)
 
-    if (this.characterController.computedGrounded()) {
+    this.grounded = this.characterController.computedGrounded()
+    if (this.verticalVelocity > 0 && movement.y < this.verticalVelocity * dt - 1e-3) {
+      this.verticalVelocity = 0 // bumped your head on something
+    } else if (this.grounded && this.verticalVelocity <= 0) {
       this.verticalVelocity = 0
     } else {
-      this.verticalVelocity -= 20 * dt
+      this.verticalVelocity -= GRAVITY * dt
     }
   }
 
@@ -92,10 +103,12 @@ export class PlayerController {
   }
 
   /** Debug helper: move the player instantly (keeps current height). */
-  teleport(x: number, z: number): void {
+  /** Move the player instantly. `feetY` puts their feet at that height (e.g. 3.5 for floor 1); omitted, they drop in from just above. */
+  teleport(x: number, z: number, feetY?: number): void {
     if (!this.body) return
     const t = this.body.translation()
-    this.body.setTranslation({ x, y: t.y + 0.2, z }, true)
+    this.verticalVelocity = 0
+    this.body.setTranslation({ x, y: feetY !== undefined ? feetY + PLAYER_HEIGHT / 2 + 0.05 : t.y + 0.2, z }, true)
     this.syncFromPhysics()
   }
 

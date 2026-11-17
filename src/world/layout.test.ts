@@ -5,6 +5,7 @@ import {
   LOCKER,
   LOCKER_BANKS,
   ROOM,
+  SLOPE_LIMITS,
   SOUTH,
   STAIRS,
   stairHole,
@@ -75,18 +76,22 @@ describe('Stairs', () => {
     expect(STAIRS.flights[1].baseY - STAIRS.flights[0].baseY).toBeCloseTo(FLOOR_HEIGHT)
   })
 
-  it('both stairwells fit inside the hall, do not overlap, and leave a landing between them', () => {
+  it('both stairwells fit inside the hall, do not overlap, and have a landing at the top and room to approach at the bottom', () => {
     const a = stairHole(0)
     const b = stairHole(1)
     for (const hole of [a, b]) {
-      expect(hole.z0).toBeGreaterThanOrEqual(SOUTH.minZ + 1)
-      expect(hole.z1).toBeLessThanOrEqual(SOUTH.maxZ)
-      expect(hole.x1).toBeLessThanOrEqual(SOUTH.maxX)
+      expect(hole.x1).toBeCloseTo(SOUTH.maxX) // the steps touch the east wall: no gap
       expect(hole.x1 - hole.x0).toBeCloseTo(STAIRS.width)
+      expect(SOUTH.maxZ - hole.z1).toBeGreaterThanOrEqual(1.5) // a landing to step off onto at the top
+      expect(hole.z0 - SOUTH.minZ).toBeGreaterThanOrEqual(1.5) // room to walk up to the first step
     }
-    expect(b.z1).toBeLessThan(a.z0) // flight 2 is entirely south of flight 1
-    expect(a.z0 - b.z1).toBeGreaterThanOrEqual(0.3) // a landing between them
-    expect(a.z1).toBeLessThan(SOUTH.maxZ - 0.3) // room for the top landing before the north wall
+    expect(b.z1).toBeLessThanOrEqual(a.z0 + 1e-6) // flight 2 is entirely south of flight 1
+  })
+
+  it('the stairs are gentle enough for the character controller to climb, and well short of where it would slide', () => {
+    const angle = (Math.atan2(STAIRS.steps * STAIRS.rise, STAIRS.steps * STAIRS.tread) * 180) / Math.PI
+    expect(angle).toBeLessThan(SLOPE_LIMITS.maxClimbDeg - 5)
+    expect(SLOPE_LIMITS.minSlideDeg).toBeGreaterThan(SLOPE_LIMITS.maxClimbDeg)
   })
 
   it('the top of each flight is level with the floor it arrives on', () => {
@@ -109,7 +114,15 @@ describe('Zones', () => {
 
   it('every zone can see itself and its neighbours, and the neighbours are mutual', () => {
     for (const [zone, neighbours] of Object.entries(ADJACENT_ZONES)) {
-      for (const other of neighbours) expect(ADJACENT_ZONES[other]).toContain(zone)
+      for (const other of neighbours) expect(ADJACENT_ZONES[other as keyof typeof ADJACENT_ZONES]).toContain(zone)
+    }
+  })
+
+  it('from anywhere in the tower you see the whole tower (the floor of floor 1 is the ceiling of the south hall)', () => {
+    // Regression: from floor 2 the south hall was hidden, so floor 1 had no floor and the grass showed through the stairwell.
+    for (const zone of ['south', 'floor1', 'floor2'] as const) {
+      const visible = new Set([zone, ...ADJACENT_ZONES[zone]])
+      for (const part of ['south', 'floor1', 'floor2'] as const) expect(visible.has(part)).toBe(true)
     }
   })
 })

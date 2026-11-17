@@ -62,9 +62,10 @@ export class LockerWall {
     const totalH = rows * pitchY
     const leftX = centerX - totalW / 2
 
-    const steel = mat(0x8d99a6, 0.45, 0.55)
+    // Not very metallic: metal only looks right with an environment to reflect, and the halls have none (they went black).
+    const steel = mat(0x8d99a6, 0.55, 0.12)
     const inner = mat(0x4b5563, 0.7, 0.2)
-    const doorMat = mat(0x9aa5b1, 0.4, 0.55)
+    const doorMat = mat(0x9aa5b1, 0.5, 0.12)
     const slot = mat(0x374151, 0.6, 0.3)
 
     // Carcass: a hollow steel frame (back panel, shelves, dividers) so open compartments show inside.

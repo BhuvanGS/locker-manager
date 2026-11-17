@@ -25,7 +25,7 @@ export function MainMenu() {
         </button>
         <ul className="control-list">
           <li>
-            <kbd>WASD</kbd> move · <kbd>Shift</kbd> walk faster · <kbd>Mouse</kbd> look
+            <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Shift</kbd> walk faster · <kbd>Mouse</kbd> look
           </li>
           <li>
             <kbd>E</kbd> or <kbd>Click</kbd> uses whatever is under the crosshair: customers, locker doors,

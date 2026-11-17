@@ -32,6 +32,7 @@ Open http://localhost:5173, press **Open the shop**, and click the view to captu
 | Key | Action |
 | --- | --- |
 | `W A S D` / arrows | Move (`Shift` to walk faster) |
+| `Space` | Jump (about 0.9 m) |
 | Mouse | Look |
 | `E` / left click | Use whatever is under the crosshair: talk to a customer, open or close a locker door, store or take an item, take a key out of a lock, hang or take a key on the key board, try a key on a locked locker |
 | `E` / `Enter` / click (in a conversation) | Confirm the highlighted answer. The natural next step is pre-highlighted, so mashing `E` walks you through |
@@ -99,7 +100,7 @@ doesn't fill it in).
 **The south expansion and the floors** are the next phase of the building. The annexes spread the lockers sideways in banks along
 the walls; the south hall grows the shop **backwards** with the lockers in rows (aisles between them), through a new doorway in the back
 wall of the storage room, beside the first locker bank. Floors 1 and 2 are the same hall stacked on top, reached by two flights of
-stairs along the east wall of the south hall (walk up from the south end and step off to the west at the top). The deposit register
+stairs along the east wall of the south hall (walk up from the south end and step straight off onto a landing at the top; the halls have windows). The deposit register
 flips through pages when it holds more than 42 bags.
 
 **The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into

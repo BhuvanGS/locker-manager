@@ -92,8 +92,10 @@ Rules:
 - **South expansion and floors** (`kind: 'hall'` in `CONFIG.upgrades`, `world/Hall.ts`, `world/Stairs.ts`): the south hall is behind the storage
   room's back wall (doorway `SOUTH.door`, cut by `Facility.setSouthOpen`), with lockers in rows (`SOUTH.rowFrontZ`, `SOUTH.bankX`) and key racks along
   the old back wall (`SOUTH.rackX`). Floors 1 and 2 are the same `Hall` at `level × FLOOR_HEIGHT`; a hall's ceiling slab is the floor above and has a
-  stairwell hole closed by a hatch (`Hall.openHatch`) until the next floor is bought, when the Engine adds `Stairs` (14 steps of 0.25 m, guard wall,
-  rail on the floor above). `LockerWall` takes a `BankPlacement` (`centerX`, `frontZ`, `floorY`) and `KeyRack` an optional `y`. Everything in a hall is
+  stairwell hole closed by a hatch (`Hall.openHatch`) until the next floor is bought, when the Engine adds `Stairs` (14 visible steps of 0.25 m with NO colliders, walked on via one sloped ramp collider so the climb is smooth
+  (`SLOPE_LIMITS`), a tall guard collider/rail, and a 1.7 m+ landing at the top). Halls have windows (`Hall.windowedWall`, glass colliders). Tower zones
+  (south, floor1, floor2) all see each other, since one floor is the next one's ceiling. Space jumps (`PlayerController`, `JUMP_SPEED`, `GRAVITY`);
+  `player/stairs.physics.test.ts` runs real Rapier. `LockerWall` takes a `BankPlacement` (`centerX`, `frontZ`, `floorY`) and `KeyRack` an optional `y`. Everything in a hall is
   positioned relative to the hall's floor (`root.position.y`) so it can rise in place, while colliders use world y.
 - **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
   `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles

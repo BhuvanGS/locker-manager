@@ -14,6 +14,17 @@ const TITLES: Record<HallKind, string> = { south: 'SOUTH EXPANSION', floor1: 'FL
 const T = 0.2 // wall thickness
 const H = ROOM.height
 const RISE_SECONDS = 1.6
+const WIN_W = 1.6
+const WIN_H = 1.4
+const SILL = 0.9
+const GLASS = new THREE.MeshStandardMaterial({
+  color: 0xbcd7e6,
+  transparent: true,
+  opacity: 0.22,
+  roughness: 0.05,
+  metalness: 0.1,
+  depthWrite: false,
+})
 
 /**
  * One big storage hall: the south expansion behind the storage room, or a floor stacked on top of it. They all share one
@@ -47,15 +58,15 @@ export class Hall {
     const slab = mat(0xbfbab0, 0.95)
     const z0 = minZ - T // far end, outer face
     const z1 = maxZ + T // old back wall's south face plane, outer face
-    const lenZ = z1 - z0
-    const cz = (z0 + z1) / 2
     const widthX = maxX - minX + 2 * T
 
     // Walls: west, east and the far (south) end. Floors above also need their own north wall (on the ground the old
     // back wall of the storage room is the north wall).
-    this.solid(T, H, lenZ, wall, minX - T / 2, H / 2, cz)
-    this.solid(T, H, lenZ, wall, maxX + T / 2, H / 2, cz)
-    this.solid(widthX, H, T, wall, 0, H / 2, minZ - T / 2)
+    // Windows are real openings with glass (the glass blocks you, so you cannot jump out). West: in the lobby, the aisle between
+    // the rows and behind the last row. East: only beyond the stairs. South: either side of the hall's name.
+    this.windowedWall('z', minX - T / 2, z0, z1, [-10.8, -14.2, -18.5], wall)
+    this.windowedWall('z', maxX + T / 2, z0, z1, [-20.2], wall)
+    this.windowedWall('x', minZ - T / 2, -widthX / 2, widthX / 2, [-3.5, 3.5], wall)
     if (this.level > 0) this.solid(widthX, H, T, wall, 0, H / 2, maxZ + T / 2)
 
     // Ground floor (upper floors stand on the slab of the hall below).
@@ -114,6 +125,41 @@ export class Hall {
     for (const body of this.bodies) this.physics.removeBody(body)
     this.bodies = []
     this.hatch = null
+  }
+
+  /**
+   * A wall with window openings. `axis` is the way the wall runs: 'z' for the west and east walls, 'x' for the far wall.
+   * `fixed` is the wall's centre on the other axis; `centers` are the windows' centres along the wall.
+   */
+  private windowedWall(axis: 'z' | 'x', fixed: number, from: number, to: number, centers: number[], material: THREE.Material): void {
+    const piece = (a: number, b: number, y0: number, y1: number) => {
+      const len = b - a
+      if (len < 0.01) return
+      const h = y1 - y0
+      const mid = (a + b) / 2
+      if (axis === 'z') this.solid(T, h, len, material, fixed, y0 + h / 2, mid)
+      else this.solid(len, h, T, material, mid, y0 + h / 2, fixed)
+    }
+    piece(from, to, 0, SILL) // below the windows
+    piece(from, to, SILL + WIN_H, H) // above them
+    let cursor = from
+    for (const c of [...centers].sort((a, b) => a - b)) {
+      piece(cursor, c - WIN_W / 2, SILL, SILL + WIN_H) // the pier between windows
+      cursor = c + WIN_W / 2
+      const glassY = SILL + WIN_H / 2
+      const pane = axis === 'z' ? this.solid(0.04, WIN_H, WIN_W, GLASS, fixed, glassY, c) : this.solid(WIN_W, WIN_H, 0.04, GLASS, c, glassY, fixed)
+      pane.mesh.castShadow = false
+      // A sill ledge on the inside.
+      const sill = new THREE.Mesh(
+        axis === 'z' ? new THREE.BoxGeometry(0.3, 0.05, WIN_W + 0.2) : new THREE.BoxGeometry(WIN_W + 0.2, 0.05, 0.3),
+        mat(0xf1f5f9, 0.7),
+      )
+      const inward = axis === 'z' ? (fixed < 0 ? 0.12 : -0.12) : 0.12
+      if (axis === 'z') sill.position.set(fixed + inward, SILL + 0.02, c)
+      else sill.position.set(c, SILL + 0.02, fixed + inward)
+      this.root.add(sill)
+    }
+    piece(cursor, to, SILL, SILL + WIN_H)
   }
 
   /**

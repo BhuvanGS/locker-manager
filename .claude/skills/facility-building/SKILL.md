@@ -62,7 +62,7 @@ new collider must be removable (`PhysicsWorld.removeBody`) so a new game can wal
 
 `Hall(kind, physics)` builds one hall (walls, ceiling slab with a hatch, fixtures, signs) at `level × FLOOR_HEIGHT`; `Stairs(flight, physics)` builds a flight and its
 guard rails. Constants (`SOUTH`, `STAIRS`, `stairHole`, `FLOOR_HEIGHT`) are in `layout.ts` and checked by `layout.test.ts`: change a number there and run the
-tests. Keep these true: steps ≤ 0.38 m (auto-step) with a tread ≥ 0.2 m; the stairs rise exactly one `FLOOR_HEIGHT`; the stairwell hole is covered by the hatch until
+tests. Stairs are visual steps plus one ramp collider (never step colliders: the capsule gets stuck); slope must stay under `SLOPE_LIMITS.maxClimbDeg`; each flight ends ≥ 1.5 m from the north wall. Keep these true: steps ≤ 0.38 m with a tread ≥ 0.2 m; the stairs rise exactly one `FLOOR_HEIGHT`; the stairwell hole is covered by the hatch until
 the floor above exists; every collider is removable (`PhysicsWorld.removeBody`). Tag anything new in a zone with `root.userData.zone`.
 
 ### Add a room

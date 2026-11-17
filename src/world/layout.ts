@@ -106,7 +106,7 @@ export const REACH = { default: 2.4, customer: 3.2 }
  *
  *    z = -9.2   ── old back wall (doorway at x = -2.15, key racks on its south face) ──────────
  *    z = -12.4  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  row 1 (lockers face north)                     stairs →  ▲
- *    z = -15.4  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  row 2                                          (x 4.5–5.8)
+ *    z = -15.4  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  row 2                                          (x 4.5–6.0)
  *    z = -21    ── far wall ────────────────────────────────────────────────────────────────
  */
 export const FLOOR_HEIGHT = 3.5 // a 3.2 m room plus a 0.3 m slab
@@ -128,23 +128,32 @@ export const SOUTH = {
 } as const
 
 /**
- * Two flights of stairs along the east wall, both climbing towards the north wall (+z). Steps are 0.25 m high and 0.3 m deep
+ * Two flights of stairs along the east wall, both climbing towards the north wall (+z), ending at the edge of the stairwell
+ * hole so you walk straight off onto the floor above (a landing at least 1.7 m deep). Steps are 0.25 m high and 0.3 m deep
  * (the character controller auto-steps 0.38 m). Flight 0 goes ground → floor 1, flight 1 goes floor 1 → floor 2.
  */
 export const STAIRS = {
-  x: 5.15,
-  width: 1.3,
+  // The steps run from x = 4.5 to the east wall at x = 6.0 (no gap between the stairs and the wall).
+  x: 5.25,
+  width: 1.5,
   steps: 14,
   rise: 0.25,
   tread: 0.3,
   flights: [
-    { baseY: 0, startZ: -13.9 },
-    { baseY: FLOOR_HEIGHT, startZ: -18.7 },
+    // Each flight ends 1.7 m or more from the north wall, so you step straight off the top onto a landing of the floor above.
+    { baseY: 0, startZ: -15.1 },
+    { baseY: FLOOR_HEIGHT, startZ: -19.3 },
   ],
-  /** The open west side of a flight is closed by a guard wall for this many steps (the top steps stay open to step off). */
+  /** The open west side of a flight is closed by a guard wall for this many steps (the last two stay open, the exit is straight ahead). */
   guardX: 4.45,
   guardSteps: 12,
 } as const
+
+/**
+ * The player's slope limits (degrees). The stairs climb at about 40°, so the character controller must be allowed to climb
+ * steeper than its old 38° limit, and must not start sliding until well beyond that.
+ */
+export const SLOPE_LIMITS = { maxClimbDeg: 50, minSlideDeg: 58 }
 
 /** The stairwell hole in the ceiling above `flight` (x and z extents). */
 export function stairHole(flight: number): { x0: number; x1: number; z0: number; z1: number } {
@@ -175,7 +184,9 @@ export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
   main: ['west', 'east', 'south'],
   west: ['main'],
   east: ['main'],
-  south: ['main', 'floor1'],
+  // The three halls are one tower: the floor of floor 1 is the ceiling slab of the south hall, and you look down stairwells
+  // to the floors below, so anywhere in the tower you must be able to see all of it.
+  south: ['main', 'floor1', 'floor2'],
   floor1: ['south', 'floor2'],
-  floor2: ['floor1'],
+  floor2: ['floor1', 'south'],
 }

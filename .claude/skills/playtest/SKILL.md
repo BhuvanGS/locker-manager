@@ -152,8 +152,8 @@ East is the mirror image (x = +3 → +11.5). Totals after both: 42 lockers, 40+ 
 Use the mod menu (M → "Unlock everything", or unlock one at a time) or `__game.grant(2800, 100000)` and buy `bank2, bank3, annexWest, annexEast, southExpansion, floor1, floor2`.
 - Doorway: stand in the storage room at about (−2.15, −7) facing the back wall: a 1.4 m opening between the first two locker banks, "SOUTH EXPANSION" sign above.
 - South hall: two rows of lockers facing the doorway, an aisle between them, five key racks on the old back wall, "SOUTH EXPANSION" on the far wall.
-- Stairs: walk to (5.15, −14.5) in the south hall and walk north (+z): 14 steps up to floor 1, then step west at the top. On floor 1 walk round to
-  (5.15, −19.2) and walk north up flight 2 to floor 2. Check for falling through gaps, the guard wall, and the rail round the stairwell.
+- Stairs: walk to (5.25, −16.3) in the south hall and walk north (+z): a smooth climb to floor 1, step straight off onto the landing. On floor 1 go to
+  (5.25, −20.5) and walk north up flight 2 to floor 2. Space jumps. From floor 2 look down the stairwell: no gap in floor 1. Check for falling through gaps, the guard wall, and the rail round the stairwell.
 - `__game.walk(forward, right, seconds)` walks relative to the camera; `__game.teleport(x, z)` keeps the current height.
 - Only the current zone and its neighbours are drawn: from floor 2 the ground floor should be hidden, and from the main room floor 1 and 2 hidden.
 - The deposit register shows "page 1/2" when more than 42 bags are stored.

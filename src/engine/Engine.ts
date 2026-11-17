@@ -354,7 +354,7 @@ export class Engine {
     const talking = this.game.dialogue !== null || this.game.catalogueOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
-      player.update(talking ? { ...input, forward: 0, right: 0, sprint: false } : input, this.cameraRig.getYaw(), dt)
+      player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
       this.physics.step(dt)
       player.syncFromPhysics()
     }
@@ -574,7 +574,7 @@ export class Engine {
       engine: this,
       /** The live GameManager (replaced on New game, so call it each time). */
       sim: () => this.game,
-      teleport: (x: number, z: number) => this.player?.teleport(x, z),
+      teleport: (x: number, z: number, feetY?: number) => this.player?.teleport(x, z, feetY),
       look: (yaw: number, pitch: number) => this.cameraRig.turn(yaw, pitch),
       face: (x: number, z: number) => {
         const p = this.player?.getPosition()

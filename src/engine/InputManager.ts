@@ -9,6 +9,8 @@ export type InputSnapshot = {
   choice: number | null
   /** Dialogue navigation this frame: −1 up, +1 down (W/S, arrows or mouse wheel). */
   menuMove: number
+  /** Space: jump (when not in a conversation or menu). */
+  jumpPressed: boolean
   /** Enter or Space: confirm the highlighted dialogue option (E and click also do, via interactPressed). */
   confirmPressed: boolean
   /** Q or Backspace: step away from the conversation. */
@@ -104,6 +106,7 @@ export class InputManager {
       choice,
       menuMove:
         (hit('KeyS') || hit('ArrowDown') ? 1 : 0) - (hit('KeyW') || hit('ArrowUp') ? 1 : 0) + Math.sign(this.wheel),
+      jumpPressed: hit('Space'),
       confirmPressed: hit('Enter') || hit('Space'),
       cancelPressed: hit('KeyQ') || hit('Backspace'),
       pausePressed: hit('Escape'),

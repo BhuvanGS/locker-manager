@@ -33,7 +33,7 @@ export class PhysicsWorld {
     const world = this.getWorld()
     const bodyDesc = RAPIER.RigidBodyDesc.fixed()
       .setTranslation(position.x, position.y, position.z)
-      .setRotation({ x: 0, y: rotationY, z: 0, w: Math.cos(rotationY / 2) })
+      .setRotation({ x: 0, y: Math.sin(rotationY / 2), z: 0, w: Math.cos(rotationY / 2) })
     const body = world.createRigidBody(bodyDesc)
     const colliderDesc = RAPIER.ColliderDesc.cuboid(
       halfExtents.x,
@@ -41,6 +41,20 @@ export class PhysicsWorld {
       halfExtents.z,
     )
     world.createCollider(colliderDesc, body)
+    return body
+  }
+
+  /** A fixed box with any rotation (e.g. the sloped ramp under a staircase). */
+  addStaticBoxRotated(
+    position: Vector3,
+    halfExtents: Vector3,
+    rotation: { x: number; y: number; z: number; w: number },
+  ): RAPIER.RigidBody {
+    const world = this.getWorld()
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z).setRotation(rotation),
+    )
+    world.createCollider(RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z), body)
     return body
   }
 

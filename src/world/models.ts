@@ -237,6 +237,8 @@ export function makePerson(a: Appearance): PersonRig {
 
 /** A flat canvas-texture sign (text on a coloured plate), facing +z. */
 export function makeSign(text: string, w: number, h: number, bg: string, fg: string): THREE.Mesh {
+  // No canvas outside a browser (unit tests): a plain plate in the background colour.
+  if (typeof document === 'undefined') return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: bg }))
   const canvas = document.createElement('canvas')
   canvas.width = 512
   canvas.height = Math.max(32, Math.round((512 * h) / w))
