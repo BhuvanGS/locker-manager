@@ -125,6 +125,12 @@ part of the building has an **arm console** (in the halls, in the north-west cor
 up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). Bags are
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
+**Routine maintenance.** Robot arms wear out. Every job costs an arm 3 % (more with faster motors); below 60 % it works 25 % slower, and below 25 % it
+can **jam** as it starts a job and stops until you fix it (a warning appears and your objective points at it). At the zone's arm console, **Routine
+service** puts every arm back to 100 % (cheap, by how worn they are) and **Repair** frees a jammed arm ($80 each) but leaves it half-fit, so service it
+soon. Waiting for a jam to happen costs far more in stuck customers than a service does. The console screen and the arm's lamp (green at rest, amber at
+work, red when jammed) show the state.
+
 **The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into
 the neighbouring unit, and a new storage hall rises out of the ground with its own locker banks and key racks.
 

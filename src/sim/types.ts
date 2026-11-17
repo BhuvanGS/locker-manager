@@ -173,6 +173,8 @@ export type SimNotice =
   | { type: 'xp'; amount: number }
   | { type: 'mistake'; kind: 'wrongKey' | 'wrongItem'; message: string }
   | { type: 'message'; text: string }
+  /** A robot arm jammed (the HUD shows it as a warning). */
+  | { type: 'jam'; zone: 'main' | 'east' | 'south' | 'floor1' | 'floor2'; text: string }
   | { type: 'stageStarted'; title: string; text: string }
   | { type: 'levelUp'; level: number; bonus: number; unlocked: string[] }
   /** An upgrade was bought: `index` is the new locker bank or key rack number (0 = the original). */

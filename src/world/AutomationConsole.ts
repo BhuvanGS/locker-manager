@@ -73,7 +73,7 @@ export class AutomationConsole {
     const signature =
       this.scope === 'hub'
         ? `hub|${zones.join(',')}`
-        : `${this.scope}|${game.conveyor.speedLevel(this.scope)}|${game.conveyor.armCount(this.scope)}`
+        : `${this.scope}|${game.conveyor.speedLevel(this.scope)}|${game.conveyor.armCount(this.scope)}|${Math.round(game.conveyor.zoneCondition(this.scope))}|${game.conveyor.jammedCount(this.scope)}`
     if (signature === this.signature) return
     this.signature = signature
     this.draw(game, zones)
@@ -107,9 +107,11 @@ export class AutomationConsole {
       ctx.font = '700 44px system-ui, sans-serif'
       ctx.fillText(`Speed level ${speed}/3`, 28, 124)
       ctx.fillText(`Arms per row: ${arms}`, 28, 188)
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = '600 26px system-ui, sans-serif'
-      ctx.fillText('Faster motors, a second arm', 28, 246)
+      const condition = Math.round(game.conveyor.zoneCondition(this.scope))
+      const jammed = game.conveyor.jammedCount(this.scope) > 0
+      ctx.font = '700 34px system-ui, sans-serif'
+      ctx.fillStyle = jammed ? '#ef4444' : condition < 25 ? '#ef4444' : condition < 60 ? '#f59e0b' : '#22c55e'
+      ctx.fillText(jammed ? 'JAMMED: repair needed' : `Condition ${condition} %${condition < 60 ? '  · service!' : ''}`, 28, 248)
     }
     ctx.fillStyle = '#94a3b8'
     ctx.font = '600 26px system-ui, sans-serif'

@@ -85,8 +85,8 @@ export class ArmRig {
     return { x: pick.x, z: pick.z, wrist: railY - 0.6, reach: 0, claw: 0 }
   }
 
-  /** Move towards `target` (or rest if null) and redraw. The carriage lamp is amber while it works. */
-  update(dt: number, target: Pose | null): void {
+  /** Move towards `target` (or rest if null) and redraw. The carriage lamp is green at rest, amber at work, red when jammed. */
+  update(dt: number, target: Pose | null, jammed = false): void {
     const t = target ?? this.idle()
     const k = 1 - Math.exp(-7 * dt)
     this.pose.x += (t.x - this.pose.x) * k
@@ -94,7 +94,7 @@ export class ArmRig {
     this.pose.wrist += (t.wrist - this.pose.wrist) * k
     this.pose.reach += (t.reach - this.pose.reach) * k
     this.pose.claw += (t.claw - this.pose.claw) * (1 - Math.exp(-14 * dt))
-    this.lamp.color.setHex(target ? 0xf59e0b : 0x22c55e)
+    this.lamp.color.setHex(jammed ? 0xef4444 : target ? 0xf59e0b : 0x22c55e)
     this.place()
   }
 

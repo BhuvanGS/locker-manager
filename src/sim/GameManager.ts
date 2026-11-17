@@ -110,7 +110,13 @@ export class GameManager {
     this.conveyor = new ConveyorSystem(
       this.lockers,
       this.customers,
-      { zoneOf: (id) => this.zoneOf(id), rowOf: (id) => this.rowOf(id) },
+      {
+        zoneOf: (id) => this.zoneOf(id),
+        rowOf: (id) => this.rowOf(id),
+        random: () => this.rand(),
+        jammed: (zone) =>
+          this.notify({ type: 'jam', zone, text: `A robot arm in the ${ZONE_TITLES[zone]} has jammed! Repair it at that arm console.` }),
+      },
       () => this.now,
     )
     this.economy = new EconomyManager(CONFIG.economy.startingMoney, CONFIG.economy.startingReputation)
@@ -803,7 +809,7 @@ export class GameManager {
 
   /** What a console sells, in order, with whether each can be bought now and why not. */
   consoleItems(scope: 'hub' | AutoZone): CatalogueItem[] {
-    return AUTOMATION_UPGRADES.filter((d) => d.scope === scope).map((def) => ({
+    const upgrades = AUTOMATION_UPGRADES.filter((d) => d.scope === scope).map((def) => ({
       id: def.id,
       title: def.title,
       description: def.description,
@@ -811,6 +817,51 @@ export class GameManager {
       level: def.level,
       ...this.automationState(def),
     }))
+    return scope === 'hub' ? upgrades : [...this.maintenanceItems(scope), ...upgrades]
+  }
+
+  /** Cost of servicing every arm of `zone` (by how worn they are), and of repairing its jammed ones. */
+  serviceCost(zone: AutoZone): number {
+    const m = CONFIG.automation.maintenance
+    const missing = this.conveyor.zoneArms(zone).reduce((n, h) => n + (h.jammed ? 0 : 100 - h.condition), 0)
+    return Math.ceil((missing / 100) * m.serviceCostPerArm)
+  }
+
+  repairCost(zone: AutoZone): number {
+    return this.conveyor.jammedCount(zone) * CONFIG.automation.maintenance.repairCostPerArm
+  }
+
+  /** Routine service and repair for a zone's arms, shown at the top of its console. */
+  private maintenanceItems(zone: AutoZone): CatalogueItem[] {
+    const level = this.economy.level.level
+    const jammed = this.conveyor.jammedCount(zone)
+    const condition = Math.round(this.conveyor.zoneCondition(zone))
+    const service = this.serviceCost(zone)
+    const repair = this.repairCost(zone)
+    const pick = (cost: number, blocked: string | null): Pick<CatalogueItem, 'state' | 'note'> =>
+      blocked
+        ? { state: 'locked', note: blocked }
+        : this.economy.money < cost
+          ? { state: 'tooExpensive', note: `Costs $${cost}, you have $${this.economy.money}` }
+          : { state: 'available', note: null }
+    return [
+      {
+        id: `service-${zone}`,
+        title: 'Routine service',
+        description: `Check and oil every arm: back to 100 %. Worst arm now: ${condition} %. Worn arms are slower, failing ones can jam.`,
+        cost: service,
+        level,
+        ...pick(service, jammed > 0 ? 'Repair the jammed arm first' : service === 0 ? 'Already in perfect condition' : null),
+      },
+      {
+        id: `repair-${zone}`,
+        title: 'Repair jammed arm',
+        description: jammed > 0 ? `${jammed} arm${jammed > 1 ? 's are' : ' is'} stuck. A repair frees ${jammed > 1 ? 'them' : 'it'} but leaves ${jammed > 1 ? 'them' : 'it'} half-fit.` : 'Frees a jammed arm (it stays half-fit until serviced).',
+        cost: repair,
+        level,
+        ...pick(repair, jammed === 0 ? 'Nothing is jammed' : null),
+      },
+    ]
   }
 
   private automationState(def: AutomationUpgradeDef): { state: CatalogueItem['state']; note: string | null } {
@@ -830,6 +881,8 @@ export class GameManager {
 
   /** Buy an automation upgrade at its console. */
   buyAutomation(id: string): ActionResult {
+    const maintenance = /^(service|repair)-(main|east|south|floor1|floor2)$/.exec(id)
+    if (maintenance) return this.maintain(maintenance[1] === 'service' ? 'service' : 'repair', maintenance[2] as AutoZone)
     const def = AUTOMATION_UPGRADES.find((d) => d.id === id)
     if (!def) return fail('Not sold here.')
     const status = this.automationState(def)
@@ -837,6 +890,16 @@ export class GameManager {
     this.economy.spend(def.cost)
     this.applyAutomation(def)
     return ok(`${def.title}: ${def.description}.`)
+  }
+
+  /** Service or repair the arms of `zone`, paying at its console. */
+  private maintain(kind: 'service' | 'repair', zone: AutoZone): ActionResult {
+    const item = this.maintenanceItems(zone).find((i) => i.id === `${kind}-${zone}`)
+    if (!item || item.state !== 'available') return fail(item?.note ?? 'Not available.')
+    this.economy.spend(item.cost)
+    if (kind === 'service') this.conveyor.service(zone)
+    else this.conveyor.repair(zone)
+    return ok(kind === 'service' ? `Serviced the arms in the ${ZONE_TITLES[zone]}: as good as new.` : `Repaired the arm in the ${ZONE_TITLES[zone]}. It is only half-fit: service it soon.`)
   }
 
   /** Mod menu: an automation upgrade for free, after whatever it needs. */
@@ -981,6 +1044,8 @@ export class GameManager {
       return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
+    const jam = this.conveyor.jammedZones()[0]
+    if (jam) return `A robot arm in the ${ZONE_TITLES[jam]} has jammed. Repair it at that arm console.`
     const lockers = this.lockers.all()
     if (lockers.some((l) => l.doorOpen && l.itemId)) return 'Close the open locker.'
     if (!this.isDigital && lockers.some((l) => l.itemId && !l.locked)) return 'An occupied locker is unlocked — take its key.'

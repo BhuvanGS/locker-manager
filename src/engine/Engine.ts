@@ -532,6 +532,7 @@ export class Engine {
       // Mistakes are already toasted from the action's own result message, so only walk-outs need one here.
       else if (notice.type === 'mistake') continue
       else if (notice.type === 'walkout') store.pushToast(notice.message, 'bad')
+      else if (notice.type === 'jam') store.pushToast(notice.text, 'bad')
       else if (notice.type === 'stageStarted') store.showBanner(notice.title, notice.text)
       else if (notice.type === 'levelUp') {
         const unlocked = notice.unlocked.length > 0 ? `New in the catalogue: ${notice.unlocked.join(', ')}.` : 'Customers will arrive a little faster.'

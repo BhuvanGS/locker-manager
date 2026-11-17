@@ -96,7 +96,7 @@ export class StationView {
     this.rigs.forEach((rig, i) => {
       const job = jobs.get(i)
       const target = job ? rig.target(job.kind, game.conveyor.armProgress(job), this.opts.locate(job.lockerId), job.row) : null
-      rig.update(dt, target)
+      rig.update(dt, target, game.conveyor.armHealth(this.opts.zone, i).jammed)
     })
     for (const [id, bag] of this.bags) {
       if (live.has(id)) continue

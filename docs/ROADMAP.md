@@ -154,6 +154,15 @@ Requested as "the next major upgrade: automation".
 - [x] Tests: `sim/AutomationLevels.test.ts` (levels, ducts, speed, two arms, rows as stations, consoles, mod menu).
 - Next idea: move the other upgrades (lockers, racks, halls) to consoles in their own areas, the same way; arm breakdowns; a duct visible between halls.
 
+## Interim work: routine maintenance (done)
+
+- [x] Arm wear (`CONFIG.automation.maintenance`): each job costs condition, worn and failing arms are slower, a failing arm can jam at the start of a job (seeded),
+      a jammed arm's job freezes until repaired; a second arm keeps working. `ConveyorSystem.armHealth / service / repair`.
+- [x] **Routine service** and **Repair jammed arm** at each zone's arm console (`GameManager.maintenanceItems`, ids `service-<zone>` and `repair-<zone>`), a `jam` notice
+      (red toast), an objective that points at the jam, a red arm lamp, condition on the console screen and "ARM JAMMED" on the terminal.
+- [x] Tests: `sim/Maintenance.test.ts`.
+- Next: belts jam too (a bag falls off), a maintenance contract that services automatically for a monthly fee, spare parts, a technician NPC.
+
 ## Interim work: mod menu (done)
 
 - [x] **Mod menu** (`M`): free cash, levels (+1, +100 XP, level 4, level 8), unlock any upgrade or everything (annexes included, built

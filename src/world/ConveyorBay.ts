@@ -260,8 +260,9 @@ export class ConveyorBay {
     const queued = game.conveyor.parcels.filter((p) => p.phase === 'queued' || p.phase === 'waitingForArm' || p.phase === 'transitIn' || p.phase === 'transitOut').length
     const jobs = game.conveyor.armJobs()
     const first = jobs[0]
-    const doing = first ? `${first.kind === 'store' ? 'STORING' : 'FETCHING'} ${game.lockers.get(first.lockerId).number}${jobs.length > 1 ? ` +${jobs.length - 1}` : ''}` : 'IDLE'
-    const signature = [doing, stored, free, inbound, returning, queued].join('|')
+    const jammed = game.conveyor.jammedZones().length > 0
+    const doing = jammed ? 'ARM JAMMED' : first ? `${first.kind === 'store' ? 'STORING' : 'FETCHING'} ${game.lockers.get(first.lockerId).number}${jobs.length > 1 ? ` +${jobs.length - 1}` : ''}` : 'IDLE'
+    const signature = [doing, jammed, stored, free, inbound, returning, queued].join('|')
     if (signature === this.kiosk.signature) return
     this.kiosk.signature = signature
     const ctx = this.kiosk.canvas.getContext('2d')
@@ -274,7 +275,7 @@ export class ConveyorBay {
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'left'
     ctx.fillText('ROBOT ARM', 28, 44)
-    ctx.fillStyle = first ? '#f59e0b' : '#22c55e'
+    ctx.fillStyle = jammed ? '#ef4444' : first ? '#f59e0b' : '#22c55e'
     ctx.font = '800 54px system-ui, sans-serif'
     ctx.fillText(doing, 28, 112)
     ctx.fillStyle = '#e2e8f0'

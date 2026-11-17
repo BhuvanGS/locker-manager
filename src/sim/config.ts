@@ -431,6 +431,25 @@ export const CONFIG = {
     /** How long a job takes in each zone, relative to the storage room (the arm rides to the bay and along to the row), plus `rowTravel` per row. */
     travelFactor: { main: 1, east: 1, south: 1.5, floor1: 1.5, floor2: 1.5 },
     rowTravel: 0.1,
+    /**
+     * Routine maintenance. Every arm wears a little with each job (faster motors wear it faster). A worn arm is slower, and a failing
+     * one can jam when it starts a job: it then stops until it is repaired at its zone's arm console. A service puts every arm back
+     * to 100 %; a repair frees a jammed arm but leaves it only half-fit, so it still needs servicing.
+     */
+    maintenance: {
+      wearPerJob: 3,
+      /** Extra wear per speed level (0.2 = 20 % more per level). */
+      speedWear: 0.2,
+      wornBelow: 60,
+      failingBelow: 25,
+      wornSlowdown: 1.25,
+      failingSlowdown: 1.5,
+      /** Chance a job start jams an arm at condition 0 (it is 100 % at exactly 0); it falls to 0 at `failingBelow`. */
+      jamChance: 0.5,
+      serviceCostPerArm: 30,
+      repairCostPerArm: 80,
+      repairedCondition: 40,
+    },
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

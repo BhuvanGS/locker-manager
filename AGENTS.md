@@ -119,6 +119,10 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
+- **Maintenance** (`CONFIG.automation.maintenance`, `ConveyorSystem.armHealth`): each arm has `condition` 0–100 and `jammed`. A finished job wears it (`wear`), the job duration
+  is scaled by `slowdown(condition)` (`jobDuration`), and `rollJam` runs when a job starts using the host's seeded `random()`. A jammed arm's job does not advance (`update` skips it).
+  `service` / `repair` are bought through `buyAutomation` with the ids `service-<zone>` / `repair-<zone>`, shown first in a zone console by `maintenanceItems`. The `jam` notice
+  becomes a red toast; `objective()` points at a jam before anything else. The arm lamp (`ArmRig.update(..., jammed)`), the console screen and the terminal show the state.
 - **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
   `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles
   materials); the halls use emissive fixtures and no point lights.

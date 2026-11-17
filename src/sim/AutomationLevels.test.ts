@@ -215,7 +215,7 @@ describe('Automation consoles and the mod menu', () => {
   it('automation upgrades are only sold at their own consoles', () => {
     const g = rich()
     expect(g.consoleItems('hub').every((i) => i.id.startsWith('line-'))).toBe(true)
-    expect(g.consoleItems('main').map((i) => i.id)).toEqual(['speed-main-1', 'speed-main-2', 'speed-main-3', 'arms-main'])
+    expect(g.consoleItems('main').map((i) => i.id)).toEqual(['service-main', 'repair-main', 'speed-main-1', 'speed-main-2', 'speed-main-3', 'arms-main'])
     expect(g.catalogueItems().some((i) => i.id.startsWith('speed-') || i.id.startsWith('line-'))).toBe(false)
   })
 
