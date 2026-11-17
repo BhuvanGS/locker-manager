@@ -16,7 +16,7 @@ export interface Parcel {
   kind: 'store' | 'fetch'
   itemId: ItemId
   lockerId: LockerId
-  /** The part of the building the locker is in, and its row there: together they say which arm station serves it. */
+  /** The part of the building the locker is in (its arms serve it), and the row there (rows further in take a little longer). */
   zone: AutoZone
   row: number
   phase: ParcelPhase
@@ -44,8 +44,8 @@ export interface ConveyorHost {
  * The conveyor belts and robot arms: pure simulation, no rendering. The 3D views read `parcels` and `armProgress()` every frame.
  *
  * The system grows in levels. Each zone (storage room, east annex, south hall, floors) is covered once its belt extension is bought,
- * and every zone has its own arm upgrades: speed levels and a second arm. Every row of lockers is an arm station; a station's arms
- * each take the oldest bag waiting for it. Lockers and items are changed here, together, so the records stay consistent.
+ * and every zone has its own arm upgrades: speed levels and a second arm. A zone's arms ride an overhead rail network from the
+ * bay to every row of lockers; each free arm takes the oldest bag waiting for its zone. Lockers and items are changed here, together, so the records stay consistent.
  */
 export class ConveyorSystem {
   parcels: Parcel[] = []
@@ -97,9 +97,11 @@ export class ConveyorSystem {
     this.arms.set(zone, Math.max(1, Math.min(CONFIG.automation.maxArms, count)))
   }
 
-  /** Seconds one arm job takes in `zone` (faster with the speed upgrades). */
-  armDuration(zone: AutoZone): number {
-    return CONFIG.automation.armSeconds / (CONFIG.automation.speedMult[this.speedLevel(zone)] ?? 1)
+  /** Seconds one arm job takes in `zone`, for a locker in `row` (longer in the halls, and further in; faster with the speed upgrades). */
+  armDuration(zone: AutoZone, row = 0): number {
+    const cfg = CONFIG.automation
+    const travel = cfg.travelFactor[zone] + cfg.rowTravel * row
+    return (cfg.armSeconds * travel) / (cfg.speedMult[this.speedLevel(zone)] ?? 1)
   }
 
   // ------------------------------------------------------------------ parcels
@@ -138,7 +140,7 @@ export class ConveyorSystem {
 
   /** 0…1 through `job`, or 0 if it is not with an arm. */
   armProgress(job: Parcel): number {
-    return job.phase === 'arm' ? Math.min(1, job.t / this.armDuration(job.zone)) : 0
+    return job.phase === 'arm' ? Math.min(1, job.t / this.armDuration(job.zone, job.row)) : 0
   }
 
   /** Bags riding in (or waiting at the end of) the loading belt, oldest first. Halls' bags leave the belt into the duct at its end. */
@@ -194,7 +196,7 @@ export class ConveyorSystem {
     // A free arm takes the oldest bag waiting for its station.
     for (const p of this.parcels) {
       if (p.phase !== 'waitingForArm' && p.phase !== 'queued') continue
-      const busy = new Set(this.parcels.filter((o) => o.phase === 'arm' && o.zone === p.zone && o.row === p.row).map((o) => o.arm))
+      const busy = new Set(this.parcels.filter((o) => o.phase === 'arm' && o.zone === p.zone).map((o) => o.arm))
       for (let arm = 0; arm < this.armCount(p.zone); arm++) {
         if (busy.has(arm)) continue
         p.arm = arm
@@ -205,7 +207,7 @@ export class ConveyorSystem {
 
     for (const job of this.armJobs()) {
       job.t += dt
-      const progress = job.t / this.armDuration(job.zone)
+      const progress = job.t / this.armDuration(job.zone, job.row)
       const at = ARM_STEPS[job.kind]
       if (job.step < 1 && progress >= at.open) {
         job.step = 1

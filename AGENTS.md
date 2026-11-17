@@ -110,13 +110,14 @@ Rules:
   a hatch in the partition (`Facility.setConveyorOpen`) and `CONVEYOR`/`lockerSlot` in `layout.ts` hold the positions (tested in `layout.test.ts`).
   There is **no west annex**: the upgrade was removed and the conveyor takes its place; floor 1 has a third row (`SOUTH.rowFrontZ` has three entries; floors use the rows they need).
 - **Conveyor levels, arms and consoles** (`AutoZone` in `config.ts`: `main | east | south | floor1 | floor2`): the sim maps every bank to a zone and row
-  (`GameManager.bankInfo`, `zoneOf`, `rowOf`). `ConveyorSystem` keeps which zones are `covered`, each zone's speed level and arm count, and one station per
-  `zone:row` whose arms (`Parcel.arm`) each take the oldest waiting bag. Halls are fed through ducts (`transitIn` / `transitOut`, `CONFIG.automation.transit`).
+  (`GameManager.bankInfo`, `zoneOf`, `rowOf`). `ConveyorSystem` keeps which zones are `covered`, each zone's speed level and arm count; a zone's arms (`Parcel.arm`) each take the oldest
+  waiting bag and ride to any of its rows (`armDuration(zone, row)` grows with the zone's travel and the row). Halls are fed through ducts (`transitIn` / `transitOut`, `CONFIG.automation.transit`).
   Levels are `AUTOMATION_UPGRADES` (generated in `config.ts`): `line-<zone>` sold at the **hub** console, `speed-<zone>-1..3` and `arms-<zone>` at that zone's
   console, bought with `buyAutomation` (`consoleItems(scope)` gives the menu). `grantUpgrade` (mod menu) also accepts these ids and grants everything they need.
-  3D: `ArmRig` (one arm, keyframes tied to `ARM_STEPS`), `StationView` (rail(s), arms, ducts, bags for one row), `ConveyorBay` (the hub: belts, kiosk, the storage
-  room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds a station per row of a zone when its `line-*` notice arrives
-  (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION` and `CONSOLES` in `layout.ts`. To add a zone: `AutoZone`, `ZONE_ROWS`,
+  3D: `ArmRig` (one arm riding overhead rails, keyframes tied to `ARM_STEPS`, pose = x, z, wrist, reach, claw), `StationView` (one per zone: rails, arms, and the
+  dock: `belt` for the storage room, `tube` for the annex, `bay` for the tall halls with its belts, ducts and collider), `ConveyorBay` (the hub: belts, kiosk, the
+  storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
+  (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY` and `CONSOLES` in `layout.ts`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
 - **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
   `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles

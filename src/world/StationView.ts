@@ -1,76 +1,106 @@
+import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import type { AutoZone } from '../sim/config'
+import type { PhysicsWorld } from '../engine/PhysicsWorld'
+import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import type { Parcel } from '../sim/ConveyorSystem'
 import type { GameManager } from '../sim/GameManager'
 import { ArmRig, HANG, type Dock } from './ArmRig'
 import { makeBag } from './bags'
-import { CONVEYOR, STATION } from './layout'
-import { mat } from './models'
+import { beltTexture, TEXTURE_TILE } from './belts'
+import { BAY, CONVEYOR, STATION } from './layout'
+import { makeSign, mat } from './models'
 
 /** How far apart (z) two bags waiting at the same dock sit, one per arm. */
 const SPACING = 0.5
 /** The belts' pick-up point (a little before their end). */
 export const PICKUP_Z = CONVEYOR.endZ + 0.15
 
+export interface StationRow {
+  row: number
+  /** The z of the locker fronts in this row. */
+  frontZ: number
+}
+
 export interface StationOptions {
   zone: AutoZone
-  row: number
-  /** Height of the floor and the z of the locker fronts in this row. */
+  /** Height of the floor this zone is on. */
   floorY: number
-  frontZ: number
-  /** The rail's x range. */
+  /** The rows of lockers the arms serve. */
+  rows: StationRow[]
+  /** The x range of the rails along the rows. */
   minX: number
   maxX: number
-  /** `belt`: the storage room's own belts. `tube`: ducts from the ceiling (the halls). */
-  dock: 'belt' | 'tube'
+  /**
+   * `belt`: the storage room's own belts. `tube`: two ducts in the gap between the annex's banks. `bay`: the shared bay at the back
+   * of the tall halls, with its own belts and ducts and an overhead runway to every row.
+   */
+  dock: 'belt' | 'tube' | 'bay'
   /** Tube stations: x of the pick-up duct and the drop-off duct. */
   tubeX?: readonly [number, number]
   /** World position of the opening of a locker (x, middle of the opening, z of the bag). */
   locate: (lockerId: string) => { x: number; y: number; z: number }
+  /** Needed by the bay, whose belts you cannot walk through. */
+  physics?: PhysicsWorld
 }
 
+type BagView = { group: THREE.Group; pos: THREE.Vector3; placed: boolean }
+
 /**
- * One row of lockers' robot arms: the gantry rail, one arm (or two, with the second-arm upgrade), and the ducts that feed
- * the halls. It draws the arms and the bags they handle from `game.conveyor`; the belts and everything on them belong to
- * `ConveyorBay`. A storage-room station is part of the bay; a hall's station is built when its belt extension is bought.
+ * The robot arms of one part of the building: their overhead rails, the arms themselves (one, or two with the second-arm upgrade),
+ * and where bags enter and leave. The storage room's station is part of `ConveyorBay` (its belts feed it); the East annex is fed by two
+ * ducts; the tall halls share a **bay** at the back where ducts drop bags on belts, and each arm rides a runway from there to the rail
+ * of any row. It draws the arms and the bags they handle from `game.conveyor`; it makes no decisions of its own.
  */
 export class StationView {
   readonly root = new THREE.Group()
   readonly opts: StationOptions
   private readonly rigs: ArmRig[] = []
-  private readonly bags = new Map<number, THREE.Group>()
-  private readonly railZ: number
-  private readonly railY: number
+  private readonly bags = new Map<number, BagView>()
+  private readonly bodies: RAPIER.RigidBody[] = []
+  private readonly belts: { texture: THREE.CanvasTexture; direction: number }[] = []
+  private readonly physics: PhysicsWorld | undefined
+  private readonly fronts = new Map<number, number>()
 
   constructor(opts: StationOptions) {
     this.opts = opts
+    this.physics = opts.physics
     this.root.userData.zone = opts.zone
-    this.railZ = opts.frontZ + STATION.railOffset
-    this.railY = opts.floorY + STATION.railHeight
-    this.addRail(0)
+    for (const r of opts.rows) this.fronts.set(r.row, r.frontZ)
     if (opts.dock === 'tube' && opts.tubeX) this.addTubes(opts.tubeX)
+    if (opts.dock === 'bay') this.buildBay()
+  }
+
+  dispose(): void {
+    for (const body of this.bodies) this.physics?.removeBody(body)
+    this.bodies.length = 0
+    for (const { texture } of this.belts) texture.dispose()
   }
 
   update(dt: number, game: GameManager): void {
     const want = game.conveyor.armCount(this.opts.zone)
     while (this.rigs.length < want) this.addRig(this.rigs.length)
 
-    // Work out what each arm is doing, and where the bags it handles are.
+    const speed = (BAY.maxX - BAY.minX) / CONFIG.automation.beltSeconds
+    for (const { texture, direction } of this.belts) texture.offset.x += (direction * speed * dt) / TEXTURE_TILE
+
+    // What each arm is doing, and where the bags it handles are.
+    const mine = game.conveyor.parcels.filter((p) => p.zone === this.opts.zone)
+    const waiting = mine.filter((p) => p.phase === 'waitingForArm')
     const live = new Set<number>()
     const jobs = new Map<number, Parcel>()
-    for (const parcel of game.conveyor.parcels) {
-      if (parcel.zone !== this.opts.zone || parcel.row !== this.opts.row) continue
+    const smooth = 1 - Math.exp(-9 * dt)
+    for (const parcel of mine) {
       if (parcel.phase === 'arm') jobs.set(parcel.arm, parcel)
-      this.placeBag(game, parcel, live)
+      this.placeBag(game, parcel, waiting.indexOf(parcel), waiting.length, smooth, live)
     }
     this.rigs.forEach((rig, i) => {
       const job = jobs.get(i)
-      const target = job ? rig.target(job.kind, game.conveyor.armProgress(job), this.opts.locate(job.lockerId)) : null
+      const target = job ? rig.target(job.kind, game.conveyor.armProgress(job), this.opts.locate(job.lockerId), job.row) : null
       rig.update(dt, target)
     })
     for (const [id, bag] of this.bags) {
       if (live.has(id)) continue
-      bag.removeFromParent()
+      bag.group.removeFromParent()
       this.bags.delete(id)
     }
   }
@@ -78,18 +108,32 @@ export class StationView {
   // ------------------------------------------------------------------ bags
 
   /** Show `parcel`'s bag if this station is the one drawing it right now. */
-  private placeBag(game: GameManager, parcel: Parcel, live: Set<number>): void {
-    const tube = this.opts.dock === 'tube'
+  private placeBag(game: GameManager, parcel: Parcel, rank: number, queued: number, smooth: number, live: Set<number>): void {
+    const { dock, floorY } = this.opts
+    const slide = BAY.slideSeconds
+    const transit = CONFIG.automation.transit[parcel.zone]
     let carried = false
     let at: THREE.Vector3 | null = null
-    if (parcel.phase === 'waitingForArm' && tube) {
-      at = this.dockPoint(this.opts.tubeX?.[0] ?? 0, parcel.arm, 'pick')
+    const beltY = floorY + CONVEYOR.topY + 0.02
+    const bayX = (r: number) => (r < 2 ? BAY.spotX[r]! : BAY.spotX[0] - (r - 1) * BAY.queueStep)
+
+    if (parcel.phase === 'waitingForArm' && dock !== 'belt') {
+      at = dock === 'bay' ? new THREE.Vector3(bayX(rank), beltY, BAY.inZ) : this.cradle(Math.min(rank, 1))
+    } else if (parcel.phase === 'transitIn' && dock === 'bay' && transit - parcel.t <= slide) {
+      // The last stretch: it comes out of the duct and rides the belt to the end.
+      const s = 1 - (transit - parcel.t) / slide
+      at = new THREE.Vector3(BAY.ductX + (bayX(queued) - BAY.ductX) * s, beltY, BAY.inZ)
+    } else if (parcel.phase === 'transitOut' && dock === 'bay' && parcel.t < slide) {
+      // The first stretch: dropped on the return belt, it rides to the duct and goes up.
+      const s = parcel.t / slide
+      const x0 = BAY.spotX[parcel.arm] ?? BAY.spotX[0]
+      at = new THREE.Vector3(x0 + (BAY.ductX - x0) * s, beltY, BAY.outZ)
     } else if (parcel.phase === 'arm') {
       const progress = game.conveyor.armProgress(parcel)
       if (parcel.kind === 'store') {
         if (parcel.step >= 2) return // it is in the locker now
         if (progress >= 0.18) carried = true
-        else at = this.dockPoint(tube ? (this.opts.tubeX?.[0] ?? 0) : CONVEYOR.inX, parcel.arm, 'pick')
+        else at = this.pickSpot(parcel.arm, beltY)
       } else {
         if (parcel.step < 2) return // still in its locker
         carried = true
@@ -98,83 +142,197 @@ export class StationView {
       return
     }
     live.add(parcel.id)
+
     let bag = this.bags.get(parcel.id)
     if (!bag) {
-      bag = makeBag(game, parcel)
+      bag = { group: makeBag(game, parcel), pos: new THREE.Vector3(), placed: false }
       this.bags.set(parcel.id, bag)
     }
     if (carried) {
-      this.rigs[parcel.arm]?.hold(bag)
+      this.rigs[parcel.arm]?.hold(bag.group)
+      bag.placed = false // when it is let go it appears where the gripper left it
     } else if (at) {
-      if (bag.parent !== this.root) this.root.add(bag)
-      bag.position.copy(at)
-      bag.rotation.set(0, 0, 0)
+      if (bag.group.parent !== this.root) this.root.add(bag.group)
+      if (bag.placed) bag.pos.lerp(at, smooth)
+      else bag.pos.copy(at)
+      bag.placed = true
+      bag.group.position.copy(bag.pos)
+      bag.group.rotation.set(0, 0, 0)
     }
   }
 
-  /** World position of arm `arm`'s pick-up (or drop-off) spot. Bags wait there, base down. */
-  private dockPoint(x: number, arm: number, _which: 'pick' | 'drop'): THREE.Vector3 {
-    if (this.opts.dock === 'belt') return new THREE.Vector3(x, CONVEYOR.topY + 0.02, PICKUP_Z + arm * SPACING)
-    return new THREE.Vector3(x, this.opts.floorY + STATION.cradleY, this.railZ + arm * 0.45)
+  /** Where arm `arm` picks up in this station (the bag waits here until it grabs it). */
+  private pickSpot(arm: number, beltY: number): THREE.Vector3 {
+    const { dock, floorY } = this.opts
+    if (dock === 'bay') return new THREE.Vector3(BAY.spotX[arm] ?? BAY.spotX[0], beltY, BAY.inZ)
+    if (dock === 'belt') return new THREE.Vector3(CONVEYOR.inX, CONVEYOR.topY + 0.02, PICKUP_Z + arm * SPACING)
+    return this.cradle(arm, floorY)
+  }
+
+  /** The annex's cradle under its pick-up duct: bags wait on it, one per arm. */
+  private cradle(slot: number, floorY = this.opts.floorY): THREE.Vector3 {
+    return new THREE.Vector3(this.opts.tubeX?.[0] ?? 0, floorY + STATION.cradleY, this.railZ(0, this.firstRow()) + slot * 0.45)
+  }
+
+  // ------------------------------------------------------------------ arms and rails
+
+  private firstRow(): number {
+    return this.opts.rows[0]?.row ?? 0
+  }
+
+  /** The carriage z on the rail serving `row` for arm `arm` (a second arm rides a parallel rail further out). */
+  private railZ(arm: number, row: number): number {
+    return (this.fronts.get(row) ?? this.opts.rows[0]?.frontZ ?? 0) + STATION.railOffset + arm * STATION.secondRail
+  }
+
+  private railY(arm: number): number {
+    return this.opts.floorY + STATION.railHeight - arm * 0.14
+  }
+
+  private addRig(arm: number): void {
+    const { dock, floorY } = this.opts
+    const row0 = this.firstRow()
+    const z0 = this.railZ(arm, row0)
+    let spec: { runX: number | null; pick: Dock; drop: Dock }
+    if (dock === 'bay') {
+      const wrist = floorY + CONVEYOR.topY + HANG
+      const x = BAY.spotX[arm] ?? BAY.spotX[0]
+      spec = {
+        runX: BAY.laneX[arm] ?? BAY.laneX[0],
+        pick: { x, z: BAY.carZ, reach: BAY.inZ - BAY.carZ, wrist },
+        drop: { x, z: BAY.carZ, reach: BAY.outZ - BAY.carZ, wrist },
+      }
+    } else if (dock === 'belt') {
+      const wrist = CONVEYOR.topY + HANG
+      const reach = PICKUP_Z + arm * SPACING - z0
+      spec = {
+        runX: null,
+        pick: { x: CONVEYOR.inX, z: z0, reach, wrist },
+        drop: { x: CONVEYOR.outX, z: z0, reach, wrist },
+      }
+    } else {
+      const wrist = floorY + STATION.cradleY + HANG
+      const reach = this.cradle(arm).z - z0
+      const [x0, x1] = this.opts.tubeX ?? [0, 0]
+      spec = {
+        runX: null,
+        pick: { x: x0, z: z0, reach, wrist },
+        drop: { x: x1, z: z0, reach, wrist: wrist + 0.05 },
+      }
+    }
+    const rig = new ArmRig({ railY: this.railY(arm), rowZ: (row) => this.railZ(arm, row), ...spec })
+    this.rigs.push(rig)
+    this.root.add(rig.root)
+    this.addRails(arm, spec.runX)
+  }
+
+  /** The overhead rails of arm `arm`: one along every row, and in the halls the runway to the bay. */
+  private addRails(arm: number, runX: number | null): void {
+    const { floorY, minX, maxX, rows } = this.opts
+    const y = this.railY(arm) + 0.12
+    const ceiling = floorY + 3.2
+    const yellow = mat(0xe5a50a, 0.55, 0.2)
+    const dark = mat(0x1f2937, 0.5, 0.4)
+    const hang = (x: number, z: number) => {
+      const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.06, ceiling - y - 0.05, 0.06), dark)
+      hanger.position.set(x, (ceiling + y + 0.05) / 2, z)
+      this.root.add(hanger)
+    }
+    const end = runX === null ? maxX : runX + 0.15
+    const span = end - minX
+    for (const r of rows) {
+      const z = this.railZ(arm, r.row)
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(span, 0.14, 0.16), yellow)
+      beam.position.set((minX + end) / 2, y, z)
+      this.root.add(beam)
+      for (let x = minX + 1.4; x < end - 0.4; x += Math.max(3, span / Math.ceil(span / 3))) hang(x, z)
+    }
+    if (runX !== null) {
+      const zs = rows.map((r) => this.railZ(arm, r.row))
+      const north = Math.max(...zs)
+      const len = north - BAY.carZ + 0.15
+      const runway = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, len), yellow)
+      runway.position.set(runX, y, BAY.carZ + len / 2 - 0.075)
+      this.root.add(runway)
+      for (let z = BAY.carZ + 1; z < north - 0.5; z += 3) hang(runX, z)
+    }
   }
 
   // ------------------------------------------------------------------ building
 
-  private addRig(arm: number): void {
-    const o = this.opts
-    const railZ = this.railZ + arm * STATION.secondRail
-    if (arm > 0) this.addRail(arm)
-    const belt = o.dock === 'belt'
-    const x0 = belt ? CONVEYOR.inX : (o.tubeX?.[0] ?? 0)
-    const x1 = belt ? CONVEYOR.outX : (o.tubeX?.[1] ?? 0)
-    const wrist = belt ? CONVEYOR.topY + HANG : o.floorY + STATION.cradleY + HANG
-    const reachOf = (x: number) => this.dockPoint(x, arm, 'pick').z - railZ
-    const pick: Dock = { x: x0, reach: reachOf(x0), wrist }
-    const drop: Dock = { x: x1, reach: this.dockPoint(x1, arm, 'drop').z - railZ, wrist: belt ? wrist : wrist + 0.05 }
-    const rig = new ArmRig({ railY: this.railY, railZ, pick, drop })
-    this.rigs.push(rig)
-    this.root.add(rig.root)
-  }
-
-  /** The gantry rail for arm `arm`, hung from the ceiling. */
-  private addRail(arm: number): void {
-    const { floorY, minX, maxX } = this.opts
-    const z = this.railZ + arm * STATION.secondRail
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.14, 0.16), mat(0xe5a50a, 0.55, 0.2))
-    beam.position.set((minX + maxX) / 2, this.railY + 0.12, z)
-    this.root.add(beam)
-    const ceiling = floorY + 3.2
-    const dark = mat(0x1f2937, 0.5, 0.4)
-    const span = maxX - minX
-    for (let x = minX + 1.4; x < maxX - 0.5; x += Math.max(3, span / Math.ceil(span / 3))) {
-      const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.06, ceiling - this.railY - 0.05, 0.06), dark)
-      hanger.position.set(x, (ceiling + this.railY + 0.05) / 2, z)
-      this.root.add(hanger)
-    }
-  }
-
-  /** The two ducts from the ceiling: bags come down the first and leave up the second. */
+  /** The annex's two ducts from the ceiling, in the gap between its banks: bags come down the first and leave up the second. */
   private addTubes(xs: readonly [number, number]): void {
     const { floorY } = this.opts
-    const steel = mat(0x9ca3af, 0.45, 0.5)
     const dark = mat(0x1f2937, 0.5, 0.4)
-    const z = this.railZ + 0.22
+    const z = this.railZ(0, this.firstRow()) + 0.22
     const ceiling = floorY + 3.2
-    const mouth = floorY + STATION.cradleY + 0.4 // the bottom of the duct
+    const mouth = floorY + STATION.cradleY + 0.4
     for (const [i, x] of xs.entries()) {
-      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, ceiling - mouth, 14), steel)
-      pipe.position.set(x, (ceiling + mouth) / 2, z)
-      this.root.add(pipe)
-      const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.12, 14), steel)
-      flare.position.set(x, mouth - 0.06, z)
-      this.root.add(flare)
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 14), mat(i === 0 ? 0x22c55e : 0xf59e0b, 0.5))
-      band.position.set(x, mouth + 0.2, z)
-      this.root.add(band)
-      // The cradle a waiting bag sits on.
+      this.duct(x, z, ceiling, mouth, i === 0 ? 0x22c55e : 0xf59e0b)
       const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.95), dark)
       plate.position.set(x, floorY + STATION.cradleY - 0.03, z + 0.22)
       this.root.add(plate)
     }
+  }
+
+  /** A vertical duct from the ceiling down to `mouth`, with a flared end and a coloured band (green in, amber out). */
+  private duct(x: number, z: number, ceiling: number, mouth: number, band: number): void {
+    const steel = mat(0x9ca3af, 0.45, 0.5)
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, ceiling - mouth, 14), steel)
+    pipe.position.set(x, (ceiling + mouth) / 2, z)
+    this.root.add(pipe)
+    const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.12, 14), steel)
+    flare.position.set(x, mouth - 0.06, z)
+    this.root.add(flare)
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 14), mat(band, 0.5))
+    ring.position.set(x, mouth + 0.2, z)
+    this.root.add(ring)
+  }
+
+  /** The bay: two belts along the back wall, a duct down onto each, a sign, and a collider. */
+  private buildBay(): void {
+    const { floorY, zone } = this.opts
+    const len = BAY.maxX - BAY.minX
+    const midX = (BAY.minX + BAY.maxX) / 2
+    const top = floorY + CONVEYOR.topY
+    const frame = mat(0x4b5563, 0.55, 0.3)
+    const legs = mat(0x1f2937, 0.6, 0.3)
+    const lip = mat(0xe5a50a, 0.55, 0.2)
+    for (const [z, direction, ductColor] of [
+      [BAY.inZ, -1, 0x22c55e],
+      [BAY.outZ, 1, 0xf59e0b],
+    ] as const) {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(len, 0.14, CONVEYOR.width + 0.1), frame)
+      base.position.set(midX, top - 0.08, z)
+      this.root.add(base)
+      for (const side of [-1, 1]) {
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(len, 0.1, 0.04), lip)
+        edge.position.set(midX, top + 0.01, z + side * (CONVEYOR.width / 2 + 0.03))
+        this.root.add(edge)
+      }
+      for (let x = BAY.minX + 0.4; x < BAY.maxX; x += 1.4) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, CONVEYOR.topY - 0.15, 0.06), legs)
+        leg.position.set(x, floorY + (CONVEYOR.topY - 0.15) / 2, z)
+        this.root.add(leg)
+      }
+      const texture = beltTexture(true)
+      texture.repeat.set(len / TEXTURE_TILE, 1)
+      const surface = new THREE.Mesh(new THREE.PlaneGeometry(len, CONVEYOR.width), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 }))
+      surface.rotation.x = -Math.PI / 2
+      surface.position.set(midX, top + 0.003, z)
+      surface.receiveShadow = true
+      this.root.add(surface)
+      this.belts.push({ texture, direction })
+      this.duct(BAY.ductX, z, floorY + 3.2, floorY + BAY.mouthY, ductColor)
+    }
+    // You cannot walk through the belts (but there is nothing to reach behind them).
+    if (this.physics) {
+      const depth = BAY.inZ - BAY.outZ + CONVEYOR.width + 0.1
+      const cz = (BAY.inZ + BAY.outZ) / 2
+      this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(midX, floorY + CONVEYOR.topY / 2, cz), new THREE.Vector3(len / 2, CONVEYOR.topY / 2, depth / 2)))
+    }
+    const sign = makeSign(`BAY · ${ZONE_TITLES[zone].toUpperCase()}`, 2.2, 0.3, '#0f172a', '#fbbf24')
+    sign.position.set(0.4, floorY + 1.9, BAY.outZ - 0.4)
+    this.root.add(sign)
   }
 }

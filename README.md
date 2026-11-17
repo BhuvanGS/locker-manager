@@ -118,9 +118,11 @@ banks (18 lockers); the other halls are still filled by hand (the lockers work t
 
 **Conveyor levels and arm upgrades are bought where they happen, not in the catalogue.** Walk up to the **control hub** console in the staff
 area (next to the terminal) to extend the belts to the **East annex** ($700), **South hall** ($1,000), **Floor 1** ($1,400) and **Floor 2**
-($1,800), in that order and once you own the hall. A bag for a hall rides the belt to the end, goes through a service duct, and arrives at that hall's
-own robot arm (4 to 10 s of extra travel); every row of lockers gets its own arm, hanging from a rail. Each part of the building has an **arm
-console** beside its arms, where you buy **arm motors** (levels 1–3, up to 2.3× faster) and a **second arm** on every row (two bags at once). Bags are
+($1,800), in that order and once you own the hall. A bag for a hall rides the belt to the end and goes through a service duct (4 to 10 s). In the tall halls (South hall, Floors 1 and 2) the ducts
+drop it onto the belts of a **bay** at the back of the hall; the hall's arm picks it up there and rides an overhead runway along the corridor to
+the rail of whichever row the locker is in (rows further in take a little longer). The East annex has two ducts in the gap between its banks. Each
+part of the building has an **arm console** (in the halls, at the end of the corridor next to the bay), where you buy **arm motors** (levels 1–3,
+up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). Bags are
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
 **The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into

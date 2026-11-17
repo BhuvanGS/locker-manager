@@ -72,7 +72,7 @@ export const ZONE_TITLES: Record<AutoZone, string> = {
   floor1: 'Floor 1',
   floor2: 'Floor 2',
 }
-/** Rows of lockers (one arm station each) in every zone. */
+/** Rows of lockers in every zone (a hall's arms ride to all of them). */
 export const ZONE_ROWS: Record<AutoZone, number> = { main: 1, east: 1, south: 2, floor1: 3, floor2: 2 }
 
 /**
@@ -148,7 +148,7 @@ function buildAutomationUpgrades(): AutomationUpgradeDef[] {
       zone,
       tier: 0,
       title: 'Second arm',
-      description: `A second arm on ${rows > 1 ? `each of the ${rows} rows` : 'the row'} in the ${ZONE_TITLES[zone]}: two bags at once`,
+      description: `A second arm for the ${ZONE_TITLES[zone]}${rows > 1 ? ` (it rides to all ${rows} rows)` : ''}: two bags at once`,
       cost: 500 * rows,
       level: 6,
       requires: `speed-${zone}-1`,
@@ -426,8 +426,11 @@ export const CONFIG = {
     transit: { main: 0, east: 4, south: 6, floor1: 8, floor2: 10 },
     /** How much faster the arms of a hall work at speed level 0, 1, 2, 3. */
     speedMult: [1, 1.4, 1.8, 2.3],
-    /** Arms per row of lockers: one, or two with the extra-arm upgrade. */
+    /** Arms per part of the building: one, or two with the extra-arm upgrade. */
     maxArms: 2,
+    /** How long a job takes in each zone, relative to the storage room (the arm rides to the bay and along to the row), plus `rowTravel` per row. */
+    travelFactor: { main: 1, east: 1, south: 1.5, floor1: 1.5, floor2: 1.5 },
+    rowTravel: 0.1,
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

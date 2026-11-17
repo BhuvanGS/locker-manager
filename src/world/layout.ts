@@ -115,18 +115,41 @@ export const CONVEYOR = {
 } as const
 
 /**
- * Robot arm stations (one per row of lockers, in every part of the building the belts reach). Each row has a gantry rail
- * `railOffset` north of its locker fronts; a second arm rides a parallel rail `secondRail` further out. The storage room
- * is fed by the belts; the halls are fed through ducts that come down from the ceiling (`tubes`: x of the pick-up duct and the
- * drop-off duct, `cradleY`: the height of the cradle bags wait on).
+ * Robot arm stations. The storage room's arms hang from a rail along its row of lockers, `railOffset` north of the locker fronts
+ * (a second arm rides a parallel rail `secondRail` further out and a little lower). The East annex is fed through two ducts in the gap
+ * between its banks (`tubes`, `cradleY`). The tall halls (south hall and floors) share one **bay** at the back: ducts from the
+ * ceiling drop bags onto two short belts, and the arms pick up and drop off at the east end of those belts. From there each arm rides an
+ * overhead runway along the corridor (x = `BAY.laneX`) to the rail of any row of lockers. Nothing overhead reaches the stairs (x > 4.45).
  */
 export const STATION = {
   railHeight: 2.85,
   railOffset: 0.93,
   secondRail: 0.4,
-  tubes: { east: [11.25, 11.75], hall: [3.3, 3.8] },
+  tubes: { east: [11.25, 11.75] },
   cradleY: 1.95,
-  extent: { main: [-5.95, 5.95], east: [6.3, 15.9], hall: [-5.95, 5.95] },
+  extent: { main: [-5.95, 5.95], east: [6.3, 15.9], hall: [-5.95, 3.9] },
+} as const
+
+/**
+ * The bay at the back of the south hall, floor 1 and floor 2 (the same place on each). Two belts run along x: IN carries bags from the
+ * duct (west) to the arms (east), OUT carries fetched bags back to a duct. `carZ` is where an arm's carriage rides between the belts,
+ * `laneX` the runway of each arm, `spotX` where each arm picks up and drops.
+ */
+export const BAY = {
+  inZ: -19.9,
+  outZ: -20.55,
+  carZ: -20.225,
+  minX: -3.2,
+  maxX: 4.0,
+  ductX: -2.7,
+  laneX: [3.2, 3.6],
+  spotX: [3.2, 3.6],
+  /** Height of the bottom of the ducts above the floor. */
+  mouthY: 1.5,
+  /** Bags queued at the pick-up end sit this far apart (x). */
+  queueStep: 0.5,
+  /** Seconds the last/first stretch of a trip through the duct is shown on the belt. */
+  slideSeconds: 2,
 } as const
 
 /**
@@ -137,8 +160,8 @@ export const CONSOLES = {
   hub: { x: -2.35, z: -1.2 },
   main: { x: -3.35, z: -6.1 },
   east: { x: 11.5, z: -5.8 },
-  /** In the corridor east of the locker rows, 2.2 m north of the first row's fronts (z = -12.4 + 2.2). */
-  hall: { x: 3.55, z: -10.2 },
+  /** At the end of the corridor east of the locker rows, just before the bay, facing north (so you see the screen as you walk down). */
+  hall: { x: 3.55, z: -18.6 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */

@@ -4,20 +4,25 @@ import { mat } from './models'
 /** From the wrist to the base of a bag in the gripper. */
 export const HANG = 0.4
 
-export type Pose = { x: number; wrist: number; reach: number; claw: number }
-type Key = [p: number, x: number, wrist: number, reach: number, claw: number]
+/** Where the carriage is (x along the rails, z along the runway) and what the arm is doing. */
+export type Pose = { x: number; z: number; wrist: number; reach: number; claw: number }
+type Key = [p: number, x: number, z: number, wrist: number, reach: number, claw: number]
 
-/** Where an arm picks bags up and drops them, in world coordinates (`reach` is a z offset from the rail). */
+/** Where an arm picks bags up or drops them: the carriage position, how far the gripper reaches (z), and the wrist height. */
 export interface Dock {
   x: number
+  z: number
   reach: number
   wrist: number
 }
 
-/** The fixed geometry of one arm: its rail, where it rests, and its two docks. */
+/** The fixed geometry of one arm and the rails it rides. */
 export interface RigSpec {
   railY: number
-  railZ: number
+  /** The carriage z on the rail that serves a row of lockers. */
+  rowZ: (row: number) => number
+  /** Where the overhead runway meets the pick-up point (the halls' bay), or null when the arm rides one straight rail. */
+  runX: number | null
   pick: Dock
   drop: Dock
 }
@@ -26,9 +31,10 @@ const YELLOW = mat(0xe5a50a, 0.55, 0.2)
 const DARK = mat(0x1f2937, 0.5, 0.4)
 
 /**
- * One robot arm hanging from a gantry rail: a carriage on the rail, a column down from it, a horizontal bar at the wrist
- * and a two-finger gripper. It moves smoothly towards the pose it is given each frame, so its motion lines up with the
- * simulation's arm job (door opening, bag moving, door shutting) without ever jumping.
+ * One robot arm hanging from an overhead rail: a carriage, a column down from it, a horizontal bar at the wrist and a
+ * two-finger gripper. It moves smoothly towards the pose it is given each frame, so its motion lines up with the
+ * simulation's arm job (door opening, bag moving, door shutting) without ever jumping. In the halls it rides from the bay
+ * along the runway and then along the rail of whichever row the locker is in.
  */
 export class ArmRig {
   readonly root = new THREE.Group()
@@ -46,7 +52,6 @@ export class ArmRig {
   constructor(spec: RigSpec) {
     this.spec = spec
     this.pose = this.idle()
-    this.carriage.position.set(this.pose.x, spec.railY, spec.railZ)
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.4), DARK)
     this.carriage.add(body)
     const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.06), this.lamp)
@@ -76,14 +81,16 @@ export class ArmRig {
 
   /** Where the arm rests between jobs: over its pick-up dock, wrist high. */
   private idle(): Pose {
-    return { x: this.spec.pick.x, wrist: this.spec.railY - 0.6, reach: 0, claw: 0 }
+    const { pick, railY } = this.spec
+    return { x: pick.x, z: pick.z, wrist: railY - 0.6, reach: 0, claw: 0 }
   }
 
-  /** Move towards `target` (or rest if null) and redraw. `busy` lights the carriage lamp amber. */
+  /** Move towards `target` (or rest if null) and redraw. The carriage lamp is amber while it works. */
   update(dt: number, target: Pose | null): void {
     const t = target ?? this.idle()
     const k = 1 - Math.exp(-7 * dt)
     this.pose.x += (t.x - this.pose.x) * k
+    this.pose.z += (t.z - this.pose.z) * k
     this.pose.wrist += (t.wrist - this.pose.wrist) * k
     this.pose.reach += (t.reach - this.pose.reach) * k
     this.pose.claw += (t.claw - this.pose.claw) * (1 - Math.exp(-14 * dt))
@@ -91,53 +98,58 @@ export class ArmRig {
     this.place()
   }
 
-  /** The gripper's x (for attaching things to the carriage's position). */
-  get x(): number {
-    return this.pose.x
-  }
-
   /**
-   * Where the arm should be, `progress` (0…1) of the way through a job on a locker whose opening is at `slot` (world
+   * Where the arm should be, `progress` (0…1) of the way through a job on a locker in `row` whose opening is at `slot` (world
    * coordinates; `y` is the middle of the opening and `z` where the bag sits). The keyframes line up with the simulation's
    * `ARM_STEPS`: a store opens the door at 0.5, places at 0.64 and shuts at 0.86; a fetch opens at 0.3, grabs at 0.56 and shuts at 0.82.
+   * Order of travel: lift, along the runway to the row (halls), along the row to the locker, then lower and reach in.
    */
-  target(kind: 'store' | 'fetch', progress: number, slot: { x: number; y: number; z: number }): Pose {
-    const { railY, railZ, pick, drop } = this.spec
+  target(kind: 'store' | 'fetch', progress: number, slot: { x: number; y: number; z: number }, row: number): Pose {
+    const { railY, rowZ, runX, pick, drop } = this.spec
     const home = railY - 0.6
+    const rz = rowZ(row)
+    const run = runX ?? pick.x
     const lockWrist = slot.y - 0.03
-    const lockReach = slot.z - railZ
+    const lockReach = slot.z - rz
     const keys: Key[] =
       kind === 'store'
         ? [
-            [0, pick.x, pick.wrist, pick.reach, 0],
-            [0.1, pick.x, pick.wrist, pick.reach, 0],
-            [0.18, pick.x, pick.wrist, pick.reach, 1],
-            [0.3, pick.x, home, 0, 1],
-            [0.42, slot.x, home, 0, 1],
-            [0.5, slot.x, lockWrist, 0, 1],
-            [0.62, slot.x, lockWrist, lockReach, 1],
-            [0.68, slot.x, lockWrist, lockReach, 0],
-            [0.78, slot.x, lockWrist, 0, 0],
-            [0.86, slot.x, home, 0, 0],
-            [1, pick.x, home, 0, 0],
+            [0, pick.x, pick.z, pick.wrist, pick.reach, 0],
+            [0.1, pick.x, pick.z, pick.wrist, pick.reach, 0],
+            [0.18, pick.x, pick.z, pick.wrist, pick.reach, 1],
+            [0.24, pick.x, pick.z, home, 0, 1],
+            [0.28, run, pick.z, home, 0, 1],
+            [0.42, run, rz, home, 0, 1],
+            [0.5, slot.x, rz, home, 0, 1],
+            [0.57, slot.x, rz, lockWrist, 0, 1],
+            [0.62, slot.x, rz, lockWrist, lockReach, 1],
+            [0.68, slot.x, rz, lockWrist, lockReach, 0],
+            [0.78, slot.x, rz, lockWrist, 0, 0],
+            [0.86, slot.x, rz, home, 0, 0],
+            [0.92, run, rz, home, 0, 0],
+            [1, pick.x, pick.z, home, 0, 0],
           ]
         : [
-            [0, slot.x, home, 0, 0],
-            [0.2, slot.x, lockWrist, 0, 0],
-            [0.36, slot.x, lockWrist, 0, 0],
-            [0.5, slot.x, lockWrist, lockReach, 0],
-            [0.56, slot.x, lockWrist, lockReach, 1],
-            [0.66, slot.x, lockWrist, 0, 1],
-            [0.74, slot.x, home, 0, 1],
-            [0.84, drop.x, home, 0, 1],
-            [0.92, drop.x, drop.wrist, drop.reach, 1],
-            [0.97, drop.x, drop.wrist, drop.reach, 0],
-            [1, drop.x, drop.wrist, drop.reach, 0],
+            [0, pick.x, pick.z, home, 0, 0],
+            [0.07, run, pick.z, home, 0, 0],
+            [0.2, run, rz, home, 0, 0],
+            [0.27, slot.x, rz, home, 0, 0],
+            [0.33, slot.x, rz, lockWrist, 0, 0],
+            [0.4, slot.x, rz, lockWrist, 0, 0],
+            [0.5, slot.x, rz, lockWrist, lockReach, 0],
+            [0.56, slot.x, rz, lockWrist, lockReach, 1],
+            [0.64, slot.x, rz, lockWrist, 0, 1],
+            [0.7, slot.x, rz, home, 0, 1],
+            [0.76, run, rz, home, 0, 1],
+            [0.88, run, drop.z, home, 0, 1],
+            [0.93, drop.x, drop.z, drop.wrist, drop.reach, 1],
+            [0.97, drop.x, drop.z, drop.wrist, drop.reach, 0],
+            [1, drop.x, drop.z, drop.wrist, drop.reach, 0],
           ]
     return sample(keys, progress)
   }
 
-  /** Attach a bag to the gripper, or put it back in `parent`. */
+  /** Attach a bag to the gripper. */
   hold(bag: THREE.Object3D): void {
     if (bag.parent !== this.anchor) this.anchor.add(bag)
     bag.position.set(0, 0, 0)
@@ -146,8 +158,8 @@ export class ArmRig {
 
   private place(): void {
     const { railY } = this.spec
-    const { x, wrist, reach, claw } = this.pose
-    this.carriage.position.x = x
+    const { x, z, wrist, reach, claw } = this.pose
+    this.carriage.position.set(x, railY, z)
     const down = railY - wrist // how far the wrist hangs below the rail
     this.column.scale.y = Math.max(0.01, down)
     this.column.position.y = -down / 2
@@ -160,23 +172,22 @@ export class ArmRig {
   }
 }
 
-/** Linear interpolation through keyframes `[progress, x, wrist, reach, claw]` (progress ascending), eased. */
+/** Linear interpolation through keyframes (progress ascending), eased. */
 function sample(keys: Key[], p: number): Pose {
   const first = keys[0]!
-  if (p <= first[0]) return { x: first[1], wrist: first[2], reach: first[3], claw: first[4] }
+  if (p <= first[0]) return at(first)
   for (let i = 1; i < keys.length; i++) {
     const a = keys[i - 1]!
     const b = keys[i]!
     if (p > b[0]) continue
     const t = b[0] === a[0] ? 1 : (p - a[0]) / (b[0] - a[0])
     const s = t * t * (3 - 2 * t)
-    return {
-      x: a[1] + (b[1] - a[1]) * s,
-      wrist: a[2] + (b[2] - a[2]) * s,
-      reach: a[3] + (b[3] - a[3]) * s,
-      claw: a[4] + (b[4] - a[4]) * s,
-    }
+    const mix = (n: number) => a[n]! + (b[n]! - a[n]!) * s
+    return { x: mix(1), z: mix(2), wrist: mix(3), reach: mix(4), claw: mix(5) }
   }
-  const last = keys[keys.length - 1]!
-  return { x: last[1], wrist: last[2], reach: last[3], claw: last[4] }
+  return at(keys[keys.length - 1]!)
+}
+
+function at(k: Key): Pose {
+  return { x: k[1], z: k[2], wrist: k[3], reach: k[4], claw: k[5] }
 }

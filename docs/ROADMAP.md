@@ -145,8 +145,10 @@ Requested as "the next major upgrade: automation".
 - [x] **Coverage levels:** the conveyor reaches one zone at a time: storage room (the catalogue upgrade), then the East annex, South hall, Floor 1 and Floor 2
       (`line-*` upgrades, each needing its hall and the previous belt). A bag for a hall leaves the belt into a service duct (`transitIn`/`transitOut`,
       `CONFIG.automation.transit`) and reaches that hall's arms.
-- [x] **One arm station per row of lockers** (`sim/ConveyorSystem.ts`: stations are `zone:row`; `ZONE_ROWS` = 1, 1, 2, 3, 2), drawn by `world/StationView.ts` with `ArmRig`.
-- [x] **Arm upgrades per zone:** speed levels 1–3 (`CONFIG.automation.speedMult`) and a second arm on every row of the zone (a parallel rail).
+- [x] **Arms per zone** (`sim/ConveyorSystem.ts`; `ZONE_ROWS` = 1, 1, 2, 3, 2 rows), drawn by `world/StationView.ts` with `ArmRig`. The tall halls have a **bay** at
+      the back (`BAY` in `layout.ts`): ducts drop bags on two belts, and each arm rides an overhead runway along the corridor from the bay to the rail of any
+      row. Jobs take longer in the halls and in rows further in (`travelFactor`, `rowTravel`). No rail reaches the stairs.
+- [x] **Arm upgrades per zone:** speed levels 1–3 (`CONFIG.automation.speedMult`) and a second arm for the whole zone (its own, parallel rails).
 - [x] **Upgrade consoles** (`world/AutomationConsole.ts`, `ui/ConsolePanel.tsx`): the control hub in the staff area sells belt extensions; every zone has its arm
       console next to its arms. These upgrades are `AUTOMATION_UPGRADES` in `config.ts`, bought with `buyAutomation`, and are not in the supplier catalogue.
 - [x] Tests: `sim/AutomationLevels.test.ts` (levels, ducts, speed, two arms, rows as stations, consoles, mod menu).

@@ -4,6 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { makeBag } from './bags'
+import { beltTexture, TEXTURE_TILE } from './belts'
 import { markBlocker, tag } from './interactables'
 import { CONVEYOR, PARTITION, STATION } from './layout'
 import { makeSign, mat } from './models'
@@ -13,7 +14,6 @@ const RISE_SECONDS = 1.5
 /** Bags wait on the belts this far apart. */
 const SPACING = 0.5
 const BELT_LENGTH = CONVEYOR.startZ - CONVEYOR.endZ
-const TEXTURE_TILE = 0.45
 
 /**
  * The conveyor system you see: two belts from the staff area through the partition to the back of the storage room, the
@@ -43,9 +43,8 @@ export class ConveyorBay {
     this.buildKiosk()
     this.station = new StationView({
       zone: 'main',
-      row: 0,
       floorY: 0,
-      frontZ: CONVEYOR.rail.z - STATION.railOffset,
+      rows: [{ row: 0, frontZ: CONVEYOR.rail.z - STATION.railOffset }],
       minX: STATION.extent.main[0],
       maxX: STATION.extent.main[1],
       dock: 'belt',
@@ -287,32 +286,4 @@ export class ConveyorBay {
     ctx.font = '600 26px system-ui, sans-serif'
     ctx.fillText('Press E to fetch a bag', 28, 308)
   }
-}
-
-/** A dark belt with lighter cross bars, tiled along its length. */
-function beltTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 64
-  canvas.height = 64
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    ctx.fillStyle = '#3b424d'
-    ctx.fillRect(0, 0, 64, 64)
-    ctx.fillStyle = '#566170'
-    ctx.fillRect(0, 0, 64, 8)
-    ctx.fillStyle = '#2a2f37'
-    ctx.fillRect(0, 36, 64, 3)
-    ctx.strokeStyle = '#6b7788'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.moveTo(10, 52)
-    ctx.lineTo(32, 42)
-    ctx.lineTo(54, 52)
-    ctx.stroke()
-  }
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.wrapS = THREE.RepeatWrapping
-  texture.wrapT = THREE.RepeatWrapping
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
 }

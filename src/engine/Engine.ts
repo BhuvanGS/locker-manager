@@ -228,37 +228,35 @@ export class Engine {
     this.interactionTargets.push(console.root)
   }
 
-  /** Extend the belts to a hall: an arm station on every row of its lockers, with ducts down from the ceiling, and its console. */
+  /** Extend the belts to a hall: its arms (with the bay and ducts in the tall halls) and its console. */
   private addLine(zone: AutoZone): void {
     if (zone === 'main' || this.stations.some((s) => s.opts.zone === zone)) return
-    // One station per row: the banks of this zone, grouped by the row their lockers are in.
-    const rows = new Map<number, { frontZ: number; floorY: number }>()
+    // The rows of lockers in this zone: its banks grouped by the row their lockers are in.
+    const rows = new Map<number, { row: number; frontZ: number; floorY: number }>()
     for (const [bank, spot] of this.bankSpots) {
       if (spot.zone !== zone) continue
       const first = this.game.lockers.all().find((l) => l.bank === bank)
       if (!first) continue
       const row = this.game.rowOf(first.id)
-      if (!rows.has(row)) rows.set(row, { frontZ: spot.placement.frontZ, floorY: spot.placement.floorY })
+      if (!rows.has(row)) rows.set(row, { row, frontZ: spot.placement.frontZ, floorY: spot.placement.floorY })
     }
+    const list = [...rows.values()].sort((a, b) => a.row - b.row)
     const east = zone === 'east'
-    const [minX, maxX] = east ? STATION.extent.east : STATION.extent.hall
-    for (const [row, where] of rows) {
-      const station = new StationView({
-        zone,
-        row,
-        floorY: where.floorY,
-        frontZ: where.frontZ,
-        minX,
-        maxX,
-        dock: 'tube',
-        tubeX: east ? STATION.tubes.east : STATION.tubes.hall,
-        locate: (id) => this.lockerSlotWorld(id),
-      })
-      this.stations.push(station)
-      this.scene.add(station.root)
-      this.interactionTargets.push(station.root)
-    }
-    const floorY = (zone === 'floor1' ? 1 : zone === 'floor2' ? 2 : 0) * FLOOR_HEIGHT
+    const floorY = list[0]?.floorY ?? 0
+    const station = new StationView({
+      zone,
+      floorY,
+      rows: list.map(({ row, frontZ }) => ({ row, frontZ })),
+      minX: east ? STATION.extent.east[0] : STATION.extent.hall[0],
+      maxX: east ? STATION.extent.east[1] : STATION.extent.hall[1],
+      dock: east ? 'tube' : 'bay',
+      tubeX: east ? STATION.tubes.east : undefined,
+      locate: (id) => this.lockerSlotWorld(id),
+      physics: this.physics,
+    })
+    this.stations.push(station)
+    this.scene.add(station.root)
+    this.interactionTargets.push(station.root)
     const spot = east ? CONSOLES.east : CONSOLES.hall
     this.addConsole(zone, spot.x, floorY, spot.z, zone)
   }
@@ -368,7 +366,10 @@ export class Engine {
       this.conveyorBay.dispose()
       this.conveyorBay = null
     }
-    for (const station of this.stations) this.discard(station.root)
+    for (const station of this.stations) {
+      this.discard(station.root)
+      station.dispose()
+    }
     this.stations = []
     for (const console of this.consoles.values()) {
       this.discard(console.root)

@@ -185,24 +185,29 @@ describe('Robot arm levels: speed and a second arm', () => {
     expect(g.conveyor.armJobs()).toHaveLength(1)
   })
 
-  it('rows are separate stations: each has its own arm', () => {
+  it("a hall's arms serve every row: one arm queues, and rows further in take a little longer", () => {
     const g = rich()
     g.buyUpgrade('annexEast')
     g.buyUpgrade('southExpansion')
     g.buyAutomation('line-east')
     g.buyAutomation('line-south')
-    // Make the storage room and annex unavailable, and put a bag in each of the south hall's two rows.
+    // Only the south hall has room: one bag in each of its two rows.
     for (const l of g.lockers.all()) if (g.zoneOf(l.id) !== 'south') l.state = 'unavailable'
     const south = g.lockers.all().filter((l) => g.zoneOf(l.id) === 'south')
-    for (const l of south) if (g.rowOf(l.id) === 0 && l.number !== south.find((x) => g.rowOf(x.id) === 0)!.number) l.state = 'unavailable'
     load(g) // first free south locker (row 0)
     for (const l of south) if (g.rowOf(l.id) === 0) l.state = 'unavailable'
     run(g, CONFIG.automation.loadGap + 0.1)
     load(g) // now it has to be row 1
-    const rows = g.conveyor.parcels.map((p) => p.row).sort()
-    expect(rows).toEqual([0, 1])
+    expect(g.conveyor.parcels.map((p) => p.row).sort()).toEqual([0, 1])
     run(g, CONFIG.automation.beltSeconds + CONFIG.automation.transit.south + 0.5)
-    expect(g.conveyor.armJobs()).toHaveLength(2) // different rows, so no queueing
+    expect(g.conveyor.armJobs()).toHaveLength(1) // one arm for the whole hall
+    expect(g.conveyor.armDuration('south', 1)).toBeGreaterThan(g.conveyor.armDuration('south', 0))
+    expect(g.conveyor.armDuration('south')).toBeGreaterThan(g.conveyor.armDuration('main')) // it has further to ride
+
+    // With a second arm both are worked on at once.
+    g.grantUpgrade('arms-south')
+    run(g, 0.1)
+    expect(g.conveyor.armJobs()).toHaveLength(2)
   })
 })
 
