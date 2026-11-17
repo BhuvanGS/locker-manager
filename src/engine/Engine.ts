@@ -17,6 +17,7 @@ import { InteractionManager } from '../world/InteractionManager'
 import { KeyRack } from '../world/KeyBoard'
 import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
+import { OccupancyBoard } from '../world/OccupancyBoard'
 import { Stairs } from '../world/Stairs'
 import { StationView } from '../world/StationView'
 import { StatusScreen } from '../world/StatusScreen'
@@ -66,6 +67,8 @@ export class Engine {
   private registerBoard: RegisterBoard | null = null
   /** Digital lockers: one status screen per bank (they replace the key racks). */
   private statusScreens = new Map<number, StatusScreen>()
+  /** Digital lockers: an occupancy board on the wall of each tall hall (by hall name). */
+  private occupancyBoards = new Map<string, OccupancyBoard>()
   /** Where each bank stands and which part of the building it is in, so a screen can be added to it later. */
   private readonly bankSpots = new Map<number, { placement: BankPlacement; zone: Zone }>()
   /** The conveyor belts, robot arm and terminal, once bought. */
@@ -186,12 +189,22 @@ export class Engine {
     this.scene.add(screen.root)
   }
 
+  /** The occupancy board on a tall hall's north wall (digital lockers only). */
+  private addOccupancyBoard(kind: HallKind, animate: boolean): void {
+    if (!this.game.isDigital || this.occupancyBoards.has(kind)) return
+    const board = new OccupancyBoard(kind, HALL_LEVEL[kind] * FLOOR_HEIGHT)
+    if (animate) board.appear()
+    this.occupancyBoards.set(kind, board)
+    this.scene.add(board.root)
+  }
+
   /** The keys are gone: take the key racks down (and the sign) and put a status screen on every bank. */
   private goDigital(): void {
     for (const rack of this.keyRacks) this.discard(rack.root)
     this.keyRacks = []
     this.facility?.setKeysSignVisible(false)
     for (const bank of this.bankSpots.keys()) this.addStatusScreen(bank, true)
+    for (const hall of this.halls) this.addOccupancyBoard(hall.kind, true)
   }
 
   /** Cut the hatch through the partition and install the belts, the robot arm and the terminal. */
@@ -312,6 +325,7 @@ export class Engine {
     racks.forEach((rack, i) => {
       this.addKeyRack(rack, true, { x: SOUTH.rackX[i] ?? 0, y: floorY + 1.45, z: SOUTH.rackZ, rotY: Math.PI }, kind)
     })
+    this.addOccupancyBoard(kind, true)
   }
 
   /**
@@ -328,6 +342,7 @@ export class Engine {
     for (const wall of this.lockerWalls) show(wall.root)
     for (const rack of this.keyRacks) show(rack.root)
     for (const screen of this.statusScreens.values()) show(screen.root)
+    for (const board of this.occupancyBoards.values()) show(board.root)
     if (this.conveyorBay) show(this.conveyorBay.root)
     for (const station of this.stations) show(station.root)
     for (const console of this.consoles.values()) show(console.root)
@@ -360,6 +375,11 @@ export class Engine {
     for (const rack of this.keyRacks) this.discard(rack.root)
     for (const screen of this.statusScreens.values()) this.discard(screen.root)
     this.statusScreens.clear()
+    for (const board of this.occupancyBoards.values()) {
+      this.discard(board.root)
+      board.dispose()
+    }
+    this.occupancyBoards.clear()
     this.bankSpots.clear()
     if (this.conveyorBay) {
       this.discard(this.conveyorBay.root)
@@ -535,6 +555,7 @@ export class Engine {
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
     for (const rack of this.keyRacks) rack.update(dt, this.game)
     for (const screen of this.statusScreens.values()) screen.update(dt, this.game)
+    for (const board of this.occupancyBoards.values()) board.update(dt, this.game)
     this.conveyorBay?.update(dt, this.game)
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)

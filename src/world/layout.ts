@@ -161,8 +161,8 @@ export const CONSOLES = {
   hub: { x: -2.35, z: -1.2, rotY: 0 },
   main: { x: -3.35, z: -6.1, rotY: 0 },
   east: { x: 11.5, z: -5.8, rotY: 0 },
-  /** At the west end of the aisle between the first two rows of every hall, facing east down the aisle (out of the way of the stairs and the bay). */
-  hall: { x: -5.55, z: -13.85, rotY: Math.PI / 2 },
+  /** In the north-west corner of every tall hall, by the west window, angled out into the room (clear of the stairs, the corridor and the bay). */
+  hall: { x: -5.5, z: -9.9, rotY: (3 * Math.PI) / 4 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
@@ -211,6 +211,12 @@ export const SOUTH = {
   rackX: [-4.7, -0.55, 0.85, 2.25, 3.65],
   rackZ: ROOM.minZ - 0.2 - 0.12,
 } as const
+
+/**
+ * The occupancy board in each tall hall: on the north wall (the old back wall on the ground), beside the arm console, clear of
+ * the doorway into the storage room (x = -2.15). (x, y, z) is the centre; it faces into the hall.
+ */
+export const OCCUPANCY_BOARD = { x: -3.95, y: 1.7, z: SOUTH.maxZ - 0.03, width: 1.8 } as const
 
 /**
  * Two flights of stairs along the east wall, both climbing towards the north wall (+z), ending at the edge of the stairwell

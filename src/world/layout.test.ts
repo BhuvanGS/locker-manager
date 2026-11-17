@@ -8,6 +8,7 @@ import {
   LOCKER,
   LOCKER_BANKS,
   lockerSlot,
+  OCCUPANCY_BOARD,
   PARTITION,
   ROOM,
   SLOPE_LIMITS,
@@ -186,12 +187,14 @@ describe('The bay and the consoles in the tall halls', () => {
     for (const x of BAY.laneX) expect(x).toBeGreaterThan(BANK_HALF + SOUTH.bankX[2]!) // the runways run beside the banks, not over them
   })
 
-  it('the hall console is in an aisle, clear of the corridor, the stairs and the lockers', () => {
+  it('the hall console stands in the north-west corner by the west window, and the occupancy board clears the doorway', () => {
     const c = CONSOLES.hall
-    expect(c.x).toBeLessThan(SOUTH.bankX[0]! - BANK_HALF + 0.5) // at the west end of the aisle
-    const aisleTop = SOUTH.rowFrontZ[0]! - LOCKER.depth - 0.02 // the back of the first row
-    const aisleBottom = SOUTH.rowFrontZ[1]! // the front of the second row
-    expect(c.z).toBeLessThan(aisleTop - 0.5)
-    expect(c.z).toBeGreaterThan(aisleBottom + 0.5)
+    expect(c.x).toBeLessThan(SOUTH.minX + 1) // the west end
+    expect(c.z).toBeGreaterThan(SOUTH.rowFrontZ[0]! + 1.5) // in the lobby, well clear of the first row
+    expect(c.z).toBeLessThan(SOUTH.maxZ - 0.4) // and clear of the north wall
+    const half = OCCUPANCY_BOARD.width / 2
+    expect(OCCUPANCY_BOARD.x - half).toBeGreaterThan(c.x + 0.6) // beside the console, not behind it
+    expect(OCCUPANCY_BOARD.x + half).toBeLessThan(SOUTH.door.x - SOUTH.door.halfWidth - 0.05) // clear of the doorway on the ground
+    expect(OCCUPANCY_BOARD.x + half).toBeLessThan(STAIRS.guardX) // and nowhere near the stairs
   })
 })
