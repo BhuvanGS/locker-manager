@@ -125,6 +125,15 @@ part of the building has an **arm console** (in the halls, in the north-west cor
 up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). Bags are
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
+**Names, cars, warehouse, counter arm.** Every customer has their **name floating over their head**. When a VIP offer appears, the VIP's **black car pulls up** in the
+street outside the office (with a VIP plate over it); you can only sit down with them once it has parked and they have walked in, and when the offer is over the car drives off.
+The **Warehouse** (level 8, $2,500, needs the south expansion) cuts a **door in the east wall of the south hall** onto a short walkway to a small warehouse (two pallet racks, 24 crate slots, a roller
+shutter and a notice board) beside a **service road** that joins the main street. **Kei truckers** drive in now and then with 2 to 5 crates, and collect them later, paying $14 a crate; **VIP deals** you signed
+are delivered in box-truck loads of up to 10 crates and collected after four minutes ($10 a crate, and a little reputation). There is one bay, so trucks queue in the road; a load that does not fit the
+shelves is turned away and costs reputation (more for a VIP). The **counter arm** (hub console, $1,800, level 8, needs the second arm in the storage room) is the last step of automation: a robot arm on a rail
+over the counter takes each customer's bag from their hand onto the belt, and when they come back fetches their bag and hands it over, paying you, with no help from you. It serves one customer at a time,
+oldest first, and leaves you alone if you start talking to the customer first. What is left for you: upgrades, maintenance, the VIPs and the warehouse.
+
 **The deal office** (level 6, $1,200, needs the conveyor) is the road to the warehouse. It is a glass office east of the lobby. Once your reputation is
 55 or more, a **VIP** (parody names: Beff Jezoz, Elan Husk, Marc Zuckerburger, Bill Gaytes, Tim Cookie, Oprah Windfree) turns up and waits at the desk for a couple of
 minutes with an offer: so many crates of something, and a retainer paid when you sign. Aim at the desk and press `E`: **sign** (retainer, XP and a little reputation),

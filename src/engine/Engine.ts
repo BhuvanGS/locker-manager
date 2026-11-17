@@ -8,6 +8,7 @@ import { applyMod, modInfo } from '../sim/mods'
 import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type TerminalView } from '../store/gameStore'
 import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
+import { CounterArm } from '../world/CounterArm'
 import { CustomerAgents } from '../world/CustomerAgents'
 import { Annex, type AnnexSide } from '../world/Annex'
 import { Facility } from '../world/Facility'
@@ -18,6 +19,8 @@ import { KeyRack } from '../world/KeyBoard'
 import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
 import { Office } from '../world/Office'
+import { VipCar } from '../world/VipCar'
+import { Warehouse } from '../world/Warehouse'
 import { OccupancyBoard } from '../world/OccupancyBoard'
 import { Stairs } from '../world/Stairs'
 import { StationView } from '../world/StationView'
@@ -76,6 +79,12 @@ export class Engine {
   private conveyorBay: ConveyorBay | null = null
   /** The deal office off the lobby, once bought. */
   private office: Office | null = null
+  /** The counter arm (late automation), over the counter. */
+  private counterArm: CounterArm | null = null
+  /** The VIP's car in the street (turns up with each offer). */
+  private vipCar: VipCar | null = null
+  /** The warehouse, its road and its trucks, once bought. */
+  private warehouse: Warehouse | null = null
   /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
   private stations: StationView[] = []
   /** Upgrade consoles by scope (`hub`, or a zone). */
@@ -213,6 +222,24 @@ export class Engine {
     for (const hall of this.halls) this.addOccupancyBoard(hall.kind, true)
   }
 
+  /** Cut the door in the south hall and build the walkway, the warehouse and the road with its trucks. */
+  private addWarehouse(animate: boolean): void {
+    if (this.warehouse) return
+    this.halls.find((h) => h.kind === 'south')?.openWarehouseDoor()
+    const warehouse = new Warehouse(this.physics)
+    if (animate) warehouse.appear()
+    this.warehouse = warehouse
+    this.scene.add(warehouse.root, warehouse.yard)
+    this.interactionTargets.push(warehouse.root)
+  }
+
+  /** Hang the counter arm over the counter. */
+  private addCounterArm(): void {
+    if (this.counterArm) return
+    this.counterArm = new CounterArm()
+    this.scene.add(this.counterArm.root)
+  }
+
   /** Knock through into the unit next door and build the deal office. */
   private addOffice(animate: boolean): void {
     if (this.office) return
@@ -222,6 +249,8 @@ export class Engine {
     this.office = office
     this.scene.add(office.root)
     this.interactionTargets.push(office.root)
+    this.vipCar = new VipCar()
+    this.scene.add(this.vipCar.root)
   }
 
   /** Cut the hatch through the partition and install the belts, the robot arm and the terminal. */
@@ -362,6 +391,8 @@ export class Engine {
     for (const board of this.occupancyBoards.values()) show(board.root)
     if (this.conveyorBay) show(this.conveyorBay.root)
     if (this.office) show(this.office.root)
+    if (this.counterArm) show(this.counterArm.root)
+    if (this.warehouse) show(this.warehouse.root)
     for (const station of this.stations) show(station.root)
     for (const console of this.consoles.values()) show(console.root)
     for (const annex of this.annexes) show(annex.root)
@@ -414,6 +445,21 @@ export class Engine {
       console.dispose()
     }
     this.consoles.clear()
+    if (this.counterArm) {
+      this.discard(this.counterArm.root)
+      this.counterArm.dispose()
+      this.counterArm = null
+    }
+    if (this.warehouse) {
+      this.discard(this.warehouse.root)
+      this.discard(this.warehouse.yard)
+      this.warehouse.dispose()
+      this.warehouse = null
+    }
+    if (this.vipCar) {
+      this.discard(this.vipCar.root)
+      this.vipCar = null
+    }
     if (this.office) {
       this.discard(this.office.root)
       this.office.dispose()
@@ -559,6 +605,7 @@ export class Engine {
       else if (notice.type === 'mistake') continue
       else if (notice.type === 'walkout') store.pushToast(notice.message, 'bad')
       else if (notice.type === 'jam') store.pushToast(notice.text, 'bad')
+      else if (notice.type === 'alert') store.pushToast(notice.text, 'bad')
       else if (notice.type === 'stageStarted') store.showBanner(notice.title, notice.text)
       else if (notice.type === 'levelUp') {
         const unlocked = notice.unlocked.length > 0 ? `New in the catalogue: ${notice.unlocked.join(', ')}.` : 'Customers will arrive a little faster.'
@@ -570,7 +617,9 @@ export class Engine {
         else if (notice.kind === 'digital') this.goDigital()
         else if (notice.kind === 'conveyor') this.addConveyor(true)
         else if (notice.kind === 'office') this.addOffice(true)
+        else if (notice.kind === 'warehouse') this.addWarehouse(true)
         else if (notice.kind === 'automation' && notice.id.startsWith('line-') && notice.zone) this.addLine(notice.zone)
+        else if (notice.kind === 'automation' && notice.id === 'counter-arm') this.addCounterArm()
         else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
         else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
         // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
@@ -586,6 +635,9 @@ export class Engine {
     for (const board of this.occupancyBoards.values()) board.update(dt, this.game)
     this.conveyorBay?.update(dt, this.game)
     this.office?.update(dt, this.game)
+    this.counterArm?.update(dt, this.game, (id) => this.agents.position(id)?.x ?? null)
+    this.vipCar?.update(dt, this.game)
+    this.warehouse?.update(dt, this.game)
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)

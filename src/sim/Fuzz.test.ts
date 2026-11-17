@@ -16,6 +16,8 @@ const SETUPS: string[][] = [
   ['conveyor', 'bank2', 'bank3'],
   ['annexEast', 'line-east', 'speed-main-1', 'arms-main'],
   ['southExpansion', 'line-south', 'line-east', 'arms-south'],
+  ['counter-arm'],
+  ['counter-arm', 'office', 'warehouse'],
 ]
 
 function check(g: GameManager): void {
@@ -33,6 +35,9 @@ function check(g: GameManager): void {
     } else if (item.status === 'heldByPlayer') {
       expect(hands, where).toEqual({ kind: 'item', itemId: item.id })
       expect(item.lockerId, where).toBeNull()
+    } else if (item.status === 'withArm') {
+      expect(g.counterJob?.customerId, where).toBe(c.id)
+      expect(g.counterJob?.moved, where).toBe(true)
     } else if (item.status === 'onConveyor') {
       expect(
         g.conveyor.parcels.some((p) => p.itemId === item.id),
@@ -113,8 +118,11 @@ function play(seed: number, setup: string[]): void {
         if (e) g.requestBag(e.lockerId)
       }
     } else if (roll < 0.84) {
-      if (rand() < 0.5) g.spawnExtraCustomer()
-      else g.callBackStoredCustomers()
+      const a = rand()
+      if (a < 0.4) g.spawnExtraCustomer()
+      else if (a < 0.7) g.callBackStoredCustomers()
+      else if (a < 0.85) g.openDeal()
+      else g.chooseDeal(pick(['accept', 'haggle', 'decline'] as const)!)
     } else if (roll < 0.88) {
       const d = pick(AUTOMATION_UPGRADES.filter((u) => u.kind !== 'line'))
       if (d) g.buyAutomation(d.id)

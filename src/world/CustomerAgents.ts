@@ -19,6 +19,8 @@ type Agent = {
   carried: ItemId | null
   bar: THREE.Group
   barFill: THREE.Mesh
+  /** Their name, floating above the head. */
+  nameTag: THREE.Sprite
   /** Face above the head that shows how annoyed they are (after wrong packages). */
   mood: THREE.Sprite | null
   moodTier: number
@@ -26,6 +28,11 @@ type Agent = {
 
 const WALK_SPEED = 1.35
 const BAR_WIDTH = 0.5
+/** Height of the name tag above the floor (above the patience bar), and its size. */
+const NAME_Y = 2.3
+const NAME_WIDTH = 1.0
+const NAME_W = 384
+const NAME_H = 64
 
 /**
  * The 3D side of customers: walking in and out, the counter spots and waiting line, carrying their
@@ -64,6 +71,10 @@ export class CustomerAgents {
     bar.visible = false
     this.bars.add(bar)
 
+    const nameTag = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTexture(customer.name), transparent: true, depthWrite: false }))
+    nameTag.scale.set(NAME_WIDTH, NAME_WIDTH * (NAME_H / NAME_W), 1)
+    this.bars.add(nameTag)
+
     const slot = this.claimSlot()
     const agent: Agent = {
       id,
@@ -76,6 +87,7 @@ export class CustomerAgents {
       carried: null,
       bar,
       barFill,
+      nameTag,
       mood: null,
       moodTier: 0,
     }
@@ -142,6 +154,7 @@ export class CustomerAgents {
       agent.rig.armR.rotation.x = agent.carried ? 0.15 : swing * 0.7
       this.updateBar(agent, game, camera)
       this.updateMood(agent, game)
+      agent.nameTag.position.set(pos.x, NAME_Y, pos.z)
     }
   }
 
@@ -215,7 +228,7 @@ export class CustomerAgents {
     const p = agent.rig.root.position
     // Angrier faces bounce a little so they catch the eye.
     const bounce = tier >= 2 ? Math.sin(performance.now() / (tier === 3 ? 90 : 160)) * 0.04 : 0
-    agent.mood.position.set(p.x, 2.4 + bounce, p.z)
+    agent.mood.position.set(p.x, NAME_Y + 0.3 + bounce, p.z)
   }
 
   private updateBar(agent: Agent, game: GameManager, camera: THREE.Camera): void {
@@ -258,6 +271,8 @@ export class CustomerAgents {
   private remove(agent: Agent): void {
     this.root.remove(agent.rig.root)
     this.bars.remove(agent.bar)
+    this.bars.remove(agent.nameTag)
+    agent.nameTag.material.dispose()
     if (agent.mood) {
       this.bars.remove(agent.mood)
       agent.mood.material.dispose()
@@ -291,6 +306,34 @@ function moodTexture(tier: number): THREE.CanvasTexture {
     texture = new THREE.CanvasTexture(canvas)
     texture.colorSpace = THREE.SRGBColorSpace
     moodTextures.set(tier, texture)
+  }
+  return texture
+}
+
+const nameTextures = new Map<string, THREE.CanvasTexture>()
+
+/** A name on a dark pill (cached by name: customers with the same name share it). */
+function nameTexture(name: string): THREE.CanvasTexture {
+  let texture = nameTextures.get(name)
+  if (!texture) {
+    const canvas = document.createElement('canvas')
+    canvas.width = NAME_W
+    canvas.height = NAME_H
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)'
+      ctx.beginPath()
+      ctx.roundRect(4, 6, NAME_W - 8, NAME_H - 12, 22)
+      ctx.fill()
+      ctx.fillStyle = '#f8fafc'
+      ctx.font = '700 34px system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(name, NAME_W / 2, NAME_H / 2 + 2, NAME_W - 28)
+    }
+    texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    nameTextures.set(name, texture)
   }
   return texture
 }

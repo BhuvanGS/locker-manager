@@ -140,7 +140,7 @@ export class Office {
   /** The VIP waiting at the desk (if any), in their own look and with their name over their head. */
   private syncVip(dt: number, game: GameManager): void {
     const offer = game.deals.offer
-    if (!offer) {
+    if (!offer || game.now < offer.readyAt) {
       if (this.vip) {
         this.root.remove(this.vip.group)
         this.vip = null

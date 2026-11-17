@@ -41,7 +41,7 @@ describe('Conveyor levels: how far the belts reach', () => {
 
   it('every hall has its own belt extension, in order, and needs the hall itself', () => {
     const g = rich()
-    expect(g.consoleItems('hub').map((i) => i.id)).toEqual(['line-east', 'line-south', 'line-floor1', 'line-floor2'])
+    expect(g.consoleItems('hub').map((i) => i.id)).toEqual(['line-east', 'line-south', 'line-floor1', 'line-floor2', 'counter-arm'])
     expect(g.buyUpgrade('line-east').ok).toBe(false) // not a catalogue item
     expect(g.buyAutomation('line-east').message).toBe('Buy Storage annex (east) first')
     expect(g.buyUpgrade('annexEast').ok).toBe(true)
@@ -214,7 +214,7 @@ describe('Robot arm levels: speed and a second arm', () => {
 describe('Automation consoles and the mod menu', () => {
   it('automation upgrades are only sold at their own consoles', () => {
     const g = rich()
-    expect(g.consoleItems('hub').every((i) => i.id.startsWith('line-'))).toBe(true)
+    expect(g.consoleItems('hub').every((i) => i.id.startsWith('line-') || i.id === 'counter-arm')).toBe(true)
     expect(g.consoleItems('main').map((i) => i.id)).toEqual(['service-main', 'repair-main', 'speed-main-1', 'speed-main-2', 'speed-main-3', 'arms-main'])
     expect(g.catalogueItems().some((i) => i.id.startsWith('speed-') || i.id.startsWith('line-'))).toBe(false)
   })

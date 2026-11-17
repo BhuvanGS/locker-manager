@@ -85,7 +85,7 @@ export type ItemCategory =
   | 'box'
   | 'accessory'
 
-export type ItemStatus = 'withCustomer' | 'heldByPlayer' | 'onConveyor' | 'inLocker' | 'returned'
+export type ItemStatus = 'withCustomer' | 'heldByPlayer' | 'withArm' | 'onConveyor' | 'inLocker' | 'returned'
 
 export interface Item {
   id: ItemId
@@ -173,6 +173,8 @@ export type SimNotice =
   | { type: 'xp'; amount: number }
   | { type: 'mistake'; kind: 'wrongKey' | 'wrongItem'; message: string }
   | { type: 'message'; text: string }
+  /** Bad news (a red toast): a load turned away, and so on. */
+  | { type: 'alert'; text: string }
   /** A robot arm jammed (the HUD shows it as a warning). */
   | { type: 'jam'; zone: 'main' | 'east' | 'south' | 'floor1' | 'floor2'; text: string }
   | { type: 'stageStarted'; title: string; text: string }
@@ -181,7 +183,7 @@ export type SimNotice =
   | {
       type: 'upgradeBought'
       id: string
-      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'automation' | 'office' | 'annex' | 'hall'
+      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'automation' | 'office' | 'warehouse' | 'annex' | 'hall'
       index: number
       title: string
       /** Annex only: which neighbouring unit was knocked through, and the new bank and rack numbers. */

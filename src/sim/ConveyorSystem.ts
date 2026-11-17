@@ -253,6 +253,18 @@ export class ConveyorSystem {
     return this.parcels.splice(at, 1)[0] ?? null
   }
 
+  /** The bag of `itemId` waiting on the return tray, removed from the system (the counter arm collects bags for customers). */
+  takeReadyFor(itemId: ItemId): Parcel | null {
+    const at = this.parcels.findIndex((p) => p.phase === 'ready' && p.itemId === itemId)
+    if (at < 0) return null
+    return this.parcels.splice(at, 1)[0] ?? null
+  }
+
+  /** Whether the bag of `itemId` is on the return tray, ready to be collected. */
+  isReady(itemId: ItemId): boolean {
+    return this.parcels.some((p) => p.phase === 'ready' && p.itemId === itemId)
+  }
+
   get readyCount(): number {
     return this.parcels.filter((p) => p.phase === 'ready').length
   }

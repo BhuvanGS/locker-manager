@@ -119,6 +119,14 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
+- **Warehouse and trucks** (`kind: 'warehouse'`, `sim/WarehouseManager.ts`, `world/Warehouse.ts`): `warehouse.update` (from `GameManager.update`) schedules kei truckers, VIP deliveries (from `deals.signed`) and
+  collections into a queue; ONE truck works the bay at a time (`arriving → unloading → leaving`, `CONFIG.warehouse` seconds); `finishWork` stores or turns away a load and returns events that `GameManager`
+  turns into money, reputation and toasts (`alert` for bad news). The view draws the truck from `warehouse.truck`, the crates from `warehouse.consignments`, and rolls the shutter while a truck works. The door in the
+  south hall is `Hall.openWarehouseDoor`; `WAREHOUSE` in `layout.ts` has every position; `world/Warehouse.ts` has two roots: `root` (the shed, zone-culled) and `yard` (road and trucks, always drawn).
+- **VIP cars** (`world/VipCar.ts`): follows `game.deals.offer` (`readyAt` is when the VIP reaches the desk). **Names:** `CustomerAgents` keeps a name sprite per agent.
+- **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): one `CounterJob` at a time (take or give); an item is `withArm` from the grab (progress 0.4 / 0.35) until the job ends; the take job
+  reserves its locker up front and loads the belt at the end, the give job removes the ready bag from the tray at the grab and pays through `finishReturn`. A job is dropped (before the grab) if you start talking
+  to the customer or they leave. The view (`CounterArm`) is keyframes over `counterJobView().progress`.
 - **Deal office and VIP deals** (`kind: 'office'`, `sim/DealManager.ts`, `world/Office.ts`, `ui/DealPanel.tsx`): after the office is bought `deals.update` (called from `GameManager.update`) makes one
   `Offer` at a time once reputation allows; the player sits at the desk (`openDeal`, `dealOpen`, tag `dealDesk`) and `chooseDeal`s accept / haggle / decline. `deals.signed` is the list of contracts
   the future warehouse will use. The Engine builds the room in `addOffice` (the doorway is a second removable panel in the east wall, `Facility.setOfficeOpen`, which also shrinks the neighbour block);

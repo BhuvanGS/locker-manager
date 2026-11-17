@@ -12,6 +12,8 @@ export interface Offer {
   crates: number
   /** Paid the moment you sign. */
   retainer: number
+  /** Game time at which they are at the desk (before that their car is still pulling up in the street). */
+  readyAt: number
   /** Game time at which they give up waiting. */
   expiresAt: number
   haggled: boolean
@@ -26,6 +28,10 @@ export interface SignedDeal {
   crates: number
   retainer: number
   signedAt: number
+  /** Crates already in the warehouse, on a truck now, and when the next load is due. */
+  delivered: number
+  inTransit: number
+  nextDeliveryAt: number
 }
 
 export type OfferEvent = 'offered' | 'expired' | null
@@ -85,14 +91,14 @@ export class DealManager {
     const crates = Math.round(lo + (hi - lo) * Math.min(1, reach * 0.7 + rand() * 0.3))
     const [rLo, rHi] = d.retainerPerCrate
     const retainer = Math.round((crates * (rLo + (rHi - rLo) * rand())) / 10) * 10
-    return { id: ++this.seq, vip, name: def.name, title: def.title, cargo: def.cargo, crates, retainer, expiresAt: now + d.expiresAfter, haggled: false }
+    return { id: ++this.seq, vip, name: def.name, title: def.title, cargo: def.cargo, crates, retainer, readyAt: now + d.arrivalSeconds, expiresAt: now + d.arrivalSeconds + d.expiresAfter, haggled: false }
   }
 
   /** Sign the offer. Returns the signed deal, or null if nobody is waiting. */
   accept(now: number, rand: () => number): SignedDeal | null {
     const o = this.offer
     if (!o) return null
-    const deal: SignedDeal = { id: o.id, name: o.name, title: o.title, cargo: o.cargo, crates: o.crates, retainer: o.retainer, signedAt: now }
+    const deal: SignedDeal = { id: o.id, name: o.name, title: o.title, cargo: o.cargo, crates: o.crates, retainer: o.retainer, signedAt: now, delivered: 0, inTransit: 0, nextDeliveryAt: now + CONFIG.warehouse.firstDeliveryDelay }
     this.signed.push(deal)
     this.offer = null
     this.scheduleNext(now, rand)

@@ -2,7 +2,7 @@ import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
-import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole } from './layout'
+import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
 
 export type HallKind = 'south' | 'floor1' | 'floor2'
@@ -42,6 +42,8 @@ export class Hall {
   private readonly floorY: number
   private bodies: RAPIER.RigidBody[] = []
   private hatch: { mesh: THREE.Mesh; body: RAPIER.RigidBody } | null = null
+  /** The panel in the east wall that is taken out when the warehouse is built (ground-floor south hall only). */
+  private doorPlug: { mesh: THREE.Mesh; body: RAPIER.RigidBody } | null = null
   private rise = 1
 
   constructor(kind: HallKind, physics: PhysicsWorld) {
@@ -65,7 +67,16 @@ export class Hall {
     // Windows are real openings with glass (the glass blocks you, so you cannot jump out). West: in the lobby, the aisle between
     // the rows and behind the last row. East: only beyond the stairs. South: either side of the hall's name.
     this.windowedWall('z', minX - T / 2, z0, z1, [-10.8, -14.2, -18.5], wall)
-    this.windowedWall('z', maxX + T / 2, z0, z1, [-20.2], wall)
+    if (kind === 'south') {
+      // The south hall's east wall has a panel where the warehouse door will be cut (and the window beside it stays).
+      const { z, halfWidth, height: doorH } = WAREHOUSE.door
+      this.windowedWall('z', maxX + T / 2, z0, z - halfWidth, [-20.2], wall)
+      this.windowedWall('z', maxX + T / 2, z + halfWidth, z1, [], wall)
+      this.solid(T, H - doorH, halfWidth * 2, wall, maxX + T / 2, doorH + (H - doorH) / 2, z)
+      this.doorPlug = this.solid(T, doorH, halfWidth * 2, wall, maxX + T / 2, doorH / 2, z)
+    } else {
+      this.windowedWall('z', maxX + T / 2, z0, z1, [-20.2], wall)
+    }
     this.windowedWall('x', minZ - T / 2, -widthX / 2, widthX / 2, [-3.5, 3.5], wall)
     if (this.level > 0) this.solid(widthX, H, T, wall, 0, H / 2, maxZ + T / 2)
 
@@ -110,6 +121,27 @@ export class Hall {
     if (this.rise >= 1) return
     this.rise = Math.min(1, this.rise + dt / RISE_SECONDS)
     this.root.scale.y = Math.max(0.001, 1 - (1 - this.rise) ** 3)
+  }
+
+  /** Cut the door in the east wall (the warehouse is built): remove the panel, add a frame and a sign. */
+  openWarehouseDoor(): void {
+    const plug = this.doorPlug
+    if (!plug) return
+    this.root.remove(plug.mesh)
+    this.physics.removeBody(plug.body)
+    this.bodies = this.bodies.filter((b) => b !== plug.body)
+    this.doorPlug = null
+    const { z, halfWidth, height } = WAREHOUSE.door
+    const trim = mat(0x6b7280, 0.5, 0.4)
+    for (const dz of [-1, 1]) {
+      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, height, 0.1), trim)
+      jamb.position.set(SOUTH.maxX + 0.05, height / 2, z + dz * (halfWidth + 0.04))
+      this.root.add(jamb)
+    }
+    const sign = makeSign('WAREHOUSE', 1.5, 0.24, '#0f172a', '#fbbf24')
+    sign.position.set(SOUTH.maxX - 0.04, height + 0.4, z)
+    sign.rotation.y = -Math.PI / 2 // faces into the hall (−x)
+    this.root.add(sign)
   }
 
   /** Take out the stairwell hatch so the stairs to the next floor can go through the ceiling. */

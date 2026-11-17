@@ -9,6 +9,7 @@ import {
   type UpgradeDef,
 } from './config'
 import { DealManager, type Offer } from './DealManager'
+import { WarehouseManager } from './WarehouseManager'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { ConveyorSystem } from './ConveyorSystem'
@@ -40,6 +41,18 @@ const DEPOSIT_VISIT = new Set(['waiting', 'depositing'])
 const RETURN_VISIT = new Set(['waitingForCollection', 'collecting'])
 /** Customers physically inside (or walking in): the shop is "empty" when none of these exist. */
 const IN_BUILDING = new Set(['arriving', 'waiting', 'depositing', 'returning', 'waitingForCollection', 'collecting'])
+
+/** The counter arm's current customer: taking their bag onto the belt, or handing their bag back. */
+export interface CounterJob {
+  kind: 'take' | 'give'
+  customerId: CustomerId
+  /** Seconds into the job. */
+  t: number
+  /** The bag has left the customer's hand (take) or the tray (give). */
+  moved: boolean
+  /** Take: the locker reserved for the bag. */
+  lockerId: LockerId | null
+}
 
 /** One bag the conveyor terminal can fetch. */
 export interface TerminalEntry {
@@ -75,6 +88,8 @@ export class GameManager {
   readonly upgrades = new UpgradeManager(CONFIG.upgrades)
   /** VIP offers and the deals you have signed (the deal office). */
   readonly deals = new DealManager()
+  /** The warehouse, its trucks and crates (once built). */
+  readonly warehouse = new WarehouseManager()
   /** The conveyor belt and robot arm (idle until the upgrade is bought). */
   readonly conveyor: ConveyorSystem
   /** Which part of the building each locker bank is in, and which row of that part (an arm station). */
@@ -92,6 +107,9 @@ export class GameManager {
   terminalOpen = false
   /** The deal desk is open (the player is talking business with a VIP). */
   dealOpen = false
+  /** What the counter arm is doing right now (it serves one customer at a time), if you have bought it. */
+  counterJob: CounterJob | null = null
+  private counterCheckAt = 0
   /** An automation console is open (`hub`, or the zone whose arms it controls). */
   consoleScope: 'hub' | AutoZone | null = null
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
@@ -141,10 +159,25 @@ export class GameManager {
       else this.onReturn(event.customerId)
     }
     this.conveyor.update(dt)
+    this.updateCounterArm(dt)
+    if (this.hasWarehouse) {
+      for (const e of this.warehouse.update(dt, this.now, this.deals, this.rand)) {
+        if (e.type === 'delivered') this.notify({ type: 'message', text: `${e.owner} unloaded ${e.crates} crates in the warehouse.` })
+        else if (e.type === 'turnedAway') {
+          this.economy.adjustReputation(e.vip ? CONFIG.warehouse.vipTurnedAwayReputation : CONFIG.warehouse.turnedAwayReputation)
+          this.notify({ type: 'alert', text: `The warehouse is full: ${e.owner}'s ${e.crates} crates were turned away.` })
+        } else {
+          this.economy.earn(e.paid)
+          this.economy.adjustReputation(e.vip ? 1 : 0)
+          this.notify({ type: 'payment', amount: e.paid })
+          this.notify({ type: 'message', text: `${e.owner} collected ${e.crates} crates and paid $${e.paid}.` })
+        }
+      }
+    }
     if (this.hasOffice) {
       const event = this.deals.update(this.now, this.economy.reputation, this.rand)
       const offer = this.deals.offer
-      if (event === 'offered' && offer) this.notify({ type: 'message', text: `${offer.name} (${offer.title}) is waiting in the deal office.` })
+      if (event === 'offered' && offer) this.notify({ type: 'message', text: `A VIP car is pulling up outside: ${offer.name} (${offer.title}).` })
       else if (event === 'expired') {
         this.dealOpen = false
         this.notify({ type: 'message', text: 'The VIP got tired of waiting and left the deal office.' })
@@ -467,10 +500,18 @@ export class GameManager {
     say('You', `Here's your ${held.label}.`)
     if (held.customerId !== c.id) return this.wrongPackage(c, say)
 
+    return this.finishReturn(c, held, say)
+  }
+
+  /**
+   * The customer gets the right bag back: they pay (a tip by how happy they are, half price if you made them furious), the shop earns XP
+   * and reputation, and they leave. You do this by handing it over; the counter arm does it for you.
+   */
+  private finishReturn(c: Customer, held: Item, say: ((who: string, text: string) => void) | null): ActionResult {
     const retried = c.visit.wrongAttempts > 0
-    say(c.name, retried ? 'Finally! That one is mine.' : c.personality.thanks)
+    say?.(c.name, retried ? 'Finally! That one is mine.' : c.personality.thanks)
     held.status = 'returned'
-    this.hands = null
+    if (this.hands?.kind === 'item' && this.hands.itemId === held.id) this.hands = null
     // Someone you kept getting wrong does not warm up just because you finally got it right.
     if (!retried) c.satisfaction = Math.min(100, c.satisfaction + 15)
     const tip = Math.round((CONFIG.economy.maxTip * c.satisfaction) / 100)
@@ -485,7 +526,7 @@ export class GameManager {
     this.customers.transition(c.id, 'completed')
     this.notify({ type: 'payment', amount: paid })
     this.notify({ type: 'customerLeaving', customerId: c.id })
-    this.dialogue = null
+    if (this.dialogue?.customerId === c.id) this.dialogue = null
     const extras = [furious ? 'half price after the mix-ups' : '', tip > 0 ? `$${tip} tip` : ''].filter(Boolean)
     return ok(`${c.name} paid $${paid}${extras.length ? ` (${extras.join(', ')})` : ''}.`)
   }
@@ -563,6 +604,110 @@ export class GameManager {
     return this.upgrades.has('office')
   }
 
+  /** The counter arm takes bags from customers and hands them back. */
+  get hasCounterArm(): boolean {
+    return this.upgrades.has('counter-arm')
+  }
+
+  /** The counter arm's job for the 3D view: what it is doing, for whom, and how far through (0…1). */
+  counterJobView(): { kind: 'take' | 'give'; customerId: CustomerId; progress: number } | null {
+    const j = this.counterJob
+    return j ? { kind: j.kind, customerId: j.customerId, progress: Math.min(1, j.t / CONFIG.automation.counterSeconds) } : null
+  }
+
+  /**
+   * The counter arm (late automation): it serves the customers at the counter one at a time, oldest first, unless you are talking to them.
+   * A customer who has come to leave a bag gets it taken onto the belt (and leaves, as when you load it yourself); a customer back to
+   * collect gets the arm fetching their bag and then handing it over. You are left with the upgrades, the maintenance and the VIPs.
+   */
+  private updateCounterArm(dt: number): void {
+    if (!this.hasCounterArm || !this.hasConveyor) return
+    // Returns: ask the belt for the bag of everyone back to collect (the arm hands it over when it arrives).
+    this.counterCheckAt -= dt
+    if (this.counterCheckAt <= 0) {
+      this.counterCheckAt = 1
+      for (const c of this.customers.all()) {
+        if (c.state !== 'waitingForCollection' && c.state !== 'collecting') continue
+        const item = this.customers.itemOf(c)
+        if (item?.status === 'inLocker' && item.lockerId && this.isRobotLocker(item.lockerId) && !this.conveyor.isBusy(item.lockerId)) this.requestBag(item.lockerId)
+      }
+    }
+    const job = this.counterJob
+    if (job) {
+      this.advanceCounterJob(job, dt)
+      return
+    }
+    const cfg = CONFIG.automation
+    for (const c of this.queue()) {
+      if (this.dialogue?.customerId === c.id) continue
+      const item = this.customers.itemOf(c)
+      if (!item) continue
+      if (c.state === 'waiting' && item.status === 'withCustomer') {
+        const inbound = this.conveyor.inbound()
+        if (inbound.length >= cfg.beltCapacity || inbound.some((p) => p.phase === 'beltIn' && p.t < cfg.loadGap)) continue
+        const locker = this.lockers.all().find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId && !this.conveyor.isBusy(l.id))
+        if (!locker) continue
+        locker.state = 'reserved'
+        this.counterJob = { kind: 'take', customerId: c.id, t: 0, moved: false, lockerId: locker.id }
+        return
+      }
+      if (c.state === 'waitingForCollection' && item.status === 'onConveyor' && this.conveyor.isReady(item.id)) {
+        this.counterJob = { kind: 'give', customerId: c.id, t: 0, moved: false, lockerId: null }
+        return
+      }
+    }
+  }
+
+  private advanceCounterJob(job: CounterJob, dt: number): void {
+    const c = this.customers.has(job.customerId) ? this.customers.get(job.customerId) : null
+    const item = c ? this.customers.itemOf(c) : null
+    const duration = CONFIG.automation.counterSeconds
+    const abort = (): void => {
+      // Only before the arm has the bag: you started talking to them, or they walked out.
+      if (job.lockerId) {
+        const locker = this.lockers.get(job.lockerId)
+        if (locker.state === 'reserved' && !locker.itemId) locker.state = 'available'
+      }
+      this.counterJob = null
+    }
+    if (!c || !item) return abort()
+    if (!job.moved) {
+      const expected = job.kind === 'take' ? c.state === 'waiting' && item.status === 'withCustomer' : c.state === 'waitingForCollection' && this.conveyor.isReady(item.id)
+      if (!expected || this.dialogue?.customerId === c.id) return abort()
+    }
+    job.t += dt
+    const progress = job.t / duration
+    if (job.kind === 'take') {
+      if (!job.moved && progress >= 0.4) {
+        item.status = 'withArm'
+        job.moved = true
+      }
+      if (progress >= 1 && job.lockerId) {
+        this.conveyor.load(item.id, job.lockerId)
+        item.status = 'onConveyor'
+        this.counterJob = null
+        this.finishDeposit(c)
+      }
+      return
+    }
+    if (!job.moved && progress >= 0.35) {
+      if (!this.conveyor.takeReadyFor(item.id)) return abort()
+      item.status = 'withArm'
+      job.moved = true
+    }
+    if (progress >= 1) {
+      this.counterJob = null
+      if (c.state === 'waitingForCollection') this.customers.transition(c.id, 'collecting')
+      c.visit.greeted = true
+      this.finishReturn(c, item, null)
+    }
+  }
+
+  /** The warehouse (door, road and trucks) is built. */
+  get hasWarehouse(): boolean {
+    return this.upgrades.has('warehouse')
+  }
+
   /** Sit down with the VIP at the deal desk. */
   openDeal(): ActionResult {
     if (!this.hasOffice) return fail('There is no deal office yet.')
@@ -570,6 +715,7 @@ export class GameManager {
     if (!this.deals.offer) {
       return fail(this.economy.reputation < CONFIG.deals.minReputation ? 'Nobody important comes to a shop with a name like yours yet. Build your reputation.' : 'No VIP is waiting. They will come.')
     }
+    if (this.now < this.deals.offer.readyAt) return fail('Their car is still pulling up outside. Give them a moment.')
     this.dealOpen = true
     return ok()
   }
@@ -735,6 +881,9 @@ export class GameManager {
         racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
       }
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, hall: def.hall, banks, racks })
+    } else if (def.kind === 'warehouse') {
+      this.warehouse.start(this.now)
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
     } else if (def.kind === 'office') {
       this.deals.start(this.now)
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
@@ -1055,7 +1204,8 @@ export class GameManager {
     this.upgrades.markOwned(def.id)
     if (def.kind === 'line') this.conveyor.cover(def.zone)
     else if (def.kind === 'speed') this.conveyor.setSpeedLevel(def.zone, def.tier)
-    else this.conveyor.setArmCount(def.zone, 2)
+    else if (def.kind === 'arms') this.conveyor.setArmCount(def.zone, 2)
+    // (the counter arm is just owning the upgrade: see `hasCounterArm`)
     this.notify({ type: 'upgradeBought', id: def.id, kind: 'automation', index: 0, title: def.title, zone: def.zone })
   }
 
@@ -1185,7 +1335,11 @@ export class GameManager {
       return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
-    if (this.deals.offer) return `${this.deals.offer.name} is waiting in the deal office, off the lobby.`
+    if (this.deals.offer) {
+      return this.now < this.deals.offer.readyAt
+        ? `A car is pulling up outside: ${this.deals.offer.name} has arrived.`
+        : `${this.deals.offer.name} is waiting in the deal office, off the lobby.`
+    }
     const jam = this.conveyor.jammedZones()[0]
     if (jam) return `A robot arm in the ${ZONE_TITLES[jam]} has jammed. Repair it at that arm console.`
     const lockers = this.lockers.all()

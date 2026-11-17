@@ -15,6 +15,8 @@ function withOffice(seed = 3, reputation = 80) {
 
 function waitForOffer(g: GameManager): void {
   for (let t = 0; t < 400 && !g.deals.offer; t += 1) g.update(1)
+  // ...and for the car to pull up and the VIP to reach the desk.
+  for (let t = 0; t < CONFIG.deals.arrivalSeconds + 1; t += 1) g.update(1)
 }
 
 describe('The deal office', () => {
@@ -40,7 +42,7 @@ describe('The deal office', () => {
     poor.economy.reputation = 80
     waitForOffer(poor)
     expect(poor.deals.offer).not.toBeNull()
-    expect(poor.drainNotices().some((n) => n.type === 'message' && n.text.includes('deal office'))).toBe(true)
+    expect(poor.drainNotices().some((n) => n.type === 'message' && n.text.includes('car is pulling up'))).toBe(true)
   })
 
   it('offers have a VIP, crates and a retainer, bigger deals come with a better reputation', () => {
@@ -125,6 +127,18 @@ describe('The deal office', () => {
     g.tutorialComplete = true
     waitForOffer(g)
     expect(g.objective()).toMatch(/is waiting in the deal office/)
+  })
+
+  it('the VIP arrives by car first: you cannot sit down until they have parked', () => {
+    const g = withOffice()
+    g.tutorialComplete = true
+    for (let t = 0; t < 400 && !g.deals.offer; t += 1) g.update(1)
+    const offer = g.deals.offer!
+    expect(offer.readyAt).toBeGreaterThan(g.now)
+    expect(g.openDeal().message).toMatch(/pulling up/)
+    expect(g.objective()).toMatch(/car is pulling up/)
+    while (g.now < offer.readyAt) g.update(0.5)
+    expect(g.openDeal().ok).toBe(true)
   })
 
   it('the mod menu can unlock the office with everything it needs', () => {

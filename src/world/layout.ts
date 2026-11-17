@@ -198,6 +198,27 @@ export const OFFICE = {
   vip: { x: 11.2, z: 2.4 },
 }
 
+/**
+ * The warehouse extension, south-east of the shop. A door in the south hall's east wall (`door`, on the ground floor) opens onto a short
+ * concrete walkway to the warehouse's west door. The warehouse is a steel-clad shed (`minX`…`maxX`, `minZ`…`maxZ`) with two pallet
+ * racks inside (4 bays × 3 levels each = 24 crate slots) and one roller shutter on its east wall, at the loading bay. East of it a service
+ * road runs north–south from the main street (z = 10) down past the bay, so trucks drive in from the street and out the far end.
+ */
+export const WAREHOUSE = {
+  door: { z: -18.2, halfWidth: 0.8, height: 2.2 },
+  minX: 9.6,
+  maxX: 19.6,
+  minZ: -26,
+  maxZ: -13,
+  height: 4.4,
+  /** The shutter on the east wall, and where a truck stops beside it (its cargo area faces the shutter). */
+  shutter: { z: -18.2, halfWidth: 1.8, height: 3.0 },
+  bay: { x: 22.6, z: -18.2 },
+  road: { minX: 20.6, maxX: 27, minZ: -52, maxZ: 10.2 },
+  /** The racks: x of each, the z of the first bay and the bay pitch, and the heights of the shelves. */
+  racks: { x: [12.4, 14.9], firstZ: -16.9, pitch: 2.0, bays: 4, levels: [0.12, 1.02, 1.92] },
+}
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 
@@ -280,7 +301,7 @@ export function stairHole(flight: number): { x0: number; x1: number; z0: number;
 }
 
 /** Parts of the building. Only the zone you are in and its neighbours are drawn (see Engine.applyZoneVisibility). */
-export type Zone = 'main' | 'west' | 'east' | 'office' | 'south' | 'floor1' | 'floor2'
+export type Zone = 'main' | 'west' | 'east' | 'office' | 'warehouse' | 'south' | 'floor1' | 'floor2'
 
 /** Which zone a player is in, from their position (`feetY` = height of their feet above the ground floor). */
 export function zoneAt(x: number, z: number, feetY: number): Zone {
@@ -288,7 +309,7 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
   if (feetY > FLOOR_HEIGHT - 0.9) return 'floor1'
   if (z < ROOM.minZ - 0.2 && x > ROOM.minX - 0.2 && x < ROOM.maxX + 0.2) return 'south'
   if (x < ROOM.minX - 0.2) return 'west'
-  if (x > ROOM.maxX + 0.2) return z > OFFICE.minZ - 0.2 ? 'office' : 'east'
+  if (x > ROOM.maxX + 0.2) return z > OFFICE.minZ - 0.2 ? 'office' : z < ROOM.minZ - 0.4 ? 'warehouse' : 'east'
   return 'main'
 }
 
@@ -300,7 +321,8 @@ export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
   east: ['main'],
   // The three halls are one tower: the floor of floor 1 is the ceiling slab of the south hall, and you look down stairwells
   // to the floors below, so anywhere in the tower you must be able to see all of it.
-  south: ['main', 'floor1', 'floor2'],
+  south: ['main', 'floor1', 'floor2', 'warehouse'],
+  warehouse: ['south'],
   floor1: ['south', 'floor2'],
   floor2: ['floor1', 'south'],
 }

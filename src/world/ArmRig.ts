@@ -6,7 +6,7 @@ export const HANG = 0.4
 
 /** Where the carriage is (x along the rails, z along the runway) and what the arm is doing. */
 export type Pose = { x: number; z: number; wrist: number; reach: number; claw: number }
-type Key = [p: number, x: number, z: number, wrist: number, reach: number, claw: number]
+export type Key = [p: number, x: number, z: number, wrist: number, reach: number, claw: number]
 
 /** Where an arm picks bags up or drops them: the carriage position, how far the gripper reaches (z), and the wrist height. */
 export interface Dock {
@@ -173,7 +173,7 @@ export class ArmRig {
 }
 
 /** Linear interpolation through keyframes (progress ascending), eased. */
-function sample(keys: Key[], p: number): Pose {
+export function sample(keys: Key[], p: number): Pose {
   const first = keys[0]!
   if (p <= first[0]) return at(first)
   for (let i = 1; i < keys.length; i++) {

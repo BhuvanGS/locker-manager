@@ -43,7 +43,7 @@ export interface UpgradeDef {
    * lockerBank / keyRack add storage; labels numbers the lockers and tags the keys; register adds the wall
    * board listing who left what.
    */
-  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'office' | 'annex' | 'hall'
+  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'office' | 'warehouse' | 'annex' | 'hall'
   title: string
   description: string
   cost: number
@@ -84,7 +84,7 @@ export interface AutomationUpgradeDef {
   id: string
   /** Which console sells it. */
   scope: 'hub' | AutoZone
-  kind: 'line' | 'speed' | 'arms'
+  kind: 'line' | 'speed' | 'arms' | 'counter'
   zone: AutoZone
   /** Speed level reached (1–3); 0 for the others. */
   tier: number
@@ -125,6 +125,19 @@ function buildAutomationUpgrades(): AutomationUpgradeDef[] {
       needs: info.needs,
     })
   }
+  out.push({
+    id: 'counter-arm',
+    scope: 'hub',
+    kind: 'counter',
+    zone: 'main',
+    tier: 0,
+    title: 'Counter arm',
+    description:
+      "A robot arm over the counter takes each customer's bag onto the belt and hands it back when they return: no more carrying bags or handing them over. It does not ask names, and you can still talk to a customer yourself before it gets to them",
+    cost: 1800,
+    level: 8,
+    requires: 'arms-main',
+  })
   for (const zone of AUTO_ZONES) {
     const rows = ZONE_ROWS[zone]
     for (let tier = 1; tier <= 3; tier++) {
@@ -268,6 +281,16 @@ export const CONFIG = {
       cost: 1200,
       level: 6,
       requires: 'conveyor',
+    },
+    // The warehouse: a door in the south hall onto a service road, where trucks bring crates to a small warehouse.
+    {
+      id: 'warehouse',
+      kind: 'warehouse',
+      title: 'Warehouse',
+      description: 'A door in the south hall opens onto a loading road and a small warehouse: kei truckers drop off crates, and your VIP deals are delivered there',
+      cost: 2500,
+      level: 8,
+      requires: 'southExpansion',
     },
     // The next phase of the building: grow backwards (south) with lockers in rows, then upwards.
     // Each hall has two rows of three locker banks (+36 lockers) and five key racks (+40 hooks).
@@ -443,6 +466,8 @@ export const CONFIG = {
     /** How long a job takes in each zone, relative to the storage room (the arm rides to the bay and along to the row), plus `rowTravel` per row. */
     travelFactor: { main: 1, east: 1, south: 1.5, floor1: 1.5, floor2: 1.5 },
     rowTravel: 0.1,
+    /** Seconds the counter arm takes to serve one customer (fetch the bag, carry it, hand it over or put it on the belt). */
+    counterSeconds: 6,
     /**
      * Routine maintenance. Every arm wears a little with each job (faster motors wear it faster). A worn arm is slower, and a failing
      * one can jam when it starts a job: it then stops until it is repaired at its zone's arm console. A service puts every arm back
@@ -470,6 +495,8 @@ export const CONFIG = {
   deals: {
     minReputation: 55,
     firstOfferDelay: 15,
+    /** Seconds from the VIP's car turning up in the street to them standing at the desk (they can be dealt with only then). */
+    arrivalSeconds: 6,
     gap: [70, 150] as [number, number],
     expiresAfter: 150,
     crates: [12, 60] as [number, number],
@@ -518,6 +545,29 @@ export const CONFIG = {
         look: { skin: 0x8d5524, hair: 0x1f1a17, hairStyle: 'long', shirt: 0xa3392b, trousers: 0x1e293b, height: 0.98 },
       },
     ],
+  },
+  /**
+   * The warehouse (shelf room for `capacity` crates, one loading bay). Kei truckers turn up at random with a few crates and collect them
+   * later, paying per crate; VIP deals are delivered in box-truck loads and collected after `vipStay`. A load that does not fit is turned away.
+   */
+  warehouse: {
+    capacity: 24,
+    firstKeiDelay: 12,
+    keiGap: [35, 80] as [number, number],
+    keiCrates: [2, 5] as [number, number],
+    keiStay: [70, 160] as [number, number],
+    keiFeePerCrate: 14,
+    boxCrates: 10,
+    firstDeliveryDelay: 10,
+    deliveryGap: 30,
+    vipStay: 240,
+    vipFeePerCrate: 10,
+    /** Seconds a truck takes to drive up to the bay, to unload or load, and to drive away. */
+    arriveSeconds: 8,
+    unloadSeconds: 6,
+    leaveSeconds: 8,
+    turnedAwayReputation: -1,
+    vipTurnedAwayReputation: -2,
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

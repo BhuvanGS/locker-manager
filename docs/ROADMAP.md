@@ -187,6 +187,18 @@ Requested as "the next major upgrade: automation".
 - **Next: the warehouse.** Signed deals (`deals.signed`) are the contracts it will fulfil: a small warehouse where kei-truck drivers (and the VIPs' trucks) drop crates, pallets and shelf space instead
       of lockers, moved by hand first, then trolleys, then forklifts; missed deliveries cost reputation in both businesses. Not built yet.
 
+## Interim work: names, VIP cars, the warehouse and the counter arm (done)
+
+- [x] **Names over heads:** a name tag sprite per customer (`CustomerAgents`, `nameTexture`), above the patience bar; the mood face sits above it.
+- [x] **VIP cars:** offers have `readyAt` (`CONFIG.deals.arrivalSeconds`); `world/VipCar.ts` drives a black car in from the far end of the street to park outside the office while the offer is open and
+      away when it ends; the VIP appears at the desk, and `openDeal` works, only after the car has parked.
+- [x] **Warehouse** (upgrade `warehouse`, level 8, needs the south expansion): `sim/WarehouseManager.ts` (consignments, one bay, kei truckers at random, VIP deals delivered in box-truck loads via
+      `SignedDeal.delivered / inTransit / nextDeliveryAt`, collections that pay per crate, loads turned away when full), `world/Warehouse.ts` (walkway, shed, racks, crates, roller shutter, notice board, the road and the
+      trucks), a removable panel in the south hall's east wall (`Hall.openWarehouseDoor`, `WAREHOUSE.door`), zone `warehouse`. Tests: `sim/Warehouse.test.ts`.
+- [x] **Counter arm** (automation upgrade `counter-arm`, hub console): `GameManager.counterJob` (take / give, `withArm` item status), `world/CounterArm.ts`. Tests: `sim/Counter.test.ts`; the stress test
+      (`Fuzz.test.ts`) now includes counter-arm, office and warehouse setups.
+- **Next:** the warehouse as a game of its own: hand-moving crates (then trolleys and forklifts), choosing which loads to accept, more shelving, a second bay, and trucks that bring things you must put on the right rack.
+
 ## Interim work: mod menu (done)
 
 - [x] **Mod menu** (`M`): free cash, levels (+1, +100 XP, level 4, level 8), unlock any upgrade or everything (annexes included, built
