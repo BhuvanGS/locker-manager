@@ -37,6 +37,11 @@ function check(g: GameManager): void {
     expect(truck!.onBoard).toBe(load.crates - load.taken)
   }
   expect(new Set(wh.trucks.map((t) => t.spot)).size, 'two trucks in one parking spot').toBe(wh.trucks.length)
+  for (const job of wh.robots) {
+    if (!job) continue
+    if (job.crate) expect(job.crate.loadId, 'a robot holds the wrong crate').toBe(job.loadId)
+    expect(wh.sectionStored(job.section)).toBeLessThanOrEqual(wh.sectionCapacity(job.section))
+  }
   for (const d of g.deals.signed) {
     expect(d.delivered + d.inTransit, `${d.name}'s deal is over-delivered`).toBeLessThanOrEqual(d.crates)
     expect(d.inTransit).toBeGreaterThanOrEqual(0)

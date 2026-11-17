@@ -172,7 +172,7 @@ export const CONSOLES = {
   /** In the north-west corner of every tall hall, by the west window, angled out into the room (clear of the stairs, the corridor and the bay). */
   hall: { x: -5.5, z: -9.9, rotY: (3 * Math.PI) / 4 },
   /** Inside the warehouse, by the west door, facing east into the shed. */
-  warehouse: { x: 10.4, z: -15.6, rotY: Math.PI / 2 },
+  warehouse: { x: 7.0, z: -11.2, rotY: Math.PI / 2 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
@@ -201,34 +201,50 @@ export const OFFICE = {
 }
 
 /**
- * The warehouse extension, south-east of the shop. A door in the south hall's east wall (`door`, on the ground floor) opens onto a short
- * concrete walkway to the warehouse's west door. The warehouse is a steel-clad shed (`minX`…`maxX`, `minZ`…`maxZ`) with two pallet
- * racks inside (4 bays × 3 levels each = 24 crate slots) and one roller shutter on its east wall, at the loading bay. East of it a service
- * road runs north–south from the main street (z = 10) down past the bay, so trucks drive in from the street and out the far end.
+ * The warehouse extension, south-east of the shop. The shed is built right against the south hall's east wall (no gap: the hall's door at
+ * `door` opens straight into it) and reaches north to the back of the east annex. Inside: a cross aisle from the hall door to the docks, four
+ * pallet racks along it (two at first, one more per capacity upgrade), the cold room, the vault and the hidden room along the south wall,
+ * each with its own rack, and painted lanes the warehouse robots follow. Three loading docks in the east wall open onto the truck yard: a
+ * private yard with its own way in and out from the service road, so trucks turn in, drive down the yard, back into a dock, and leave by the
+ * yard's south exit. The service road joins the main street (z = 10).
  */
 export const WAREHOUSE = {
   door: { z: -18.2, halfWidth: 0.8, height: 2.2 },
-  minX: 9.6,
+  minX: 6.2,
   maxX: 24.0,
   minZ: -31,
-  maxZ: -13,
+  maxZ: -9.4,
   height: 5.0,
-  /** The big roller shutter in the east wall: you carry crates through it to and from the parked trucks (it opens as you walk up). */
-  shutter: { z: -22.0, halfWidth: 2.6, height: 3.4 },
-  /** Parking spots beside the shed, between it and the road: trucks park here (facing −z) while their crates are carried. */
-  parking: { x: 27.6, z: [-15.5, -22.0, -28.5] },
-  /** The service road: trucks drive down it from the main street, pull into a spot, and leave by the far end. */
-  road: { minX: 31, maxX: 37, minZ: -64, maxZ: 10.2, laneX: 33.2 },
-  /** The two base racks run along z (4 bays of 2 m, 3 shelves): 24 slots. */
-  racks: { x: [13.4, 17.0], northZ: -17.0, pitch: 2.0, bays: 4, levels: [0.12, 1.02, 1.92] },
-  /** The rack rows that come with the capacity upgrades run along x by the north and south walls (4 bays of 0.9 m, 3 shelves): 12 slots each. */
-  rows: { northZ: -14.8, southZ: -27.6, x0: 13.2, bays: 4, pitch: 0.9 },
-  /** The rooms in the corners (interiors), each with its racks. */
-  cold: { minX: 19.8, maxX: 23.8, minZ: -17.6, maxZ: -13.2 },
-  vault: { minX: 19.8, maxX: 23.8, minZ: -30.8, maxZ: -26.4 },
-  hidden: { minX: 9.8, maxX: 12.6, minZ: -30.8, maxZ: -26.0 },
-  /** The receiving desk, between the shutter and the vault. */
-  desk: { x: 19.0, z: -25.2 },
+  /** Loading docks in the east wall: a roller door each, which opens for a docked truck or when you walk up. */
+  docks: { z: [-12.8, -18.2, -23.6], halfWidth: 1.7, height: 3.6 },
+  /**
+   * The truck yard east of the docks. Trucks come down the road, turn in at `inZ`, drive south down `aisleX`, back into their dock in an arc
+   * of radius `turn`, and leave by driving out and down to `outZ`, back onto the road.
+   */
+  yard: { minX: 24.2, maxX: 42, minZ: -40, maxZ: -2.5, aisleX: 36.1, inZ: -6, outZ: -36.5, turn: 7 },
+  /** The service road: southbound lane `laneX` (the trucks), the other lane for the police. */
+  road: { minX: 42, maxX: 48, minZ: -90, maxZ: 10.2, laneX: 43.5, upLaneX: 46.5 },
+  /** Racks run along x (4 bays of `pitch`, 3 shelves): the shelves' four racks, in the order they are bought (2 base, then 1 per capacity upgrade). */
+  rack: { bays: 4, pitch: 1.2, levels: [0.12, 1.02, 1.92] },
+  shelves: [
+    { z: -16.0, x0: 9.0 },
+    { z: -20.4, x0: 9.0 },
+    { z: -16.0, x0: 14.4 },
+    { z: -20.4, x0: 14.4 },
+  ],
+  /** The rooms along the south wall (interiors); each has a door in its north wall and a rack along its south wall. */
+  hidden: { minX: 6.6, maxX: 10.2, minZ: -31, maxZ: -26.6, pitch: 0.8 },
+  cold: { minX: 10.8, maxX: 15.6, minZ: -31, maxZ: -26.6, pitch: 1.0 },
+  vault: { minX: 16.2, maxX: 20.4, minZ: -31, maxZ: -26.6, pitch: 0.9 },
+  /** Robot lanes (painted on the floor): the cross aisle, the south aisle, the dock lane, a west link, and the lane inside each room. */
+  lanes: { cross: -18.2, south: -25.0, dock: 22.0, west: 7.4, room: -28.4, north: -11.0 },
+  /** Where the robots wait and charge. */
+  robotHomes: [
+    [21.2, -29.8],
+    [23.0, -29.8],
+  ] as [number, number][],
+  /** The receiving desk, by the docks. */
+  desk: { x: 19.8, z: -11.4 },
 }
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
@@ -322,7 +338,7 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
   if (z < ROOM.minZ - 0.2 && x > ROOM.minX - 0.2 && x < ROOM.maxX + 0.2) return 'south'
   if (x < ROOM.minX - 0.2) return 'west'
   // Outside, east of the east annex: the yard, the road and the parking, which belong to the warehouse.
-  if (x > ANNEX.east.maxX + 0.2) return 'warehouse'
+  if (x > ANNEX.east.maxX + 0.2 && z < OFFICE.minZ - 0.2) return 'warehouse'
   if (x > ROOM.maxX + 0.2) return z > OFFICE.minZ - 0.2 ? 'office' : z < ROOM.minZ - 0.4 ? 'warehouse' : 'east'
   return 'main'
 }
@@ -337,7 +353,8 @@ export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
   // to the floors below, so anywhere in the tower you must be able to see all of it.
   south: ['main', 'floor1', 'floor2', 'warehouse'],
   // From the shed and its yard you can see the halls (through the door) and the east side of the shop.
-  warehouse: ['south', 'east', 'office'],
-  floor1: ['south', 'floor2'],
-  floor2: ['floor1', 'south'],
+  warehouse: ['south', 'east', 'office', 'floor1', 'floor2'],
+  // Their east windows look out over the warehouse roof.
+  floor1: ['south', 'floor2', 'warehouse'],
+  floor2: ['floor1', 'south', 'warehouse'],
 }

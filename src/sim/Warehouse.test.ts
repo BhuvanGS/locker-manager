@@ -420,42 +420,84 @@ describe('VIP loads', () => {
   })
 })
 
-describe('Automation: the receiving robots', () => {
-  it('robots carry whole loads in, one every few seconds, by what they look like', () => {
+describe('Automation: the warehouse robots', () => {
+  const crateSeconds = (level: number) => w.robots.seconds[level]!
+
+  it('a robot carries one crate at a time off a parked truck, picking it up partway through the job', () => {
     const b = bare()
     b.wh.applyUpgrade('wh-auto-1')
-    parked(b, 'general', 2)
-    parked(b, 'food', 2)
-    b.run(w.autoSeconds[1]! * 3, always(0.5), 0.5)
-    expect(b.wh.loads.filter((l) => l.owner === 'Test (kei truck)')).toHaveLength(0)
-    expect(b.wh.stored).toBeGreaterThanOrEqual(4)
-    b.wh.applyUpgrade('wh-auto-2')
-    expect(w.autoSeconds[2]).toBeLessThan(w.autoSeconds[1]!)
+    expect(b.wh.robots).toHaveLength(1)
+    const load = parked(b, 'general', 2)
+    b.run(0.5)
+    const job = b.wh.robots[0]!
+    expect(job).toMatchObject({ dir: 'in', loadId: load.id, section: 'shelves', crate: null })
+    expect(b.wh.sectionFree('shelves')).toBe(b.wh.capacity - 1) // a place is kept for it
+    b.run(crateSeconds(1) * w.robots.grabAt)
+    expect(job.crate).not.toBeNull()
+    expect(load.taken).toBe(1) // off the truck, in the robot's clamp
+    expect(b.wh.stored).toBe(0)
+    b.run(crateSeconds(1))
+    expect(b.wh.stored).toBeGreaterThanOrEqual(1)
+    b.run(crateSeconds(1) * 2)
+    expect(b.wh.cratesOf(load.id)).toBe(2)
+    expect(b.wh.loads.includes(load)).toBe(false)
+    expect(b.events).toContainEqual(expect.objectContaining({ type: 'stored', crates: 2 }))
   })
 
-  it('robots finish a load you started carrying', () => {
+  it('the second robot works alongside, faster', () => {
     const b = bare()
+    b.wh.applyUpgrade('wh-auto-1')
+    b.wh.applyUpgrade('wh-auto-2')
+    expect(b.wh.robots).toHaveLength(2)
+    expect(crateSeconds(2)).toBeLessThan(crateSeconds(1))
     const load = parked(b, 'general', 4)
+    // Two at a time (the second starts a little later, so they are not side by side): 4 crates in about 2.5 jobs' time.
+    b.run(crateSeconds(2) * 2.5 + 1)
+    expect(b.wh.cratesOf(load.id)).toBe(4)
+  })
+
+  it('robots finish a load you started, and drop a job whose crate you took first', () => {
+    const b = bare()
+    const load = parked(b, 'general', 2)
     b.wh.takeFromTruck(load.truckId, b.now)
     b.wh.storeCarried('shelves', b.deals)
     b.wh.applyUpgrade('wh-auto-1')
-    b.run(w.autoSeconds[1]! + 1)
-    expect(b.wh.cratesOf(load.id)).toBe(4)
-    expect(b.wh.loads.includes(load)).toBe(false)
+    b.run(0.5)
+    expect(b.wh.robots[0]?.loadId).toBe(load.id)
+    // You take the last crate before the robot gets to it: its job is dropped at the pick-up, and nothing is lost.
+    b.wh.takeFromTruck(load.truckId, b.now)
+    b.run(crateSeconds(1))
+    expect(b.wh.storeCarried('shelves', b.deals).ok).toBe(true)
+    expect(b.wh.cratesOf(load.id)).toBe(2)
+  })
+
+  it('robots carry collections out to the waiting truck, and the owner pays when the last crate is on', () => {
+    const b = bare()
+    b.wh.applyUpgrade('wh-vault')
+    const load = parked(b, 'metals', 2)
+    carryIn(b, load)
+    b.wh.applyUpgrade('wh-auto-1')
+    b.wh.consignments[0]!.collectAt = b.now
+    const truck = untilCollection(b, load.id)
+    b.run(crateSeconds(1) * 2 + 1)
+    expect(b.wh.cratesOf(load.id)).toBe(0)
+    expect(truck.phase).toBe('leaving')
+    expect(b.events.find((e) => e.type === 'collected')).toMatchObject({ crates: 2 })
   })
 
   it('without the scanner the robots happily put contraband on the shelves; with it they refuse it, or hide it if there is room', () => {
+    const long = crateSeconds(1) * 3
     const blind = bare()
     blind.wh.applyUpgrade('wh-auto-1')
     parked(blind, 'illegal', 2)
-    blind.run(w.autoSeconds[1]! * 2)
+    blind.run(long)
     expect(blind.wh.consignments[0]?.section).toBe('shelves')
 
     const refuses = bare()
     refuses.wh.applyUpgrade('wh-auto-1')
     refuses.wh.applyUpgrade('wh-scanner')
     parked(refuses, 'illegal', 2)
-    refuses.run(w.autoSeconds[1]! * 2)
+    refuses.run(long)
     expect(refuses.wh.consignments.some((c) => c.cargo === 'illegal')).toBe(false)
     expect(refuses.events.some((e) => e.type === 'refused')).toBe(true)
 
@@ -464,7 +506,7 @@ describe('Automation: the receiving robots', () => {
     hides.wh.applyUpgrade('wh-scanner')
     hides.wh.applyUpgrade('wh-hidden-1')
     parked(hides, 'illegal', 2)
-    hides.run(w.autoSeconds[1]! * 2)
+    hides.run(long)
     expect(hides.wh.consignments[0]?.section).toBe('hidden')
   })
 
@@ -473,13 +515,14 @@ describe('Automation: the receiving robots', () => {
     b.wh.applyUpgrade('wh-cap-1')
     b.wh.applyUpgrade('wh-cap-2')
     b.wh.applyUpgrade('wh-auto-1')
+    b.wh.applyUpgrade('wh-auto-2')
     b.deals.signed.push({
       id: 99, name: 'Beff Jezoz', title: 'Founder, Amazin', cargo: 'parcels', cargoType: 'general', crates: 25, retainer: 400, signedAt: 0, delivered: 0, inTransit: 0, nextDeliveryAt: w.firstDeliveryDelay,
     })
-    b.run(600, always(0.5), 0.5)
+    b.run(900, always(0.5), 0.5)
     expect(b.deals.signed[0]!.delivered).toBe(25)
     expect(b.deals.signed[0]!.inTransit).toBe(0)
-    b.run(w.vipStay + 600, always(0.5), 1)
+    b.run(w.vipStay + 900, always(0.5), 1)
     expect(b.wh.consignments.filter((c) => c.kind === 'vip')).toHaveLength(0)
     expect(b.events.filter((e) => e.type === 'collected' && e.vip).length).toBeGreaterThanOrEqual(3)
   })

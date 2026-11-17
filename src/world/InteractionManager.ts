@@ -117,7 +117,6 @@ export class InteractionManager {
         if (!truck) return none()
         const name = truck.owner.split(' (')[0]
         if (truck.phase !== 'parked') return none(truck.phase === 'arriving' ? `${name} is parking…` : `${name} is leaving`)
-        if (wh.autoLevel > 0) return none('The robots handle the trucks')
         if (truck.job === 'collect') {
           if (hands?.kind !== 'crate') return none(hands ? 'Hands full' : `${name} is collecting: bring their crates here`)
           return wh.carrying?.loadId === truck.loadId ? { action: `Load the crate onto ${name}'s truck`, hint: null } : none(`Not ${name}'s crate`)

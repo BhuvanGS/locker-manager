@@ -223,7 +223,17 @@ Requested as "the next major upgrade: automation".
 - [x] **Render fixes:** the sun's shadow box follows the player (`Facility.followSun`), the shed roof and room ceilings cast shadows, the shed fascia is no longer a false ceiling, and the inside is lit evenly.
 - [x] Tests: `Warehouse.test.ts` rewritten for the carry model (parking, carrying in and out, wrong truck, full sections, give-up, robots finishing a started load); `Fuzz.test.ts` carries crates at random and checks that a
       crate is in exactly one place.
-- **Next:** a hand trolley (carry 4 crates), then a forklift; a second parking row; insurance and a claims desk; customs inspections; a **bribe** option for the police; night shifts.
+- **Next:** see the next section.
+
+## Interim work: docks, a truck yard, warehouse robots and walking VIPs (done)
+
+- [x] **Trucks drive properly:** routes with turns and a reverse into the dock (`world/paths.ts`); nothing slides sideways.
+- [x] **Loading docks and a private truck yard:** three docks with roller doors in the east wall, the yard with its own way in and out, the service road moved east and the main street carried on to it.
+- [x] **No gap:** the shed is built against the south hall's east wall and up to the east annex; the hall's door opens straight into it.
+- [x] **Warehouse robots you can see:** a robot per upgrade level, one crate per job (`RobotJob`), driving painted lanes (`LaneGraph`) with a telescoping arm and a big clamp; the crate moves in the sim when the clamp grabs it.
+- [x] **VIPs walk in:** from the car, through the shop to the office, and back out again before the car leaves.
+- [x] Tests for the robot jobs (pick-up timing, reserved room, dropped jobs, collections, two robots); the fuzz test checks robot-held crates.
+- **Next:** articulated lorries (European / American) and a bigger yard, a hand trolley then a forklift, insurance and a claims desk, customs inspections, a **bribe** option for the police, night shifts.
 
 ## Interim work: mod menu (done)
 

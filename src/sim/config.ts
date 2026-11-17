@@ -198,8 +198,8 @@ export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
   { id: 'wh-scanner', title: 'Scanner arch', description: 'Every load that arrives shows what is really in it (and what it was declared as)', cost: 1200, level: 9 },
   { id: 'wh-hidden-1', title: 'Hidden compartments', description: 'A false-walled room with 8 slots for contraband. The police find what is hidden 40 % of the time instead of always', cost: 2000, level: 10 },
   { id: 'wh-hidden-2', title: 'Deeper hiding', description: '+4 hidden slots (12 in all), and the police find hidden loads only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
-  { id: 'wh-auto-1', title: 'Receiving robots', description: 'Robots carry each parked load in (to where it looks like it belongs) and each collection out, one every 12 s. No more carrying crates', cost: 2500, level: 10, requires: 'wh-cap-1' },
-  { id: 'wh-auto-2', title: 'Fast receiving robots', description: 'The robots work every 5 s. With the scanner they refuse contraband (or hide it, if you have the room)', cost: 3500, level: 11, requires: 'wh-auto-1' },
+  { id: 'wh-auto-1', title: 'Receiving robots', description: 'A warehouse robot with a big clamp carries crates for you: off parked trucks to where they look like they belong, and out to collection trucks (20 s a crate)', cost: 2500, level: 10, requires: 'wh-cap-1' },
+  { id: 'wh-auto-2', title: 'Second robot', description: 'A second robot, and both work faster (14 s a crate). With the scanner they refuse contraband (or hide it, if you have the room)', cost: 3500, level: 11, requires: 'wh-auto-1' },
 ]
 
 export const CONFIG = {
@@ -528,7 +528,8 @@ export const CONFIG = {
     minReputation: 55,
     firstOfferDelay: 15,
     /** Seconds from the VIP's car turning up in the street to them standing at the desk (they can be dealt with only then). */
-    arrivalSeconds: 6,
+    /** Seconds from the offer to the VIP sitting at the desk: the car drives up and parks, and they walk in through the lobby. */
+    arrivalSeconds: 24,
     gap: [70, 150] as [number, number],
     expiresAfter: 150,
     crates: [12, 60] as [number, number],
@@ -599,8 +600,8 @@ export const CONFIG = {
     deliveryGap: 30,
     vipStay: 240,
     /** Seconds a truck takes to drive in and park, and to pull out and drive away. */
-    arriveSeconds: 8,
-    leaveSeconds: 8,
+    arriveSeconds: 16,
+    leaveSeconds: 14,
     turnedAwayReputation: -1,
     /** Seconds a parked delivery truck waits to be unloaded before its driver gives up and drives off with what is still on board (so ignored trucks never block the parking for good). */
     parkedPatience: 180,
@@ -628,7 +629,11 @@ export const CONFIG = {
     /** Shelf slots at the start; the other sections start with none and come with upgrades. */
     startShelves: 24,
     /** Seconds between loads for the receiving robots, by level (0 = none). */
-    autoSeconds: [0, 12, 5] as number[],
+    /**
+     * The warehouse robots (bought with wh-auto-1 / wh-auto-2): how many there are and the seconds each takes per crate. A robot job carries
+     * ONE crate: it drives to the truck (or rack), picks the crate up at `grabAt` of the job, and puts it down at the end.
+     */
+    robots: { count: [0, 1, 2] as number[], seconds: [0, 20, 14] as number[], grabAt: 0.45, stagger: 0.4 },
     /**
      * The police. They only start to check once the warehouse holds `minCrates` crates (you have grown big), and then rarely.
      * Contraband in the open is always found; hidden contraband is found with the `hiddenFind` chance by hidden level (0, 1, 2).

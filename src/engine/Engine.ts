@@ -461,6 +461,7 @@ export class Engine {
       this.warehouse = null
     }
     if (this.vipCar) {
+      this.vipCar.dispose()
       this.discard(this.vipCar.root)
       this.vipCar = null
     }
@@ -635,7 +636,7 @@ export class Engine {
     // Views.
     this.agents.update(playing ? dt : 0, this.game, playerPos, camera)
     this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
-    this.facility.update(dt, this.agents.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
+    this.facility.update(dt, this.agents.nearDoor() || !!this.vipCar?.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
     for (const rack of this.keyRacks) rack.update(dt, this.game)
     for (const screen of this.statusScreens.values()) screen.update(dt, this.game)

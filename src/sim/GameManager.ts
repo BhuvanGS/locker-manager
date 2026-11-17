@@ -729,7 +729,7 @@ export class GameManager {
         this.notify({ type: 'message', text })
       } else if (e.type === 'stored') {
         if (this.warehouse.autoLevel === 0) continue
-        this.notify({ type: 'message', text: `The robots stored ${e.owner}'s ${e.crates} crates (${e.section}).` })
+        this.notify({ type: 'message', text: `The robots have put away ${e.owner.split(' (')[0]}'s ${e.crates} crate${e.crates === 1 ? '' : 's'}.` })
       } else if (e.type === 'refused') {
         if (e.vip) this.economy.adjustReputation(w.vipTurnedAwayReputation)
         else if (e.gaveUp) this.economy.adjustReputation(w.turnedAwayReputation)

@@ -126,13 +126,14 @@ up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). 
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
 **Names, cars, warehouse, counter arm.** Every customer has their **name floating over their head**. When a VIP offer appears, the VIP's **black car pulls up** in the
-street outside the office (with a VIP plate over it); you can only sit down with them once it has parked and they have walked in, and when the offer is over the car drives off.
-The **Warehouse** (level 8, $2,500, needs the south expansion) cuts a **door in the east wall of the south hall** onto a short walkway to a roomy warehouse shed (two long pallet racks with 24 crate slots, wide aisles,
-a roller shutter on the far side that rolls up as you walk to it, and a notice board), with **three parking spots** outside the shutter beside a **service road** that joins the main street. **Kei truckers** drive in
-now and then with 2 to 5 crates; **VIP deals** you signed are delivered in box-truck loads of up to 10 crates. Trucks park and wait while **you carry the crates in by hand**, one at a time: press E on the truck
-to take a crate, then E on a rack (or in the right room) to put it there. When the owner comes back, their truck parks again and you carry their crates out to it: E on the rack to take one of theirs, E on their
-truck to load it; with the last crate they pay and drive off. With every spot taken the next truck waits in the road, and a driver nobody unloads gives up after three minutes and leaves with what is still on board
-(a little reputation lost). The **counter arm** (hub console, $1,800, level 8, needs the second arm in the storage room) is the last step of automation: a robot arm on a rail
+street outside the office (with a VIP plate over it), the VIP gets out and **walks in** through the shop and the lobby to the deal office, and sits down at the desk; when the meeting
+is over they walk back out to the car and it drives off.
+The **Warehouse** (level 8, $2,500, needs the south expansion) is a big steel shed built right against the **east wall of the south hall** (the hall's door opens straight into it): two long pallet racks along
+a wide cross aisle (24 crate slots), a notice board, and **three loading docks** in the east wall. Trucks have their **own truck yard**: they come down the service road, turn in, drive down the yard and **back into a
+dock**, and leave by the yard's exit; the dock's roller door rolls up for them (and when you walk up to it). **Kei truckers** come now and then with 2 to 5 crates; **VIP deals** you signed are delivered in box-truck
+loads of up to 10 crates. While a truck is at its dock, **you carry the crates in by hand**, one at a time: press E on the truck to take a crate, then E on a rack (or in the right room) to put it there. When the owner
+comes back, their truck docks again and you carry their crates out to it: E on the rack to take one of theirs, E on their truck to load it; with the last crate they pay and drive off. With every dock taken the next
+truck waits on the road, and a driver nobody unloads gives up after three minutes and leaves with what is still on board (a little reputation lost). The **counter arm** (hub console, $1,800, level 8, needs the second arm in the storage room) is the last step of automation: a robot arm on a rail
 over the counter takes each customer's bag from their hand onto the belt, and when they come back fetches their bag and hands it over, paying you, with no help from you. It serves one customer at a time,
 oldest first, and leaves you alone if you start talking to the customer first. What is left for you: upgrades, maintenance, the VIPs and the warehouse.
 
@@ -145,8 +146,9 @@ now and then once the warehouse holds 16 or more crates (rarely: every five to t
 compartments** (the hidden room) it is found only 40 % of the time (20 % with deeper hiding), and special metals without the **special goods licence** earn a $300 fine. Spoiled goods earn nothing, a load that does not fit is
 sent back, and crates are paid by what is in them when their owner collects: general $14, food $16, cold $26, special metals $55, contraband $110 a crate (a VIP's load earns 70 % of that, on top of the retainer).
 All the **warehouse upgrades** are bought at the **warehouse office console** inside the shed, by the west door: two **rack rows** (+12 shelf slots each), the **cold room** (12 slots on its own racks), the
-**vault** (8), the **special goods licence**, the **scanner arch**, the **hidden room** (8 slots, 12 with deeper hiding), and the **receiving robots** (they carry each parked load in, and each collection out, every 12 s,
-then every 5 s; they also finish a load you started; with the scanner they send contraband back, or hide it if there is room). Which is the game: the manual desk first, then the robots, and every shortcut has a risk.
+**vault** (8), the **special goods licence**, the **scanner arch**, the **hidden room** (8 slots, 12 with deeper hiding), and the **warehouse robots**: yellow wheeled robots with a telescoping arm and a big
+clamp that drive the painted yellow lanes from their charging spots to the docks and the racks, one crate at a time (20 s a crate; the second upgrade adds a second robot and makes both faster). They carry deliveries in,
+collections out, finish loads you started, and with the scanner they send contraband back, or hide it if there is room; you can still carry crates yourself alongside them. Which is the game: the manual desk first, then the robots, and every shortcut has a risk.
 
 **The deal office** (level 6, $1,200, needs the conveyor) is the road to the warehouse. It is a glass office east of the lobby. Once your reputation is
 55 or more, a **VIP** (parody names: Beff Jezoz, Elan Husk, Marc Zuckerburger, Bill Gaytes, Tim Cookie, Oprah Windfree) turns up and waits at the desk for a couple of

@@ -64,6 +64,19 @@ export interface Truck {
   spoiled: boolean
 }
 
+/** One warehouse robot's job: carry ONE crate from a parked truck to a section (`in`) or from a section to a collection truck (`out`). */
+export interface RobotJob {
+  dir: 'in' | 'out'
+  truckId: number
+  loadId: number
+  section: Section
+  /** Seconds into the job, and how long it takes. */
+  t: number
+  duration: number
+  /** The crate, once the robot has picked it up (at `grabAt` of the job); until then it is still on the truck or in the section. */
+  crate: CrateData | null
+}
+
 export interface PoliceVisit {
   phase: 'arriving' | 'inspecting' | 'leaving'
   t: number
@@ -103,6 +116,8 @@ export class WarehouseManager {
   loads: Load[] = []
   trucks: Truck[] = []
   carrying: CrateData | null = null
+  /** One entry per robot: its job, or null while it is idle. */
+  robots: (RobotJob | null)[] = []
   police: PoliceVisit | null = null
   capacity: number = CONFIG.warehouse.startShelves
   coldCapacity = 0
@@ -119,11 +134,12 @@ export class WarehouseManager {
   private nextKeiAt: number | null = null
   private nextPoliceAt: number | null = null
   private nextTheftAt = 0
-  private nextAutoAt = 0
   private seq = 0
   private truckSeq = 0
   private loadSeq = 0
   private readonly owned = new Set<string>()
+  /** Robots start jobs a little apart, so two robots never drive the same route side by side. */
+  private nextRobotStart = 0
 
   start(now: number): void {
     this.nextKeiAt = now + CONFIG.warehouse.firstKeiDelay
@@ -144,8 +160,20 @@ export class WarehouseManager {
     return this.consignments.filter((c) => c.section === section).reduce((n, c) => n + c.crates, 0)
   }
 
+  /** Room left in a section, keeping a place for every crate a robot is bringing there. */
   sectionFree(section: Section): number {
-    return Math.max(0, this.sectionCapacity(section) - this.sectionStored(section))
+    const coming = this.robots.filter((j) => j?.dir === 'in' && j.section === section).length
+    return Math.max(0, this.sectionCapacity(section) - this.sectionStored(section) - coming)
+  }
+
+  /** Robots whose job is about `loadId` and who have not picked their crate up yet. */
+  private pending(loadId: number, dir: RobotJob['dir'], section?: Section): number {
+    return this.robots.filter((j) => j && !j.crate && j.dir === dir && j.loadId === loadId && (section === undefined || j.section === section)).length
+  }
+
+  /** A robot is holding a crate of `loadId`. */
+  private robotHolds(loadId: number): boolean {
+    return this.robots.some((j) => j?.crate?.loadId === loadId)
   }
 
   get free(): number {
@@ -210,8 +238,11 @@ export class WarehouseManager {
     } else if (id === 'wh-hidden-2') {
       this.hiddenLevel = 2
       this.hiddenCapacity = 12
-    } else if (id === 'wh-auto-1') this.autoLevel = 1
-    else if (id === 'wh-auto-2') this.autoLevel = 2
+    } else if (id === 'wh-auto-1' || id === 'wh-auto-2') {
+      this.autoLevel = id === 'wh-auto-1' ? Math.max(this.autoLevel, 1) : 2
+      const count = CONFIG.warehouse.robots.count[this.autoLevel] ?? 0
+      while (this.robots.length < count) this.robots.push(null)
+    }
   }
 
   // ------------------------------------------------------------------ carrying crates by hand
@@ -329,7 +360,7 @@ export class WarehouseManager {
 
   /** A collection is done when none of the load is left in the warehouse or in your hands. */
   private finishCollection(truck: Truck, events: WarehouseEvent[]): void {
-    if (truck.phase !== 'parked' || this.cratesOf(truck.loadId) > 0 || this.carrying?.loadId === truck.loadId) return
+    if (truck.phase !== 'parked' || this.cratesOf(truck.loadId) > 0 || this.carrying?.loadId === truck.loadId || this.robotHolds(truck.loadId)) return
     this.earned += truck.paid
     this.collected += truck.onBoard
     events.push({ type: 'collected', owner: truck.owner, crates: truck.onBoard, paid: truck.paid, vip: truck.kind === 'box', spoiled: truck.spoiled })
@@ -348,7 +379,7 @@ export class WarehouseManager {
     this.schedule(now, deals, rand)
     this.updateTrucks(dt, now, deals, rand, events)
     this.updateLoads(now, events)
-    this.updateAuto(now, deals, events)
+    this.updateRobots(dt, now, deals, events)
     this.updateSpoilage(now, events)
     this.updateTheft(now, rand, events)
     this.updatePolice(dt, now, rand, events)
@@ -441,7 +472,7 @@ export class WarehouseManager {
     for (const c of this.consignments) if (now >= c.collectAt) due.add(c.loadId)
     for (const loadId of due) {
       if (this.queue.some((q) => q.loadId === loadId && q.job === 'collect') || this.trucks.some((t) => t.loadId === loadId)) continue
-      if (this.loads.some((l) => l.id === loadId) || this.carrying?.loadId === loadId) continue
+      if (this.loads.some((l) => l.id === loadId) || this.carrying?.loadId === loadId || this.robotHolds(loadId)) continue
       const c = this.consignments.find((o) => o.loadId === loadId)!
       this.queue.push({ kind: c.kind === 'vip' ? 'box' : 'kei', job: 'collect', owner: c.owner, crates: this.cratesOf(loadId), dealId: null, loadId, cargo: c.cargo, declared: c.cargo })
     }
@@ -470,45 +501,97 @@ export class WarehouseManager {
     }
   }
 
-  /** The receiving robots: every few seconds they carry a whole parked load in, or a whole collection out. */
-  private updateAuto(now: number, deals: DealManager, events: WarehouseEvent[]): void {
-    const secs = CONFIG.warehouse.autoSeconds[this.autoLevel] ?? 0
-    if (secs <= 0 || now < this.nextAutoAt) return
-    const parked = this.trucks.filter((t) => t.phase === 'parked')
-    // Collections first: they free room.
-    const collect = parked.find((t) => t.job === 'collect' && this.carrying?.loadId !== t.loadId && this.cratesOf(t.loadId) > 0)
-    if (collect) {
-      this.nextAutoAt = now + secs
-      for (const c of this.consignments.filter((o) => o.loadId === collect.loadId)) {
-        const { id: _id, section: _s, crates, ...data } = c
-        for (let i = 0; i < crates; i++) this.loadOne(collect, data)
-        this.removeCrates(c, crates)
+  /** The warehouse robots: each idle robot takes the next job (collections first: they free room), works it, and picks the crate up and puts it down on time. */
+  private updateRobots(dt: number, now: number, deals: DealManager, events: WarehouseEvent[]): void {
+    const cfg = CONFIG.warehouse.robots
+    for (let i = 0; i < this.robots.length; i++) {
+      const job = this.robots[i]
+      if (!job) {
+        if (now < this.nextRobotStart) continue
+        const seconds = cfg.seconds[this.autoLevel] ?? 10
+        this.robots[i] = this.nextRobotJob(seconds, deals, events)
+        if (this.robots[i]) this.nextRobotStart = now + seconds * cfg.stagger
+        continue
       }
-      this.finishCollection(collect, events)
+      job.t += dt
+      if (!job.crate && job.t >= job.duration * cfg.grabAt && !this.robotGrab(job, now)) {
+        this.robots[i] = null // the crate or the truck has gone: drop the job
+        continue
+      }
+      if (job.crate && job.t >= job.duration) {
+        this.robotDrop(job, deals, events)
+        this.robots[i] = null
+      }
+    }
+  }
+
+  private nextRobotJob(seconds: number, deals: DealManager, events: WarehouseEvent[]): RobotJob | null {
+    const parked = this.trucks.filter((t) => t.phase === 'parked')
+    for (const t of parked) {
+      if (t.job !== 'collect') continue
+      for (const section of SECTIONS) {
+        const here = this.consignments.filter((c) => c.loadId === t.loadId && c.section === section).reduce((n, c) => n + c.crates, 0)
+        if (here - this.pending(t.loadId, 'out', section) > 0) return { dir: 'out', truckId: t.id, loadId: t.loadId, section, t: 0, duration: seconds, crate: null }
+      }
+    }
+    for (const t of parked) {
+      if (t.job !== 'deliver') continue
+      const load = this.loadOf(t)
+      if (!load || load.inspectDone !== null) continue
+      if (load.crates - load.taken - this.pending(load.id, 'in') <= 0) continue
+      // With the scanner, contraband that cannot all be hidden is sent back before anything is unloaded.
+      if (this.scanner && load.cargo === 'illegal' && load.taken === 0 && this.pending(load.id, 'in') === 0 && this.sectionFree('hidden') < load.crates) {
+        const refused = this.refuse(load.id, deals)
+        if (refused) events.push({ type: 'refused', owner: refused.owner, crates: refused.crates, vip: refused.kind === 'vip' })
+        continue
+      }
+      const section = this.placeFor(this.visibleCargo(load), 1)
+      if (section) return { dir: 'in', truckId: t.id, loadId: load.id, section, t: 0, duration: seconds, crate: null }
+    }
+    return null
+  }
+
+  /** The robot picks its crate up: off the truck, or out of the section. False if it is no longer there. */
+  private robotGrab(job: RobotJob, now: number): boolean {
+    const truck = this.truck(job.truckId)
+    if (!truck || truck.phase !== 'parked') return false
+    if (job.dir === 'in') {
+      const load = this.loads.find((l) => l.id === job.loadId)
+      if (!load || load.taken >= load.crates || load.inspectDone !== null) return false
+      load.taken += 1
+      truck.onBoard = load.crates - load.taken
+      job.crate = { loadId: load.id, owner: load.owner, kind: load.kind, cargo: load.cargo, dealId: load.dealId, spoiled: load.spoiled, deliveredAt: now, collectAt: load.collectAt }
+      this.afterTaking(load, truck)
+      return true
+    }
+    const c = this.consignments.find((o) => o.loadId === job.loadId && o.section === job.section)
+    if (!c) return false
+    const { id: _id, section: _s, crates: _n, ...data } = c
+    job.crate = data
+    this.removeCrates(c, 1)
+    return true
+  }
+
+  /** The robot puts its crate down: in its section, or on the collection truck. */
+  private robotDrop(job: RobotJob, deals: DealManager, events: WarehouseEvent[]): void {
+    const crate = job.crate!
+    if (job.dir === 'in') {
+      this.addCrates(crate, job.section, 1)
+      this.bookDelivered(crate, 1, deals)
+      // Tell the player once the whole load is in.
+      if (!this.loads.some((l) => l.id === crate.loadId) && !this.robots.some((j) => j !== job && j?.crate?.loadId === crate.loadId)) {
+        events.push({ type: 'stored', owner: crate.owner, crates: this.cratesOf(crate.loadId), section: job.section })
+      }
       return
     }
-    // A delivery: whatever is still on the truck (you may have carried some of it already).
-    const delivery = parked.map((t) => this.loadOf(t)).find((l): l is Load => !!l && l.taken < l.crates && l.inspectDone === null)
-    if (!delivery) return
-    const left = delivery.crates - delivery.taken
-    this.nextAutoAt = now + secs
-    if (this.scanner && delivery.cargo === 'illegal' && delivery.taken === 0 && this.sectionFree('hidden') < delivery.crates) {
-      const refused = this.refuse(delivery.id, deals)
-      if (refused) events.push({ type: 'refused', owner: refused.owner, crates: refused.crates, vip: refused.kind === 'vip' })
-      return
+    const truck = this.truck(job.truckId)
+    if (truck && truck.phase === 'parked') {
+      job.crate = null
+      this.loadOne(truck, crate)
+      this.finishCollection(truck, events)
+    } else {
+      this.addCrates(crate, job.section, 1) // cannot happen (a collection waits for its crates), but never lose a crate
     }
-    const section = this.placeFor(this.visibleCargo(delivery), left)
-    if (!section) return
-    const crate: CrateData = { loadId: delivery.id, owner: delivery.owner, kind: delivery.kind, cargo: delivery.cargo, dealId: delivery.dealId, spoiled: delivery.spoiled, deliveredAt: now, collectAt: delivery.collectAt }
-    this.addCrates(crate, section, left)
-    this.bookDelivered(crate, left, deals)
-    delivery.taken = delivery.crates
-    const truck = this.truck(delivery.truckId)
-    if (truck) {
-      truck.onBoard = 0
-      this.afterTaking(delivery, truck)
-    }
-    events.push({ type: 'stored', owner: delivery.owner, crates: left, section })
   }
 
   private updateSpoilage(now: number, events: WarehouseEvent[]): void {
