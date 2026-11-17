@@ -1,4 +1,4 @@
-import { AUTOMATION_UPGRADES, CONFIG } from './config'
+import { AUTOMATION_UPGRADES, CONFIG, WAREHOUSE_UPGRADES } from './config'
 import type { GameManager } from './GameManager'
 import type { ActionResult } from './types'
 
@@ -73,7 +73,8 @@ export function applyMod(game: GameManager, request: ModRequest): ActionResult {
       return game.grantUpgrade(request.id)
     case 'unlockAll': {
       let n = 0
-      for (const def of [...CONFIG.upgrades, ...AUTOMATION_UPGRADES]) {
+      for (const def of [...CONFIG.upgrades, ...AUTOMATION_UPGRADES, ...WAREHOUSE_UPGRADES]) {
+        if ('requires' in def && false) continue
         if (!game.upgrades.has(def.id) && game.grantUpgrade(def.id).ok) n += 1
       }
       return n > 0 ? ok(`Unlocked ${n} upgrade${n === 1 ? '' : 's'}.`) : fail('Everything is already unlocked.')

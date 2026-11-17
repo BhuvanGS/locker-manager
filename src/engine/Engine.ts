@@ -5,7 +5,7 @@ import { GameManager } from '../sim/GameManager'
 import type { ActionResult, DialogueOptionId } from '../sim/types'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import { applyMod, modInfo } from '../sim/mods'
-import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type TerminalView } from '../store/gameStore'
+import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type ReceivingView, type TerminalView } from '../store/gameStore'
 import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
 import { CounterArm } from '../world/CounterArm'
@@ -106,6 +106,9 @@ export class Engine {
   private catalogueSig = ''
   private catalogueView: CatalogueView | null = null
   private catalogueIndex = 0
+  private receivingSig = ''
+  private receivingView: ReceivingView | null = null
+  private receivingIndex = 0
   private dealSig = ''
   private dealView: DealView | null = null
   private dealIndex = 0
@@ -231,6 +234,7 @@ export class Engine {
     this.warehouse = warehouse
     this.scene.add(warehouse.root, warehouse.yard)
     this.interactionTargets.push(warehouse.root)
+    this.addConsole('warehouse', CONSOLES.warehouse.x, 0, CONSOLES.warehouse.z, CONSOLES.warehouse.rotY, 'warehouse')
   }
 
   /** Hang the counter arm over the counter. */
@@ -279,7 +283,7 @@ export class Engine {
     }
   }
 
-  private addConsole(scope: 'hub' | AutoZone, x: number, floorY: number, z: number, rotY: number, zone: AutoZone): void {
+  private addConsole(scope: 'hub' | 'warehouse' | AutoZone, x: number, floorY: number, z: number, rotY: number, zone: AutoZone | 'warehouse'): void {
     if (this.consoles.has(scope)) return
     const console = new AutomationConsole(scope, x, floorY, z, rotY, zone, this.physics)
     this.consoles.set(scope, console)
@@ -519,9 +523,11 @@ export class Engine {
     this.consoleView = null
     this.dealSig = ''
     this.dealView = null
+    this.receivingSig = ''
+    this.receivingView = null
     this.modSig = ''
     this.modView = null
-    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, deal: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, deal: null, receiving: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -583,7 +589,7 @@ export class Engine {
 
     // Player and camera. While you are talking or browsing the catalogue you stand still
     // (W/S/arrows choose answers instead).
-    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || this.game.dealOpen || modOpen
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || this.game.dealOpen || this.game.receivingOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
       player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
@@ -662,6 +668,8 @@ export class Engine {
         this.handleConsoleInput(input)
       } else if (this.game.dealOpen) {
         this.handleDealInput(input)
+      } else if (this.game.receivingOpen) {
+        this.handleReceivingInput(input)
       } else {
         if (store.pendingChoice) store.patch({ pendingChoice: null })
         if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
@@ -724,6 +732,30 @@ export class Engine {
       buy = items[this.catalogueIndex]?.id ?? null
     }
     if (buy) this.report(this.game.buyUpgrade(buy))
+  }
+
+  /** Receiving desk controls: W/S or the wheel pick a load, 1 stores it, 2 opens it, 3 sends it back, Q closes. */
+  private handleReceivingInput(input: InputSnapshot): void {
+    const store = useGameStore.getState()
+    const loads = this.game.receivingLoads()
+    const n = loads.length
+    if (n > 0) {
+      if (input.menuMove !== 0) this.receivingIndex = (this.receivingIndex + input.menuMove + n) % n
+      this.receivingIndex = Math.min(this.receivingIndex, n - 1)
+    }
+    const actions = ['store', 'inspect', 'refuse'] as const
+    let act: { id: number; action: (typeof actions)[number] } | null = null
+    if (store.pendingReceive) {
+      act = store.pendingReceive
+      store.patch({ pendingReceive: null })
+    } else if (input.cancelPressed) {
+      this.game.closeReceiving()
+      return
+    } else if (input.choice !== null && input.choice <= 3) {
+      const load = loads[this.receivingIndex]
+      if (load) act = { id: load.id, action: actions[input.choice - 1]! }
+    }
+    if (act) this.report(this.game.receive(act.id, act.action))
   }
 
   /** Deal desk controls: W/S or the wheel choose, 1–3 pick, E / Enter / a click confirm, Q closes. */
@@ -853,6 +885,23 @@ export class Engine {
       this.catalogueView = catalogue
     }
 
+    // Receiving desk view, cached the same way.
+    let receiving: ReceivingView | null = null
+    if (game.receivingOpen) {
+      const wh = game.warehouse
+      receiving = {
+        loads: game.receivingLoads(),
+        sections: wh.sections().map((section) => ({ section, stored: wh.sectionStored(section), capacity: wh.sectionCapacity(section) })),
+        scanner: wh.scanner,
+        autoLevel: wh.autoLevel,
+      }
+    }
+    const receivingSig = receiving ? JSON.stringify(receiving) : ''
+    if (receivingSig !== this.receivingSig) {
+      this.receivingSig = receivingSig
+      this.receivingView = receiving
+    }
+
     // Deal desk view, cached the same way.
     let deal: DealView | null = null
     if (game.dealOpen && game.deals.offer) {
@@ -881,7 +930,7 @@ export class Engine {
     if (game.consoleScope !== null) {
       const scope = game.consoleScope
       consoleView = {
-        title: scope === 'hub' ? 'Control hub · extend the belts' : `Robot arms · ${ZONE_TITLES[scope]}`,
+        title: scope === 'hub' ? 'Control hub · extend the belts' : scope === 'warehouse' ? 'Warehouse office · upgrades' : `Robot arms · ${ZONE_TITLES[scope]}`,
         money: game.economy.money,
         level: level.level,
         items: game.consoleItems(scope),
@@ -927,13 +976,15 @@ export class Engine {
       queue: game.queue().length,
       objective: game.objective(),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
-      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen ? null : (aim?.action ?? null),
-      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen ? null : (aim?.hint ?? null),
+      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen || game.receivingOpen ? null : (aim?.action ?? null),
+      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen || game.receivingOpen ? null : (aim?.hint ?? null),
       holding,
       dialogue: this.dialogueView,
       dialogueIndex: this.dialogueIndex,
       catalogue: this.catalogueView,
       catalogueIndex: this.catalogueIndex,
+      receiving: this.receivingView,
+      receivingIndex: this.receivingIndex,
       deal: this.dealView,
       dealIndex: this.dealIndex,
       console: this.consoleView,

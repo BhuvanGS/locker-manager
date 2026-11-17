@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { DialogueOptionId } from '../sim/types'
 import type { ModInfo, ModRequest } from '../sim/mods'
-import type { TerminalEntry } from '../sim/GameManager'
+import type { ReceivingLoad, TerminalEntry } from '../sim/GameManager'
+import type { Section } from '../sim/config'
 import type { CatalogueItem } from '../sim/UpgradeManager'
 
 export type GamePhase = 'menu' | 'playing' | 'paused'
@@ -35,6 +36,14 @@ export type DealView = {
   signed: number
   signedCrates: number
   options: { id: 'accept' | 'haggle' | 'decline'; label: string; disabled: string | null }[]
+}
+
+/** The receiving desk as the HUD shows it: the loads on the dock, how full each section of the warehouse is, and what helps you. */
+export type ReceivingView = {
+  loads: ReceivingLoad[]
+  sections: { section: Section; stored: number; capacity: number }[]
+  scanner: boolean
+  autoLevel: number
 }
 
 /** The conveyor terminal as the HUD shows it: the bags the robot arm can fetch. */
@@ -75,6 +84,9 @@ export type GameStoreState = {
   catalogue: CatalogueView | null
   /** Which catalogue row is highlighted (E / Enter buys it). */
   catalogueIndex: number
+  receiving: ReceivingView | null
+  /** Which load on the dock is highlighted (1 / 2 / 3 act on it). */
+  receivingIndex: number
   deal: DealView | null
   /** Which deal option is highlighted (E / Enter chooses it). */
   dealIndex: number
@@ -94,6 +106,8 @@ export type GameStoreState = {
   pendingFetch: string | null
   /** Deal option clicked in the UI, consumed by the Engine. */
   pendingDeal: 'accept' | 'haggle' | 'decline' | null
+  /** A button on a dock load clicked in the UI, consumed by the Engine. */
+  pendingReceive: { id: number; action: 'store' | 'inspect' | 'refuse' } | null
   /** Console row clicked in the UI, consumed by the Engine. */
   pendingConsoleBuy: string | null
 
@@ -142,6 +156,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   dialogueIndex: 0,
   catalogue: null,
   catalogueIndex: 0,
+  receiving: null,
+  receivingIndex: 0,
   deal: null,
   dealIndex: 0,
   console: null,
@@ -153,6 +169,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   pendingBuy: null,
   pendingFetch: null,
   pendingDeal: null,
+  pendingReceive: null,
   pendingConsoleBuy: null,
   modOpen: false,
   modPause: true,

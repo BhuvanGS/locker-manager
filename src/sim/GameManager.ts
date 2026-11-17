@@ -2,14 +2,17 @@ import { mulberry32 } from '../lib/random'
 import {
   AUTOMATION_UPGRADES,
   CONFIG,
+  WAREHOUSE_UPGRADES,
   ZONE_TITLES,
   type ArrivalStage,
+  type CargoType,
   type AutoZone,
   type AutomationUpgradeDef,
+  type Section,
   type UpgradeDef,
 } from './config'
 import { DealManager, type Offer } from './DealManager'
-import { WarehouseManager } from './WarehouseManager'
+import { WarehouseManager, type WarehouseEvent } from './WarehouseManager'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { ConveyorSystem } from './ConveyorSystem'
@@ -52,6 +55,24 @@ export interface CounterJob {
   moved: boolean
   /** Take: the locker reserved for the bag. */
   lockerId: LockerId | null
+}
+
+/** A load on the receiving dock, as you see it. */
+export interface ReceivingLoad {
+  id: number
+  owner: string
+  crates: number
+  /** What it looks like: its real contents if you know them, otherwise what the driver says. */
+  looksLike: CargoType
+  /** You know what is really inside (you opened it, or the scanner did). */
+  known: boolean
+  declared: CargoType
+  /** Someone is opening the crates right now. */
+  opening: boolean
+  spoiled: boolean
+  vip: boolean
+  /** The section it would be stored in, or null if there is no room for it. */
+  goesTo: Section | null
 }
 
 /** One bag the conveyor terminal can fetch. */
@@ -111,7 +132,9 @@ export class GameManager {
   counterJob: CounterJob | null = null
   private counterCheckAt = 0
   /** An automation console is open (`hub`, or the zone whose arms it controls). */
-  consoleScope: 'hub' | AutoZone | null = null
+  consoleScope: 'hub' | 'warehouse' | AutoZone | null = null
+  /** The receiving desk in the warehouse is open (the player is deciding what to do with the loads on the dock). */
+  receivingOpen = false
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
   busyUntil = 0
   firstCustomerId: CustomerId | null = null
@@ -160,20 +183,7 @@ export class GameManager {
     }
     this.conveyor.update(dt)
     this.updateCounterArm(dt)
-    if (this.hasWarehouse) {
-      for (const e of this.warehouse.update(dt, this.now, this.deals, this.rand)) {
-        if (e.type === 'delivered') this.notify({ type: 'message', text: `${e.owner} unloaded ${e.crates} crates in the warehouse.` })
-        else if (e.type === 'turnedAway') {
-          this.economy.adjustReputation(e.vip ? CONFIG.warehouse.vipTurnedAwayReputation : CONFIG.warehouse.turnedAwayReputation)
-          this.notify({ type: 'alert', text: `The warehouse is full: ${e.owner}'s ${e.crates} crates were turned away.` })
-        } else {
-          this.economy.earn(e.paid)
-          this.economy.adjustReputation(e.vip ? 1 : 0)
-          this.notify({ type: 'payment', amount: e.paid })
-          this.notify({ type: 'message', text: `${e.owner} collected ${e.crates} crates and paid $${e.paid}.` })
-        }
-      }
-    }
+    if (this.hasWarehouse) this.handleWarehouseEvents(this.warehouse.update(dt, this.now, this.deals, this.rand))
     if (this.hasOffice) {
       const event = this.deals.update(this.now, this.economy.reputation, this.rand)
       const offer = this.deals.offer
@@ -703,6 +713,148 @@ export class GameManager {
     }
   }
 
+  /** Turn what happened in the warehouse into money, reputation and messages. */
+  private handleWarehouseEvents(events: WarehouseEvent[]): void {
+    const w = CONFIG.warehouse
+    const label = (c: CargoType) => w.cargo[c].label.toLowerCase()
+    for (const e of events) {
+      if (e.type === 'arrived') {
+        const auto = this.warehouse.autoLevel > 0
+        this.notify({ type: 'message', text: `${e.owner} unloaded ${e.crates} crates of ${label(e.declared)} at the dock${auto ? '.' : ': process them at the receiving desk.'}` })
+      } else if (e.type === 'stored') {
+        if (this.warehouse.autoLevel === 0) continue
+        this.notify({ type: 'message', text: `The robots stored ${e.owner}'s ${e.crates} crates (${e.section}).` })
+      } else if (e.type === 'refused') {
+        if (e.vip) this.economy.adjustReputation(w.vipTurnedAwayReputation)
+        this.notify({ type: 'message', text: `${e.owner}'s load was sent back.` })
+      } else if (e.type === 'collected') {
+        this.economy.earn(e.paid)
+        this.economy.adjustReputation(e.spoiled ? -1 : e.vip ? 1 : 0)
+        if (e.paid > 0) this.notify({ type: 'payment', amount: e.paid })
+        this.notify(
+          e.spoiled
+            ? { type: 'alert', text: `${e.owner} collected ${e.crates} crates of spoiled goods and paid nothing.` }
+            : { type: 'message', text: `${e.owner} collected ${e.crates} crates and paid $${e.paid}.` },
+        )
+      } else if (e.type === 'spoiled') {
+        this.notify({ type: 'alert', text: `${e.owner}'s ${e.crates} crates of ${label(e.cargo)} have gone off.` })
+      } else if (e.type === 'stolen') {
+        this.economy.adjustReputation(w.theft.reputation)
+        this.notify({ type: 'alert', text: `Thieves took ${e.crates} crate${e.crates === 1 ? '' : 's'} of ${e.owner}'s special metals from the open shelves.` })
+      } else if (e.type === 'policeArrived') {
+        this.notify({ type: 'alert', text: 'Police are at the gate: a routine inspection of the warehouse.' })
+      } else {
+        const p = w.police
+        if (e.fine > 0) this.economy.spend(e.fine)
+        this.economy.adjustReputation(e.illegalFound ? p.illegalReputation : e.metalsFined ? p.metalsReputation : p.cleanReputation)
+        const found = [
+          e.illegalFound ? `contraband found and seized (${e.seizedCrates} crates)` : '',
+          e.metalsFined ? 'special metals without a licence' : '',
+        ].filter(Boolean)
+        this.notify(
+          found.length > 0
+            ? { type: 'alert', text: `The police fined you $${e.fine}: ${found.join('; ')}.` }
+            : { type: 'message', text: 'The police found nothing and left. Your name is good.' },
+        )
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ the receiving desk and warehouse upgrades
+
+  openReceiving(): ActionResult {
+    if (!this.hasWarehouse) return fail('There is no warehouse yet.')
+    if (this.dialogue) return fail('Finish talking first.')
+    this.receivingOpen = true
+    return ok()
+  }
+
+  closeReceiving(): void {
+    this.receivingOpen = false
+  }
+
+  /** The loads waiting at the dock as you see them: what each looks like (not necessarily what it is), and what you can do. */
+  receivingLoads(): ReceivingLoad[] {
+    const wh = this.warehouse
+    return wh.receiving.map((l) => {
+      const visible = wh.visibleCargo(l)
+      return {
+        id: l.id,
+        owner: l.owner,
+        crates: l.crates,
+        looksLike: visible,
+        known: l.inspected || wh.scanner,
+        declared: l.declared,
+        opening: l.inspectDone !== null,
+        spoiled: l.spoiled,
+        vip: l.kind === 'vip',
+        goesTo: wh.placeFor(visible, l.crates),
+      }
+    })
+  }
+
+  /** Do something with a load on the dock: store it, open it to see what is really inside, or send it back. */
+  receive(loadId: number, action: 'store' | 'inspect' | 'refuse'): ActionResult {
+    if (!this.hasWarehouse) return fail('There is no warehouse yet.')
+    const wh = this.warehouse
+    const load = wh.receiving.find((l) => l.id === loadId)
+    if (!load) return fail('That load has gone.')
+    if (action === 'inspect') {
+      if (load.inspected || wh.scanner) return fail('You already know what is in it.')
+      return wh.inspect(loadId, this.now) ? ok('Opening the crates…') : fail('They are already opening it.')
+    }
+    if (action === 'refuse') {
+      const refused = wh.refuse(loadId, this.deals)
+      if (!refused) return fail('That load has gone.')
+      if (refused.kind === 'vip') this.economy.adjustReputation(CONFIG.warehouse.vipTurnedAwayReputation)
+      return ok(`You sent ${refused.owner}'s load back.`)
+    }
+    const result = wh.store(loadId, this.now, this.rand())
+    if (!result.ok) return fail(result.reason)
+    wh.afterStored(result.load, this.deals)
+    const where = result.section === 'shelves' ? 'on the shelves' : result.section === 'cold' ? 'in the cold room' : result.section === 'vault' ? 'in the vault' : 'in the hidden compartments'
+    return ok(`Stored ${result.load.crates} crates ${where}.`)
+  }
+
+  private warehouseItems(): CatalogueItem[] {
+    return WAREHOUSE_UPGRADES.map((def) => ({ id: def.id, title: def.title, description: def.description, cost: def.cost, level: def.level, ...this.warehouseState(def.id) }))
+  }
+
+  private warehouseState(id: string): { state: CatalogueItem['state']; note: string | null } {
+    const def = WAREHOUSE_UPGRADES.find((d) => d.id === id)
+    if (!def) return { state: 'locked', note: 'Unknown' }
+    if (this.warehouse.has(id)) return { state: 'owned', note: 'Owned' }
+    const locked = (note: string) => ({ state: 'locked' as const, note })
+    if (!this.hasWarehouse) return locked('Needs the warehouse')
+    if (def.requires && !this.warehouse.has(def.requires)) return locked(`Buy ${WAREHOUSE_UPGRADES.find((d) => d.id === def.requires)?.title ?? def.requires} first`)
+    if (this.economy.level.level < def.level) return locked(`Needs level ${def.level}`)
+    if (this.economy.money < def.cost) return { state: 'tooExpensive', note: `Costs $${def.cost}, you have $${this.economy.money}` }
+    return { state: 'available', note: null }
+  }
+
+  private buyWarehouseUpgrade(id: string): ActionResult {
+    const def = WAREHOUSE_UPGRADES.find((d) => d.id === id)
+    if (!def) return fail('Not sold here.')
+    const status = this.warehouseState(id)
+    if (status.state !== 'available') return fail(status.note ?? 'Not available.')
+    this.economy.spend(def.cost)
+    this.warehouse.applyUpgrade(id)
+    this.notify({ type: 'upgradeBought', id, kind: 'warehouseUpgrade', index: 0, title: def.title })
+    return ok(`${def.title}: ${def.description}.`)
+  }
+
+  /** Mod menu: a warehouse upgrade for free, after what it needs. */
+  private grantWarehouseUpgrade(id: string): ActionResult {
+    const def = WAREHOUSE_UPGRADES.find((d) => d.id === id)
+    if (!def) return fail('Not sold here.')
+    if (this.warehouse.has(id)) return fail(`${def.title} is already owned.`)
+    if (!this.hasWarehouse) this.grantUpgrade('warehouse')
+    if (def.requires && !this.warehouse.has(def.requires)) this.grantUpgrade(def.requires)
+    this.warehouse.applyUpgrade(id)
+    this.notify({ type: 'upgradeBought', id, kind: 'warehouseUpgrade', index: 0, title: def.title })
+    return ok(`Unlocked ${def.title}.`)
+  }
+
   /** The warehouse (door, road and trucks) is built. */
   get hasWarehouse(): boolean {
     return this.upgrades.has('warehouse')
@@ -845,6 +997,8 @@ export class GameManager {
   grantUpgrade(id: string): ActionResult {
     const auto = AUTOMATION_UPGRADES.find((d) => d.id === id)
     if (auto) return this.grantAutomation(auto)
+    const wh = WAREHOUSE_UPGRADES.find((d) => d.id === id)
+    if (wh) return this.grantWarehouseUpgrade(wh.id)
     const def = this.upgrades.def(id)
     if (!def) return fail('Not in the catalogue.')
     if (this.upgrades.has(id)) return fail(`${def.title} is already owned.`)
@@ -1083,8 +1237,8 @@ export class GameManager {
   // ------------------------------------------------------------------ automation consoles
 
   /** Open the console for `scope` (the hub control console, or a zone's arm console). */
-  openConsole(scope: 'hub' | AutoZone): ActionResult {
-    if (!this.hasConveyor) return fail('There is no conveyor yet.')
+  openConsole(scope: 'hub' | 'warehouse' | AutoZone): ActionResult {
+    if (scope === 'warehouse' ? !this.hasWarehouse : !this.hasConveyor) return fail(scope === 'warehouse' ? 'There is no warehouse yet.' : 'There is no conveyor yet.')
     if (this.dialogue) return fail('Finish talking first.')
     this.consoleScope = scope
     return ok()
@@ -1095,7 +1249,8 @@ export class GameManager {
   }
 
   /** What a console sells, in order, with whether each can be bought now and why not. */
-  consoleItems(scope: 'hub' | AutoZone): CatalogueItem[] {
+  consoleItems(scope: 'hub' | 'warehouse' | AutoZone): CatalogueItem[] {
+    if (scope === 'warehouse') return this.warehouseItems()
     const upgrades = AUTOMATION_UPGRADES.filter((d) => d.scope === scope).map((def) => ({
       id: def.id,
       title: def.title,
@@ -1168,6 +1323,7 @@ export class GameManager {
 
   /** Buy an automation upgrade at its console. */
   buyAutomation(id: string): ActionResult {
+    if (id.startsWith('wh-')) return this.buyWarehouseUpgrade(id)
     const maintenance = /^(service|repair)-(main|east|south|floor1|floor2)$/.exec(id)
     if (maintenance) return this.maintain(maintenance[1] === 'service' ? 'service' : 'repair', maintenance[2] as AutoZone)
     const def = AUTOMATION_UPGRADES.find((d) => d.id === id)
@@ -1335,6 +1491,9 @@ export class GameManager {
       return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
+    if (this.hasWarehouse && this.warehouse.autoLevel === 0 && this.warehouse.receiving.length > 0) {
+      return `${this.warehouse.receiving.length} load${this.warehouse.receiving.length === 1 ? '' : 's'} waiting at the warehouse dock: go to the receiving desk.`
+    }
     if (this.deals.offer) {
       return this.now < this.deals.offer.readyAt
         ? `A car is pulling up outside: ${this.deals.offer.name} has arrived.`

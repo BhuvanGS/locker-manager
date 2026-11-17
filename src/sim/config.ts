@@ -170,6 +170,38 @@ function buildAutomationUpgrades(): AutomationUpgradeDef[] {
   return out
 }
 
+/** What a crate holds. `illegal` is contraband; a contraband load is *declared* as something harmless, so you cannot tell by looking. */
+export type CargoType = 'general' | 'food' | 'cold' | 'metals' | 'illegal'
+export const CARGO_TYPES: readonly CargoType[] = ['general', 'food', 'cold', 'metals', 'illegal']
+
+/** Where in the warehouse crates are kept: the shelves, the cold room, the vault, the hidden compartments. */
+export type Section = 'shelves' | 'cold' | 'vault' | 'hidden'
+export const SECTIONS: readonly Section[] = ['shelves', 'cold', 'vault', 'hidden']
+
+/** An upgrade for the warehouse, bought at the warehouse console inside it. */
+export interface WarehouseUpgradeDef {
+  id: string
+  title: string
+  description: string
+  cost: number
+  /** Player level needed. */
+  level: number
+  requires?: string
+}
+
+export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
+  { id: 'wh-cap-1', title: 'Rack row (north)', description: '+12 shelf slots along the north wall', cost: 900, level: 8 },
+  { id: 'wh-cap-2', title: 'Rack row (south)', description: '+12 more shelf slots along the south wall', cost: 1400, level: 8, requires: 'wh-cap-1' },
+  { id: 'wh-cold', title: 'Cold room', description: 'A refrigerated room with 12 slots: cold-chain loads keep fresh in it, and spoil in 90 s anywhere else', cost: 1800, level: 8 },
+  { id: 'wh-vault', title: 'Vault', description: 'A steel vault with 8 slots for special metals, which get stolen from the open shelves', cost: 2200, level: 9 },
+  { id: 'wh-permit', title: 'Special goods licence', description: 'Special metals become fully legal: no fine when the police check', cost: 1500, level: 9 },
+  { id: 'wh-scanner', title: 'Scanner arch', description: 'Every load that arrives shows what is really in it (and what it was declared as)', cost: 1200, level: 9 },
+  { id: 'wh-hidden-1', title: 'Hidden compartments', description: 'A false-walled room with 8 slots for contraband. The police find what is hidden 40 % of the time instead of always', cost: 2000, level: 10 },
+  { id: 'wh-hidden-2', title: 'Deeper hiding', description: '+8 hidden slots, and the police find hidden loads only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
+  { id: 'wh-auto-1', title: 'Receiving robots', description: 'Robots store each load that arrives, by what it looks like, one every 12 s. You no longer have to go to the receiving desk', cost: 2500, level: 10, requires: 'wh-cap-1' },
+  { id: 'wh-auto-2', title: 'Fast receiving robots', description: 'The robots work every 5 s. With the scanner they refuse contraband (or hide it, if you have the room)', cost: 3500, level: 11, requires: 'wh-auto-1' },
+]
+
 export const CONFIG = {
   facility: {
     /** Each locker bank is a wall of rows × cols lockers; the shop starts with one bank. */
@@ -512,36 +544,42 @@ export const CONFIG = {
         name: 'Beff Jezoz',
         title: 'Founder, Amazin',
         cargo: 'online-shop parcels',
+        type: 'general' as const,
         look: { skin: 0xe0ac69, hair: 0x1f1a17, hairStyle: 'bald', shirt: 0x1e293b, trousers: 0x0f172a, height: 1.0 },
       },
       {
         name: 'Elan Husk',
         title: 'CEO, Tezla & SpaceZ',
         cargo: 'rocket parts and battery cells',
+        type: 'metals' as const,
         look: { skin: 0xf1c9a5, hair: 0x4a2f1b, hairStyle: 'short', shirt: 0x111827, trousers: 0x1f2937, height: 1.04 },
       },
       {
         name: 'Marc Zuckerburger',
         title: 'Founder, Facebok',
         cargo: 'VR headsets',
+        type: 'general' as const,
         look: { skin: 0xf1c9a5, hair: 0x8b5a2b, hairStyle: 'short', shirt: 0x9ca3af, trousers: 0x374151, height: 0.98 },
       },
       {
         name: 'Bill Gaytes',
         title: 'Chair, Microsoftly',
         cargo: 'charity vaccines',
+        type: 'cold' as const,
         look: { skin: 0xffdbac, hair: 0x9a9a9a, hairStyle: 'short', shirt: 0x3b82f6, trousers: 0x374151, height: 1.0 },
       },
       {
         name: 'Tim Cookie',
         title: 'CEO, Pear',
         cargo: 'phones nobody has seen yet',
+        type: 'general' as const,
         look: { skin: 0xf1c9a5, hair: 0x9a9a9a, hairStyle: 'short', shirt: 0x1f2937, trousers: 0x111827, height: 1.02 },
       },
       {
         name: 'Oprah Windfree',
         title: 'Media mogul',
-        cargo: "a year's worth of book club books",
+        cargo: 'hampers of gourmet food for the show',
+        type: 'food' as const,
         look: { skin: 0x8d5524, hair: 0x1f1a17, hairStyle: 'long', shirt: 0xa3392b, trousers: 0x1e293b, height: 0.98 },
       },
     ],
@@ -556,18 +594,58 @@ export const CONFIG = {
     keiGap: [35, 80] as [number, number],
     keiCrates: [2, 5] as [number, number],
     keiStay: [70, 160] as [number, number],
-    keiFeePerCrate: 14,
     boxCrates: 10,
     firstDeliveryDelay: 10,
     deliveryGap: 30,
     vipStay: 240,
-    vipFeePerCrate: 10,
     /** Seconds a truck takes to drive up to the bay, to unload or load, and to drive away. */
     arriveSeconds: 8,
     unloadSeconds: 6,
     leaveSeconds: 8,
     turnedAwayReputation: -1,
     vipTurnedAwayReputation: -2,
+    /** What a crate of each kind earns per crate when the owner collects (a VIP's load earns `vipFeeFactor` of it, on top of the retainer). */
+    cargo: {
+      general: { label: 'General goods', fee: 14 },
+      food: { label: 'Food', fee: 16 },
+      cold: { label: 'Cold chain', fee: 26 },
+      metals: { label: 'Special metals', fee: 55 },
+      illegal: { label: 'Contraband', fee: 110 },
+    },
+    vipFeeFactor: 0.7,
+    /** What a kei trucker's load is, at random (metals only ever come from VIP deals). Contraband is declared as general goods. */
+    keiMix: { general: 0.5, food: 0.25, cold: 0.15, illegal: 0.1 },
+    /** Loads that can wait at the receiving dock; a full dock holds the trucks back. */
+    dockSlots: 3,
+    /** Food spoils this long after it arrives; cold-chain goods spoil this soon anywhere but in the cold room (the dock counts). */
+    foodShelfLife: 240,
+    coldSpoilSeconds: 90,
+    /** Special metals on the open shelves: now and then a crate or two walk off. */
+    theft: { every: 30, chance: 0.08, crates: [1, 3] as [number, number], reputation: -2 },
+    /** Opening a load to see what is in it takes this long. */
+    inspectSeconds: 6,
+    /** Shelf slots at the start; the other sections start with none and come with upgrades. */
+    startShelves: 24,
+    /** Seconds between loads for the receiving robots, by level (0 = none). */
+    autoSeconds: [0, 12, 5] as number[],
+    /**
+     * The police. They only start to check once the warehouse holds `minCrates` crates (you have grown big), and then rarely.
+     * Contraband in the open is always found; hidden contraband is found with the `hiddenFind` chance by hidden level (0, 1, 2).
+     * Special metals without the licence are fined once per visit.
+     */
+    police: {
+      minCrates: 16,
+      gap: [300, 600] as [number, number],
+      arriveSeconds: 8,
+      inspectSeconds: 12,
+      leaveSeconds: 8,
+      illegalFinePerCrate: 150,
+      metalsFine: 300,
+      illegalReputation: -6,
+      metalsReputation: -2,
+      cleanReputation: 1,
+      hiddenFind: [1, 0.4, 0.2] as number[],
+    },
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

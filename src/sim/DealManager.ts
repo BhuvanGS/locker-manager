@@ -1,4 +1,4 @@
-import { CONFIG } from './config'
+import { CONFIG, type CargoType } from './config'
 
 /** A VIP's offer, waiting at the deal desk. */
 export interface Offer {
@@ -9,6 +9,8 @@ export interface Offer {
   title: string
   /** What they want stored, in words ("online-shop parcels"). */
   cargo: string
+  /** What kind of goods that is (it decides where in the warehouse they must go). */
+  cargoType: CargoType
   crates: number
   /** Paid the moment you sign. */
   retainer: number
@@ -25,6 +27,7 @@ export interface SignedDeal {
   name: string
   title: string
   cargo: string
+  cargoType: CargoType
   crates: number
   retainer: number
   signedAt: number
@@ -91,14 +94,14 @@ export class DealManager {
     const crates = Math.round(lo + (hi - lo) * Math.min(1, reach * 0.7 + rand() * 0.3))
     const [rLo, rHi] = d.retainerPerCrate
     const retainer = Math.round((crates * (rLo + (rHi - rLo) * rand())) / 10) * 10
-    return { id: ++this.seq, vip, name: def.name, title: def.title, cargo: def.cargo, crates, retainer, readyAt: now + d.arrivalSeconds, expiresAt: now + d.arrivalSeconds + d.expiresAfter, haggled: false }
+    return { id: ++this.seq, vip, name: def.name, title: def.title, cargo: def.cargo, cargoType: def.type, crates, retainer, readyAt: now + d.arrivalSeconds, expiresAt: now + d.arrivalSeconds + d.expiresAfter, haggled: false }
   }
 
   /** Sign the offer. Returns the signed deal, or null if nobody is waiting. */
   accept(now: number, rand: () => number): SignedDeal | null {
     const o = this.offer
     if (!o) return null
-    const deal: SignedDeal = { id: o.id, name: o.name, title: o.title, cargo: o.cargo, crates: o.crates, retainer: o.retainer, signedAt: now, delivered: 0, inTransit: 0, nextDeliveryAt: now + CONFIG.warehouse.firstDeliveryDelay }
+    const deal: SignedDeal = { id: o.id, name: o.name, title: o.title, cargo: o.cargo, cargoType: o.cargoType, crates: o.crates, retainer: o.retainer, signedAt: now, delivered: 0, inTransit: 0, nextDeliveryAt: now + CONFIG.warehouse.firstDeliveryDelay }
     this.signed.push(deal)
     this.offer = null
     this.scheduleNext(now, rand)

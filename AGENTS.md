@@ -119,6 +119,13 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
+- **Cargo, the dock, sections, police** (`sim/WarehouseManager.ts`; `CONFIG.warehouse`, `WAREHOUSE_UPGRADES`, `CargoType`, `Section` in `config.ts`): a truck's delivery does not store anything: it becomes a `PendingLoad` on
+  `receiving` (the dock). `visibleCargo` is what it looks like (the real type only if `inspected` or the scanner); `placeFor(visible, crates)` picks the section (falling back to the shelves); `store / inspect / refuse` are
+  the desk actions (`GameManager.receive`) and the robots (`autoLevel`, `updateAuto`) do the same by themselves. `consignments` hold stored crates by `section`, with `spoiled` (food after `foodShelfLife`, cold
+  chain outside the cold room after `coldSpoilSeconds`), theft (metals outside the vault) and collection pay `cargo fee × crates` (0 if spoiled). `updatePolice` starts visits only once `stored ≥ police.minCrates`;
+  `inspectBuilding` fines and seizes. `GameManager.handleWarehouseEvents` turns events into money, reputation and toasts. Upgrades are bought through `buyAutomation('wh-…')` (console scope `warehouse`) and applied with
+  `WarehouseManager.applyUpgrade`. The 3D side (`world/Warehouse.ts`) builds rack rows and rooms when a flag appears, draws crates per section, pallets on the dock by what they LOOK like, the receiving desk (tag
+  `receivingDesk`) and the police car. **Add to `Fuzz.test.ts` and `check()` when you add a new way for crates to move.**
 - **Warehouse and trucks** (`kind: 'warehouse'`, `sim/WarehouseManager.ts`, `world/Warehouse.ts`): `warehouse.update` (from `GameManager.update`) schedules kei truckers, VIP deliveries (from `deals.signed`) and
   collections into a queue; ONE truck works the bay at a time (`arriving → unloading → leaving`, `CONFIG.warehouse` seconds); `finishWork` stores or turns away a load and returns events that `GameManager`
   turns into money, reputation and toasts (`alert` for bad news). The view draws the truck from `warehouse.truck`, the crates from `warehouse.consignments`, and rolls the shutter while a truck works. The door in the

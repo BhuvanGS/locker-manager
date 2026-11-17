@@ -199,6 +199,21 @@ Requested as "the next major upgrade: automation".
       (`Fuzz.test.ts`) now includes counter-arm, office and warehouse setups.
 - **Next:** the warehouse as a game of its own: hand-moving crates (then trolleys and forklifts), choosing which loads to accept, more shelving, a second bay, and trucks that bring things you must put on the right rack.
 
+## Interim work: the warehouse game: cargo types, the dock, upgrades and the police (done)
+
+- [x] **Cargo types** (`CargoType` in `config.ts`: general, food, cold, metals, illegal) with a fee per crate (`CONFIG.warehouse.cargo`); kei truckers bring a random mix (`keiMix`), VIPs bring what their deal is
+      (`CONFIG.deals.vips[].type`). Contraband is *declared* as general goods.
+- [x] **The receiving dock and desk:** `WarehouseManager.receiving` (`PendingLoad`), `store / inspect / refuse`, `GameManager.receivingLoads / receive`, the desk panel (`ui/ReceivingPanel.tsx`, keys 1 / 2 / 3), a full dock
+      (`dockSlots`) holds trucks back.
+- [x] **Sections** (`Section`: shelves, cold, vault, hidden) with room each, **spoilage** (food, cold chain), **theft** (metals on the open shelves) and **collection pay by cargo**.
+- [x] **Police** (`CONFIG.warehouse.police`): rare inspections once `minCrates` are stored; contraband in the open is always found, hidden contraband by `hiddenFind[level]`, unlicensed metals fined; fines come out of your money and
+      reputation. A police car (`world/Warehouse.ts`) parks on the road with its lights flashing.
+- [x] **Warehouse upgrades** (`WAREHOUSE_UPGRADES`, bought at the warehouse console, scope `warehouse`): rack rows, cold room, vault, licence, scanner, hidden compartments (2 levels), receiving robots (2 levels, `autoSeconds`).
+      The view builds each rack row / room when it is bought.
+- [x] Tests: `sim/Warehouse.test.ts` rewritten (dock, cargo, spoilage, theft, police, robots, upgrades); `Fuzz.test.ts` plays the receiving desk and the upgrades too.
+- **Next:** hand-moving crates (a trolley, then a forklift), a second bay and dock, insurance and a claims desk, customs inspections of imports, a **bribe** option for the police, truckers who come back angry
+      after a refusal, night shifts, and a bigger shed (the road and the lot have room).
+
 ## Interim work: mod menu (done)
 
 - [x] **Mod menu** (`M`): free cash, levels (+1, +100 XP, level 4, level 8), unlock any upgrade or everything (annexes included, built

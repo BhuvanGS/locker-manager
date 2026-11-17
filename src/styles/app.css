@@ -801,3 +801,29 @@ kbd {
   font-size: 0.95rem;
   line-height: 1.45;
 }
+
+.receiving-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.receiving-actions button {
+  background: rgba(30, 41, 59, 0.9);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.receiving-actions button:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.receiving-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

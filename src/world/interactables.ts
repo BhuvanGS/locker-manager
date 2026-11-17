@@ -16,7 +16,9 @@ export type Interactable =
   /** The deal desk in the office. */
   | { kind: 'dealDesk' }
   /** An automation upgrade console: `hub` or the zone whose arms it controls. */
-  | { kind: 'console'; scope: 'hub' | 'main' | 'east' | 'south' | 'floor1' | 'floor2' }
+  | { kind: 'console'; scope: 'hub' | 'warehouse' | 'main' | 'east' | 'south' | 'floor1' | 'floor2' }
+  /** The receiving desk at the warehouse dock. */
+  | { kind: 'receivingDesk' }
 
 export function tag(object: THREE.Object3D, data: Interactable): void {
   object.userData.interact = data

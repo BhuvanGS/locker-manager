@@ -171,6 +171,8 @@ export const CONSOLES = {
   east: { x: 11.5, z: -5.8, rotY: 0 },
   /** In the north-west corner of every tall hall, by the west window, angled out into the room (clear of the stairs, the corridor and the bay). */
   hall: { x: -5.5, z: -9.9, rotY: (3 * Math.PI) / 4 },
+  /** Inside the warehouse, by the west door, facing east into the shed. */
+  warehouse: { x: 10.5, z: -16.0, rotY: Math.PI / 2 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */

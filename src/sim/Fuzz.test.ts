@@ -18,9 +18,20 @@ const SETUPS: string[][] = [
   ['southExpansion', 'line-south', 'line-east', 'arms-south'],
   ['counter-arm'],
   ['counter-arm', 'office', 'warehouse'],
+  ['warehouse', 'wh-cap-1', 'wh-cold', 'wh-vault', 'wh-hidden-1', 'wh-scanner', 'office'],
+  ['warehouse', 'wh-auto-2', 'wh-hidden-2', 'wh-permit', 'office'],
 ]
 
 function check(g: GameManager): void {
+  const wh = g.warehouse
+  for (const section of ['shelves', 'cold', 'vault', 'hidden'] as const) {
+    expect(wh.sectionStored(section), `${section} is over its capacity`).toBeLessThanOrEqual(wh.sectionCapacity(section))
+  }
+  expect(new Set(wh.receiving.map((l) => l.id)).size).toBe(wh.receiving.length)
+  for (const d of g.deals.signed) {
+    expect(d.delivered + d.inTransit, `${d.name}'s deal is over-delivered`).toBeLessThanOrEqual(d.crates)
+    expect(d.inTransit).toBeGreaterThanOrEqual(0)
+  }
   const hands = g.hands
   for (const c of g.customers.all()) {
     const item = g.customers.itemOf(c)
@@ -122,7 +133,11 @@ function play(seed: number, setup: string[]): void {
       if (a < 0.4) g.spawnExtraCustomer()
       else if (a < 0.7) g.callBackStoredCustomers()
       else if (a < 0.85) g.openDeal()
-      else g.chooseDeal(pick(['accept', 'haggle', 'decline'] as const)!)
+      else if (a < 0.93) g.chooseDeal(pick(['accept', 'haggle', 'decline'] as const)!)
+      else {
+        const load = pick(g.warehouse.receiving)
+        if (load) g.receive(load.id, pick(['store', 'store', 'inspect', 'refuse'] as const)!)
+      }
     } else if (roll < 0.88) {
       const d = pick(AUTOMATION_UPGRADES.filter((u) => u.kind !== 'line'))
       if (d) g.buyAutomation(d.id)

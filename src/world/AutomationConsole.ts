@@ -9,7 +9,7 @@ import { makeSign, mat } from './models'
 const W = 512
 const H = 340
 
-export type ConsoleScope = 'hub' | AutoZone
+export type ConsoleScope = 'hub' | 'warehouse' | AutoZone
 
 /**
  * An upgrade console: a pedestal with a screen, standing in the part of the building it controls. The hub console (staff
@@ -26,7 +26,7 @@ export class AutomationConsole {
   private signature = ''
 
   /** `floorY` is the height of the floor it stands on. */
-  constructor(scope: ConsoleScope, x: number, floorY: number, z: number, rotY: number, zone: AutoZone | 'main', physics: PhysicsWorld) {
+  constructor(scope: ConsoleScope, x: number, floorY: number, z: number, rotY: number, zone: AutoZone | 'warehouse', physics: PhysicsWorld) {
     this.scope = scope
     this.physics = physics
     this.root.userData.zone = zone
@@ -58,7 +58,7 @@ export class AutomationConsole {
     proxy.position.y = 0.7
     tag(proxy, { kind: 'console', scope })
     this.root.add(proxy)
-    const sign = makeSign(scope === 'hub' ? 'CONTROL HUB' : 'ARM CONSOLE', 0.5, 0.12, '#0f172a', '#fbbf24')
+    const sign = makeSign(scope === 'hub' ? 'CONTROL HUB' : scope === 'warehouse' ? 'WAREHOUSE OFFICE' : 'ARM CONSOLE', 0.5, 0.12, '#0f172a', '#fbbf24')
     sign.position.set(0, 1.55, 0.08)
     this.root.add(sign)
   }
@@ -70,8 +70,11 @@ export class AutomationConsole {
 
   update(game: GameManager): void {
     const zones = AUTO_ZONES.filter((z) => game.conveyor.isCovered(z))
+    const wh = game.warehouse
     const signature =
-      this.scope === 'hub'
+      this.scope === 'warehouse'
+        ? `wh|${wh.capacity}|${wh.coldCapacity}|${wh.vaultCapacity}|${wh.hiddenLevel}|${wh.permit}|${wh.scanner}|${wh.autoLevel}`
+        : this.scope === 'hub'
         ? `hub|${zones.join(',')}`
         : `${this.scope}|${game.conveyor.speedLevel(this.scope)}|${game.conveyor.armCount(this.scope)}|${Math.round(game.conveyor.zoneCondition(this.scope))}|${game.conveyor.jammedCount(this.scope)}`
     if (signature === this.signature) return
@@ -89,7 +92,23 @@ export class AutomationConsole {
     ctx.textAlign = 'left'
     ctx.fillStyle = '#fbbf24'
     ctx.font = '800 38px system-ui, sans-serif'
-    if (this.scope === 'hub') {
+    if (this.scope === 'warehouse') {
+      const wh = game.warehouse
+      ctx.fillText('WAREHOUSE', 28, 44)
+      ctx.fillStyle = '#e2e8f0'
+      ctx.font = '600 28px system-ui, sans-serif'
+      const lines: [string, boolean][] = [
+        [`Shelves: ${wh.capacity} slots`, true],
+        [`Cold room: ${wh.coldCapacity > 0 ? `${wh.coldCapacity} slots` : 'none'}`, wh.coldCapacity > 0],
+        [`Vault: ${wh.vaultCapacity > 0 ? `${wh.vaultCapacity} slots` : 'none'}`, wh.vaultCapacity > 0],
+        [`Hidden: ${wh.hiddenLevel > 0 ? `level ${wh.hiddenLevel}` : 'none'}`, wh.hiddenLevel > 0],
+        [`Licence ${wh.permit ? '✓' : '✗'}  Scanner ${wh.scanner ? '✓' : '✗'}  Robots ${wh.autoLevel}`, wh.permit || wh.scanner || wh.autoLevel > 0],
+      ]
+      lines.forEach(([text, on], i) => {
+        ctx.fillStyle = on ? '#22c55e' : '#64748b'
+        ctx.fillText(text, 28, 96 + i * 40)
+      })
+    } else if (this.scope === 'hub') {
       ctx.fillText('CONTROL HUB', 28, 44)
       ctx.fillStyle = '#e2e8f0'
       ctx.font = '600 28px system-ui, sans-serif'

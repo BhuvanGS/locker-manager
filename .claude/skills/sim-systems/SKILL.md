@@ -74,6 +74,8 @@ Confirming a deposit is guarded by `storedBlocker`: bag in a locker, door shut, 
 
 ### Customer return order
 
+**The warehouse:** loads are `PendingLoad`s until a decision; the true `cargo` is private to the sim (`visibleCargo` is what the player may know), so UI and views must use `looksLike`, never `cargo`, for loads on the dock. Money and reputation effects of warehouse events live in `GameManager.handleWarehouseEvents`, not in the manager.
+
 **Invariants and the stress test:** `src/sim/Fuzz.test.ts` plays randomly and checks that records agree after every step. When you add an action, state or place an item can be, extend `check()` and the random player; run a long hunt (`FUZZ_SEEDS=150`) before you commit anything that touches lockers, items, hands or customers.
 
 **Automation levels:** coverage, speed and arm count live in `ConveyorSystem` and are set only by `applyAutomation`; add a new level by extending `buildAutomationUpgrades` in `config.ts`, and test it in `AutomationLevels.test.ts` (step the sim with small `dt`).

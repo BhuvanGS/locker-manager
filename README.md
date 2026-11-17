@@ -134,6 +134,18 @@ shelves is turned away and costs reputation (more for a VIP). The **counter arm*
 over the counter takes each customer's bag from their hand onto the belt, and when they come back fetches their bag and hands it over, paying you, with no help from you. It serves one customer at a time,
 oldest first, and leaves you alone if you start talking to the customer first. What is left for you: upgrades, maintenance, the VIPs and the warehouse.
 
+**The warehouse game.** The warehouse is where the real management begins. Every load is one of five **cargo types**: *general goods*, *food*, *cold chain*, *special metals* or
+*contraband*. Each truck unloads at the **receiving dock** (up to three loads wait there; a full dock holds the trucks back in the road). At the **receiving desk** you pick a load and press
+**1** to store it where it looks like it belongs, **2** to open the crates and see what is really inside (a few seconds), or **3** to send it back. What a load *looks like* is what the driver
+declares, and contraband is always declared as general goods, so you cannot tell by looking: open it, or buy the scanner. Where things go matters. **Food** goes off after four minutes. **Cold-chain**
+goods spoil in 90 seconds anywhere but the **cold room**. **Special metals** are stolen from the open shelves unless they are in the **vault**. **Contraband** pays $110 a crate, but the **police** come
+now and then once the warehouse holds 16 or more crates (rarely: every five to ten minutes) and they always find contraband in the open, fine you $150 a crate and seize it. In the **hidden
+compartments** it is found only 40 % of the time (20 % with deeper hiding), and special metals without the **special goods licence** earn a $300 fine. Spoiled goods earn nothing, a load that does not fit is
+sent back, and crates are paid by what is in them when their owner collects: general $14, food $16, cold $26, special metals $55, contraband $110 a crate (a VIP's load earns 70 % of that, on top of the retainer).
+All the **warehouse upgrades** are bought at the **warehouse office console** inside the shed, by the west door: two **rack rows** (+12 shelf slots each), the **cold room**, the **vault**, the **special goods
+licence**, the **scanner arch**, **hidden compartments** (and deeper hiding), and the **receiving robots** (they store each load for you every 12 s, then every 5 s; with the scanner they send contraband back, or hide
+it if there is room). Which is the game: the manual desk first, then the robots, and every shortcut has a risk.
+
 **The deal office** (level 6, $1,200, needs the conveyor) is the road to the warehouse. It is a glass office east of the lobby. Once your reputation is
 55 or more, a **VIP** (parody names: Beff Jezoz, Elan Husk, Marc Zuckerburger, Bill Gaytes, Tim Cookie, Oprah Windfree) turns up and waits at the desk for a couple of
 minutes with an offer: so many crates of something, and a retainer paid when you sign. Aim at the desk and press `E`: **sign** (retainer, XP and a little reputation),

@@ -59,6 +59,8 @@ export class InteractionManager {
         return game.openDeal()
       case 'console':
         return game.openConsole(t.scope)
+      case 'receivingDesk':
+        return game.openReceiving()
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -97,7 +99,11 @@ export class InteractionManager {
         return offer ? { action: `Talk business with ${offer.name}`, hint: null } : none('Nobody is waiting at the desk')
       }
       case 'console':
-        return { action: t.scope === 'hub' ? 'Use the control hub' : 'Upgrade the robot arms here', hint: null }
+        return { action: t.scope === 'hub' ? 'Use the control hub' : t.scope === 'warehouse' ? 'Upgrade the warehouse' : 'Upgrade the robot arms here', hint: null }
+      case 'receivingDesk': {
+        const n = game.warehouse.receiving.length
+        return { action: n > 0 ? `Process the ${n} load${n === 1 ? '' : 's'} on the dock` : 'Receiving desk', hint: null }
+      }
       case 'customer': {
         const c = game.customers.get(t.customerId)
         if (game.dialogue?.customerId === c.id) return none()
