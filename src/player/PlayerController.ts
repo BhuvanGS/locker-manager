@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import RAPIER from '@dimforge/rapier3d-compat'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
-import type { InputSnapshotWithMouse } from '../engine/InputManager'
-import { WALK_HEIGHT_GROUND } from '../world/constants'
+import type { InputSnapshot } from '../engine/InputManager'
+import { FLOOR_Y } from '../world/layout'
 
 const PLAYER_HEIGHT = 1.75
 const PLAYER_RADIUS = 0.38
@@ -19,7 +19,7 @@ export class PlayerController {
 
   constructor(physics: PhysicsWorld, spawn: THREE.Vector3) {
     this.physics = physics
-    const startY = WALK_HEIGHT_GROUND + PLAYER_HEIGHT / 2 + 0.05
+    const startY = FLOOR_Y + PLAYER_HEIGHT / 2 + 0.05
     this.mesh.position.set(spawn.x, startY, spawn.z)
   }
 
@@ -41,7 +41,7 @@ export class PlayerController {
     this.characterController.enableAutostep(0.38, 0.2, true)
   }
 
-  update(input: InputSnapshotWithMouse, cameraYaw: number, dt: number, elevatorDy: number): void {
+  update(input: InputSnapshot, cameraYaw: number, dt: number): void {
     if (!this.body || !this.characterController || !this.collider) return
 
     this.crouching = input.crouch
@@ -51,7 +51,7 @@ export class PlayerController {
       this.collider,
       {
         x: this.pendingMove.x,
-        y: this.verticalVelocity * dt + elevatorDy,
+        y: this.verticalVelocity * dt,
         z: this.pendingMove.z,
       },
     )
@@ -74,8 +74,8 @@ export class PlayerController {
 
   private pendingMove = new THREE.Vector3()
 
-  private computeDesiredMove(input: InputSnapshotWithMouse, cameraYaw: number, dt: number): void {
-    let speed = input.sprint ? 6.2 : 4.2
+  private computeDesiredMove(input: InputSnapshot, cameraYaw: number, dt: number): void {
+    let speed = input.sprint ? 5.2 : 3.4
     if (this.crouching) speed = 2.1
     const dir = new THREE.Vector3(input.right, 0, -input.forward)
     if (dir.lengthSq() > 0) {

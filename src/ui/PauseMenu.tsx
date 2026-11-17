@@ -5,24 +5,19 @@ export function PauseMenu() {
 
   const resume = () => {
     setPhase('playing')
-    const canvas = document.getElementById('game-canvas')
-    void canvas?.requestPointerLock()
-  }
-
-  const toMenu = () => {
-    setPhase('menu')
-    void document.exitPointerLock()
+    document.getElementById('game-canvas')?.requestPointerLock()?.catch(() => {})
   }
 
   return (
-    <div className="pause-overlay">
+    <div className="overlay">
       <div className="menu-card compact">
         <h2>Paused</h2>
+        <p className="muted">The shop clock is stopped while paused.</p>
         <div className="btn-row">
           <button type="button" className="btn-primary" onClick={resume}>
             Resume
           </button>
-          <button type="button" className="btn-ghost" onClick={toMenu}>
+          <button type="button" className="btn-ghost" onClick={() => setPhase('menu')}>
             Main menu
           </button>
         </div>

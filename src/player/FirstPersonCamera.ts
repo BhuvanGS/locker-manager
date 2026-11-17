@@ -10,7 +10,7 @@ export class FirstPersonCamera {
   private readonly forward = new THREE.Vector3()
 
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(58, aspect, 0.15, 600)
+    this.camera = new THREE.PerspectiveCamera(65, aspect, 0.05, 250)
     this.camera.rotation.order = 'YXZ'
   }
 
@@ -28,11 +28,16 @@ export class FirstPersonCamera {
     this.camera.rotation.z = 0
   }
 
+  /** Face the point (x, z) from (fromX, fromZ). The camera looks down its local −z axis. */
   lookToward(x: number, z: number, fromX = 0, fromZ = 0): void {
-    const dx = x - fromX
-    const dz = z - fromZ
-    this.yaw = Math.atan2(dx, dz)
+    this.yaw = Math.atan2(-(x - fromX), -(z - fromZ))
     this.pitch = 0
+  }
+
+  /** Turn by a relative amount in radians (debug/automation; mouse look uses handleMouseDelta). */
+  turn(yaw: number, pitch: number): void {
+    this.yaw += yaw
+    this.pitch = THREE.MathUtils.clamp(this.pitch + pitch, this.minPitch, this.maxPitch)
   }
 
   getYaw(): number {

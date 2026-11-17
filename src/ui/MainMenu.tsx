@@ -1,48 +1,40 @@
 import { useGameStore } from '../store/gameStore'
 
 export function MainMenu() {
-  const setPhase = useGameStore((s) => s.setPhase)
+  const patch = useGameStore((s) => s.patch)
 
   const start = () => {
-    setPhase('playing')
-    document.getElementById('game-canvas')?.focus()
+    patch({ phase: 'playing', newGameRequested: true })
+    const canvas = document.getElementById('game-canvas')
+    canvas?.focus()
+    canvas?.requestPointerLock()?.catch(() => {})
   }
 
   return (
-    <div className="menu-overlay">
+    <div className="overlay">
       <div className="menu-card">
-        <p className="eyebrow">The neighbours are watching</p>
-        <h1>Which One&apos;s My Key?</h1>
+        <p className="eyebrow">From memory to automation</p>
+        <h1>Locker Manager</h1>
         <p className="lede">
-          Jay called. One drink turned into a night you barely remember. You hid the house key
-          in a fake rock, took a picture so you would not forget, and passed out. The picture
-          is on your phone. It does not help.
+          You just opened a tiny bag-storage shop: one counter, six identical lockers, and a board of
+          identical keys. No computer, no labels, no notebook. Customers leave their things with you
+          and come back later. Remember who left what, where you put it, and which key opens it.
         </p>
         <button type="button" className="btn-primary" onClick={start}>
-          Start searching
+          Open the shop
         </button>
         <ul className="control-list">
           <li>
-            <kbd>WASD</kbd> move · <kbd>Shift</kbd> sprint · <kbd>C</kbd> crouch · <kbd>Mouse</kbd> look
+            <kbd>WASD</kbd> move · <kbd>Shift</kbd> walk faster · <kbd>Mouse</kbd> look
           </li>
           <li>
-            Click the view once, then <kbd>left click</kbd> a rock. <kbd>Right mouse</kbd> flips it. <kbd>F</kbd> tries to open it.
+            <kbd>E</kbd> or <kbd>Click</kbd> uses whatever is under the crosshair: customers, locker doors,
+            keys, the key board.
           </li>
           <li>
-            Do not hold Control while clicking — on a Mac that turns left-click into a right-click, so pickup never fires.
-          </li>
-          <li>
-            <kbd>I</kbd> pulls up your phone. Gallery has last night&apos;s picture of the rock.
-          </li>
-          <li>
-            Walk up to a neighbour. <kbd>G</kbd> greets them once. <kbd>X</kbd> explains the lost key once.
-            Saying either again makes that neighbour much more suspicious. They remember after you leave their sight.
+            <kbd>1</kbd>–<kbd>6</kbd> pick what to say when talking to a customer. <kbd>Esc</kbd> pauses.
           </li>
         </ul>
-        <p className="debug-hint">
-          Troubleshoot pickup: add <code>?debug=1</code> to the URL for a step log and orange
-          wireframe on held rocks.
-        </p>
       </div>
     </div>
   )

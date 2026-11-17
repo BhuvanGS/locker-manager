@@ -1,2 +1,0 @@
-export const GROUND_HEIGHT = 0.05
-export const WALK_HEIGHT_GROUND = GROUND_HEIGHT
