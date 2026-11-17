@@ -140,10 +140,11 @@ export const BAY = {
   outZ: -20.55,
   carZ: -20.225,
   minX: -3.2,
-  maxX: 4.0,
+  // The belts end well short of the stairs (x = 4.45): the corridor beside them stays wide enough to walk to the foot of the next flight.
+  maxX: 3.4,
   ductX: -2.7,
-  laneX: [3.2, 3.6],
-  spotX: [3.2, 3.6],
+  laneX: [2.85, 3.2],
+  spotX: [2.85, 3.2],
   /** Height of the bottom of the ducts above the floor. */
   mouthY: 1.5,
   /** Bags queued at the pick-up end sit this far apart (x). */
@@ -157,11 +158,11 @@ export const BAY = {
  * console near its robot arms. They face +z.
  */
 export const CONSOLES = {
-  hub: { x: -2.35, z: -1.2 },
-  main: { x: -3.35, z: -6.1 },
-  east: { x: 11.5, z: -5.8 },
-  /** At the end of the corridor east of the locker rows, just before the bay, facing north (so you see the screen as you walk down). */
-  hall: { x: 3.55, z: -18.6 },
+  hub: { x: -2.35, z: -1.2, rotY: 0 },
+  main: { x: -3.35, z: -6.1, rotY: 0 },
+  east: { x: 11.5, z: -5.8, rotY: 0 },
+  /** At the west end of the aisle between the first two rows of every hall, facing east down the aisle (out of the way of the stairs and the bay). */
+  hall: { x: -5.55, z: -13.85, rotY: Math.PI / 2 },
 } as const
 
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */

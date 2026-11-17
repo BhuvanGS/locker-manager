@@ -203,8 +203,8 @@ export class Engine {
     this.conveyorBay = bay
     this.scene.add(bay.root)
     this.interactionTargets.push(bay.root)
-    this.addConsole('hub', CONSOLES.hub.x, 0, CONSOLES.hub.z, 'main')
-    this.addConsole('main', CONSOLES.main.x, 0, CONSOLES.main.z, 'main')
+    this.addConsole('hub', CONSOLES.hub.x, 0, CONSOLES.hub.z, CONSOLES.hub.rotY, 'main')
+    this.addConsole('main', CONSOLES.main.x, 0, CONSOLES.main.z, CONSOLES.main.rotY, 'main')
   }
 
   /** The world position of the opening of a locker: x, the middle of the opening, and where a bag sits. */
@@ -220,9 +220,9 @@ export class Engine {
     }
   }
 
-  private addConsole(scope: 'hub' | AutoZone, x: number, floorY: number, z: number, zone: AutoZone): void {
+  private addConsole(scope: 'hub' | AutoZone, x: number, floorY: number, z: number, rotY: number, zone: AutoZone): void {
     if (this.consoles.has(scope)) return
-    const console = new AutomationConsole(scope, x, floorY, z, zone, this.physics)
+    const console = new AutomationConsole(scope, x, floorY, z, rotY, zone, this.physics)
     this.consoles.set(scope, console)
     this.scene.add(console.root)
     this.interactionTargets.push(console.root)
@@ -258,7 +258,7 @@ export class Engine {
     this.scene.add(station.root)
     this.interactionTargets.push(station.root)
     const spot = east ? CONSOLES.east : CONSOLES.hall
-    this.addConsole(zone, spot.x, floorY, spot.z, zone)
+    this.addConsole(zone, spot.x, floorY, spot.z, spot.rotY, zone)
   }
 
   private addRegisterBoard(animate: boolean): void {

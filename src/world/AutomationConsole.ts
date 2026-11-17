@@ -26,18 +26,20 @@ export class AutomationConsole {
   private signature = ''
 
   /** `floorY` is the height of the floor it stands on. */
-  constructor(scope: ConsoleScope, x: number, floorY: number, z: number, zone: AutoZone | 'main', physics: PhysicsWorld) {
+  constructor(scope: ConsoleScope, x: number, floorY: number, z: number, rotY: number, zone: AutoZone | 'main', physics: PhysicsWorld) {
     this.scope = scope
     this.physics = physics
     this.root.userData.zone = zone
     this.root.position.set(x, floorY, z)
+    this.root.rotation.y = rotY // 0 faces +z; a quarter turn faces along x
     const steel = mat(0x1f2937, 0.5, 0.4)
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.95, 0.34), steel)
     pedestal.position.y = 0.475
     pedestal.castShadow = true
     markBlocker(pedestal)
     this.root.add(pedestal)
-    this.body = physics.addStaticBox(new THREE.Vector3(x, floorY + 0.475, z), new THREE.Vector3(0.23, 0.475, 0.17))
+    const sideways = Math.abs(Math.sin(rotY)) > 0.5
+    this.body = physics.addStaticBox(new THREE.Vector3(x, floorY + 0.475, z), new THREE.Vector3(sideways ? 0.17 : 0.23, 0.475, sideways ? 0.23 : 0.17))
 
     this.canvas.width = W
     this.canvas.height = H
@@ -56,8 +58,8 @@ export class AutomationConsole {
     proxy.position.y = 0.7
     tag(proxy, { kind: 'console', scope })
     this.root.add(proxy)
-    const sign = makeSign(scope === 'hub' ? 'CONTROL HUB' : 'ARM CONSOLE', 0.7, 0.16, '#0f172a', '#fbbf24')
-    sign.position.set(0, 1.6, 0.08)
+    const sign = makeSign(scope === 'hub' ? 'CONTROL HUB' : 'ARM CONSOLE', 0.5, 0.12, '#0f172a', '#fbbf24')
+    sign.position.set(0, 1.55, 0.08)
     this.root.add(sign)
   }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADJACENT_ZONES,
+  BAY,
+  CONSOLES,
   CONVEYOR,
   FLOOR_HEIGHT,
   LOCKER,
@@ -161,5 +163,35 @@ describe('Conveyor layout', () => {
         }
       }
     }
+  })
+})
+
+describe('The bay and the consoles in the tall halls', () => {
+  it('the bay belts stop well short of the stairs, so you can walk to the foot of every flight', () => {
+    const gap = STAIRS.guardX - 0.04 - BAY.maxX // the corridor beside the end of the belts
+    expect(gap).toBeGreaterThanOrEqual(0.95) // the player is 0.76 m wide
+    // The flight's approach pocket (south of its first step) is reached down that corridor.
+    expect(STAIRS.flights[1].startZ - SOUTH.minZ).toBeGreaterThanOrEqual(1.5)
+  })
+
+  it('the bay fits behind the last row of floor 1, and the arms pick up over the belts', () => {
+    const depth = LOCKER.depth + 0.02
+    const lastRowBack = SOUTH.rowFrontZ[2]! - depth
+    expect(BAY.inZ + CONVEYOR.width / 2 + 0.05).toBeLessThan(lastRowBack) // the first belt clears the third row
+    expect(BAY.outZ - CONVEYOR.width / 2 - 0.05).toBeGreaterThan(SOUTH.minZ) // the second belt is inside the far wall
+    for (const x of BAY.spotX) {
+      expect(x).toBeGreaterThan(BAY.minX)
+      expect(x).toBeLessThan(BAY.maxX)
+    }
+    for (const x of BAY.laneX) expect(x).toBeGreaterThan(BANK_HALF + SOUTH.bankX[2]!) // the runways run beside the banks, not over them
+  })
+
+  it('the hall console is in an aisle, clear of the corridor, the stairs and the lockers', () => {
+    const c = CONSOLES.hall
+    expect(c.x).toBeLessThan(SOUTH.bankX[0]! - BANK_HALF + 0.5) // at the west end of the aisle
+    const aisleTop = SOUTH.rowFrontZ[0]! - LOCKER.depth - 0.02 // the back of the first row
+    const aisleBottom = SOUTH.rowFrontZ[1]! // the front of the second row
+    expect(c.z).toBeLessThan(aisleTop - 0.5)
+    expect(c.z).toBeGreaterThan(aisleBottom + 0.5)
   })
 })
