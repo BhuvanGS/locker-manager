@@ -5,7 +5,7 @@ import { GameManager } from '../sim/GameManager'
 import type { ActionResult, DialogueOptionId } from '../sim/types'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import { applyMod, modInfo } from '../sim/mods'
-import { useGameStore, type CatalogueView, type ConsoleView, type DialogueView, type TerminalView } from '../store/gameStore'
+import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type TerminalView } from '../store/gameStore'
 import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
 import { CustomerAgents } from '../world/CustomerAgents'
@@ -17,6 +17,7 @@ import { InteractionManager } from '../world/InteractionManager'
 import { KeyRack } from '../world/KeyBoard'
 import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
+import { Office } from '../world/Office'
 import { OccupancyBoard } from '../world/OccupancyBoard'
 import { Stairs } from '../world/Stairs'
 import { StationView } from '../world/StationView'
@@ -73,6 +74,8 @@ export class Engine {
   private readonly bankSpots = new Map<number, { placement: BankPlacement; zone: Zone }>()
   /** The conveyor belts, robot arm and terminal, once bought. */
   private conveyorBay: ConveyorBay | null = null
+  /** The deal office off the lobby, once bought. */
+  private office: Office | null = null
   /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
   private stations: StationView[] = []
   /** Upgrade consoles by scope (`hub`, or a zone). */
@@ -94,6 +97,9 @@ export class Engine {
   private catalogueSig = ''
   private catalogueView: CatalogueView | null = null
   private catalogueIndex = 0
+  private dealSig = ''
+  private dealView: DealView | null = null
+  private dealIndex = 0
   private consoleSig = ''
   private consoleView: ConsoleView | null = null
   private consoleIndex = 0
@@ -205,6 +211,17 @@ export class Engine {
     this.facility?.setKeysSignVisible(false)
     for (const bank of this.bankSpots.keys()) this.addStatusScreen(bank, true)
     for (const hall of this.halls) this.addOccupancyBoard(hall.kind, true)
+  }
+
+  /** Knock through into the unit next door and build the deal office. */
+  private addOffice(animate: boolean): void {
+    if (this.office) return
+    this.facility?.setOfficeOpen(true)
+    const office = new Office(this.physics)
+    if (animate) office.appear()
+    this.office = office
+    this.scene.add(office.root)
+    this.interactionTargets.push(office.root)
   }
 
   /** Cut the hatch through the partition and install the belts, the robot arm and the terminal. */
@@ -344,6 +361,7 @@ export class Engine {
     for (const screen of this.statusScreens.values()) show(screen.root)
     for (const board of this.occupancyBoards.values()) show(board.root)
     if (this.conveyorBay) show(this.conveyorBay.root)
+    if (this.office) show(this.office.root)
     for (const station of this.stations) show(station.root)
     for (const console of this.consoles.values()) show(console.root)
     for (const annex of this.annexes) show(annex.root)
@@ -396,6 +414,12 @@ export class Engine {
       console.dispose()
     }
     this.consoles.clear()
+    if (this.office) {
+      this.discard(this.office.root)
+      this.office.dispose()
+      this.office = null
+    }
+    this.facility?.setOfficeOpen(false)
     this.facility?.setConveyorOpen(false)
     this.facility?.setKeysSignVisible(true)
     if (this.registerBoard) {
@@ -447,9 +471,11 @@ export class Engine {
     this.terminalView = null
     this.consoleSig = ''
     this.consoleView = null
+    this.dealSig = ''
+    this.dealView = null
     this.modSig = ''
     this.modView = null
-    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, deal: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -511,7 +537,7 @@ export class Engine {
 
     // Player and camera. While you are talking or browsing the catalogue you stand still
     // (W/S/arrows choose answers instead).
-    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || modOpen
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || this.game.dealOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
       player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
@@ -543,6 +569,7 @@ export class Engine {
         else if (notice.kind === 'register') this.addRegisterBoard(true)
         else if (notice.kind === 'digital') this.goDigital()
         else if (notice.kind === 'conveyor') this.addConveyor(true)
+        else if (notice.kind === 'office') this.addOffice(true)
         else if (notice.kind === 'automation' && notice.id.startsWith('line-') && notice.zone) this.addLine(notice.zone)
         else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
         else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
@@ -558,6 +585,7 @@ export class Engine {
     for (const screen of this.statusScreens.values()) screen.update(dt, this.game)
     for (const board of this.occupancyBoards.values()) board.update(dt, this.game)
     this.conveyorBay?.update(dt, this.game)
+    this.office?.update(dt, this.game)
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)
@@ -580,6 +608,8 @@ export class Engine {
         this.handleTerminalInput(input)
       } else if (this.game.consoleScope !== null) {
         this.handleConsoleInput(input)
+      } else if (this.game.dealOpen) {
+        this.handleDealInput(input)
       } else {
         if (store.pendingChoice) store.patch({ pendingChoice: null })
         if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
@@ -642,6 +672,26 @@ export class Engine {
       buy = items[this.catalogueIndex]?.id ?? null
     }
     if (buy) this.report(this.game.buyUpgrade(buy))
+  }
+
+  /** Deal desk controls: W/S or the wheel choose, 1–3 pick, E / Enter / a click confirm, Q closes. */
+  private handleDealInput(input: InputSnapshot): void {
+    const store = useGameStore.getState()
+    const options = this.game.dealOptions()
+    const n = options.length
+    if (input.menuMove !== 0) this.dealIndex = (this.dealIndex + input.menuMove + n) % n
+    if (input.choice !== null && input.choice <= n) this.dealIndex = input.choice - 1
+    let pick: 'accept' | 'haggle' | 'decline' | null = null
+    if (store.pendingDeal) {
+      pick = store.pendingDeal
+      store.patch({ pendingDeal: null })
+    } else if (input.cancelPressed) {
+      this.game.closeDeal()
+      return
+    } else if (input.interactPressed || input.confirmPressed) {
+      pick = options[this.dealIndex]?.id ?? null
+    }
+    if (pick) this.report(this.game.chooseDeal(pick))
   }
 
   /** Console controls, like the catalogue's: W/S or the wheel choose, 1–9 jump, E / Enter / a click buy, Q closes. */
@@ -751,6 +801,29 @@ export class Engine {
       this.catalogueView = catalogue
     }
 
+    // Deal desk view, cached the same way.
+    let deal: DealView | null = null
+    if (game.dealOpen && game.deals.offer) {
+      const o = game.deals.offer
+      deal = {
+        name: o.name,
+        title: o.title,
+        cargo: o.cargo,
+        crates: o.crates,
+        retainer: o.retainer,
+        waitLeft: Math.max(0, Math.ceil(o.expiresAt - game.now)),
+        haggled: o.haggled,
+        signed: game.deals.signed.length,
+        signedCrates: game.deals.crates,
+        options: game.dealOptions(),
+      }
+    }
+    const dealSig = deal ? JSON.stringify(deal) : ''
+    if (dealSig !== this.dealSig) {
+      this.dealSig = dealSig
+      this.dealView = deal
+    }
+
     // Console view, cached the same way.
     let consoleView: ConsoleView | null = null
     if (game.consoleScope !== null) {
@@ -802,13 +875,15 @@ export class Engine {
       queue: game.queue().length,
       objective: game.objective(),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
-      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null ? null : (aim?.action ?? null),
-      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null ? null : (aim?.hint ?? null),
+      prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen ? null : (aim?.action ?? null),
+      promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen ? null : (aim?.hint ?? null),
       holding,
       dialogue: this.dialogueView,
       dialogueIndex: this.dialogueIndex,
       catalogue: this.catalogueView,
       catalogueIndex: this.catalogueIndex,
+      deal: this.dealView,
+      dealIndex: this.dealIndex,
       console: this.consoleView,
       consoleIndex: this.consoleIndex,
       terminal: this.terminalView,

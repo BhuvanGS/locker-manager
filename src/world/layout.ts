@@ -43,10 +43,8 @@ export const CUSTOMER_PATH = {
     new THREE.Vector3(-4.1, 0, 2.9),
     new THREE.Vector3(-4.1, 0, 3.8),
     new THREE.Vector3(-4.1, 0, 4.7),
-    new THREE.Vector3(4.6, 0, 2.9),
     new THREE.Vector3(4.6, 0, 3.8),
     new THREE.Vector3(4.6, 0, 4.7),
-    new THREE.Vector3(5.3, 0, 3.4),
     new THREE.Vector3(5.3, 0, 4.4),
     new THREE.Vector3(5.3, 0, 5.3),
   ],
@@ -186,6 +184,20 @@ export function lockerSlot(bank: number, row: number, col: number): { x: number;
   }
 }
 
+/**
+ * The deal office: a glass-fronted room east of the lobby, in the unit next door (its front half is rebuilt as the office). `OFFICE_DOOR` is
+ * the doorway cut in the lobby's east wall. The VIP stands behind the desk and faces the door (−x); you stand on the lobby side.
+ */
+export const OFFICE_DOOR = { z: 2.4, halfWidth: 0.8, height: 2.2 }
+export const OFFICE = {
+  minX: 6.3,
+  maxX: 12.4,
+  minZ: -0.8,
+  maxZ: 5.6,
+  desk: { x: 10.2, z: 2.4, width: 0.9, length: 2.4, height: 0.78 },
+  vip: { x: 11.2, z: 2.4 },
+}
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 
@@ -268,7 +280,7 @@ export function stairHole(flight: number): { x0: number; x1: number; z0: number;
 }
 
 /** Parts of the building. Only the zone you are in and its neighbours are drawn (see Engine.applyZoneVisibility). */
-export type Zone = 'main' | 'west' | 'east' | 'south' | 'floor1' | 'floor2'
+export type Zone = 'main' | 'west' | 'east' | 'office' | 'south' | 'floor1' | 'floor2'
 
 /** Which zone a player is in, from their position (`feetY` = height of their feet above the ground floor). */
 export function zoneAt(x: number, z: number, feetY: number): Zone {
@@ -276,13 +288,14 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
   if (feetY > FLOOR_HEIGHT - 0.9) return 'floor1'
   if (z < ROOM.minZ - 0.2 && x > ROOM.minX - 0.2 && x < ROOM.maxX + 0.2) return 'south'
   if (x < ROOM.minX - 0.2) return 'west'
-  if (x > ROOM.maxX + 0.2) return 'east'
+  if (x > ROOM.maxX + 0.2) return z > OFFICE.minZ - 0.2 ? 'office' : 'east'
   return 'main'
 }
 
 /** Zones you can see into from each zone (through doorways and stairwells). */
 export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
-  main: ['west', 'east', 'south'],
+  main: ['west', 'east', 'south', 'office'],
+  office: ['main'],
   west: ['main'],
   east: ['main'],
   // The three halls are one tower: the floor of floor 1 is the ceiling slab of the south hall, and you look down stairwells

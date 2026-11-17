@@ -13,6 +13,8 @@ export type Interactable =
   | { kind: 'conveyorIn' }
   | { kind: 'conveyorOut' }
   | { kind: 'terminal' }
+  /** The deal desk in the office. */
+  | { kind: 'dealDesk' }
   /** An automation upgrade console: `hub` or the zone whose arms it controls. */
   | { kind: 'console'; scope: 'hub' | 'main' | 'east' | 'south' | 'floor1' | 'floor2' }
 

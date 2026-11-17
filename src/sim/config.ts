@@ -43,7 +43,7 @@ export interface UpgradeDef {
    * lockerBank / keyRack add storage; labels numbers the lockers and tags the keys; register adds the wall
    * board listing who left what.
    */
-  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'annex' | 'hall'
+  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'office' | 'annex' | 'hall'
   title: string
   description: string
   cost: number
@@ -259,6 +259,16 @@ export const CONFIG = {
       level: 5,
       requires: 'digital',
     },
+    // The deal office: a glass office off the lobby where big names come to make storage deals (the road to the warehouse).
+    {
+      id: 'office',
+      kind: 'office',
+      title: 'Deal office',
+      description: 'A glass office off the lobby. VIPs with a good name to protect come to make storage deals with you: retainers now, crates for the warehouse later',
+      cost: 1200,
+      level: 6,
+      requires: 'conveyor',
+    },
     // The next phase of the building: grow backwards (south) with lockers in rows, then upwards.
     // Each hall has two rows of three locker banks (+36 lockers) and five key racks (+40 hooks).
     {
@@ -452,6 +462,62 @@ export const CONFIG = {
       repairCostPerArm: 80,
       repairedCondition: 40,
     },
+  },
+  /**
+   * VIP deals (the deal office). Offers start once your reputation reaches `minReputation`; one VIP at a time waits `expiresAfter` seconds.
+   * Parody names, on purpose.
+   */
+  deals: {
+    minReputation: 55,
+    firstOfferDelay: 15,
+    gap: [70, 150] as [number, number],
+    expiresAfter: 150,
+    crates: [12, 60] as [number, number],
+    retainerPerCrate: [18, 30] as [number, number],
+    signingXp: 80,
+    signingReputation: 3,
+    /** Haggling: the retainer goes up by this much, or the VIP walks out with this chance (and you lose a little reputation). */
+    haggleBonus: 0.25,
+    haggleWalkChance: 0.4,
+    haggleWalkReputation: -2,
+    vips: [
+      {
+        name: 'Beff Jezoz',
+        title: 'Founder, Amazin',
+        cargo: 'online-shop parcels',
+        look: { skin: 0xe0ac69, hair: 0x1f1a17, hairStyle: 'bald', shirt: 0x1e293b, trousers: 0x0f172a, height: 1.0 },
+      },
+      {
+        name: 'Elan Husk',
+        title: 'CEO, Tezla & SpaceZ',
+        cargo: 'rocket parts and battery cells',
+        look: { skin: 0xf1c9a5, hair: 0x4a2f1b, hairStyle: 'short', shirt: 0x111827, trousers: 0x1f2937, height: 1.04 },
+      },
+      {
+        name: 'Marc Zuckerburger',
+        title: 'Founder, Facebok',
+        cargo: 'VR headsets',
+        look: { skin: 0xf1c9a5, hair: 0x8b5a2b, hairStyle: 'short', shirt: 0x9ca3af, trousers: 0x374151, height: 0.98 },
+      },
+      {
+        name: 'Bill Gaytes',
+        title: 'Chair, Microsoftly',
+        cargo: 'charity vaccines',
+        look: { skin: 0xffdbac, hair: 0x9a9a9a, hairStyle: 'short', shirt: 0x3b82f6, trousers: 0x374151, height: 1.0 },
+      },
+      {
+        name: 'Tim Cookie',
+        title: 'CEO, Pear',
+        cargo: 'phones nobody has seen yet',
+        look: { skin: 0xf1c9a5, hair: 0x9a9a9a, hairStyle: 'short', shirt: 0x1f2937, trousers: 0x111827, height: 1.02 },
+      },
+      {
+        name: 'Oprah Windfree',
+        title: 'Media mogul',
+        cargo: "a year's worth of book club books",
+        look: { skin: 0x8d5524, hair: 0x1f1a17, hairStyle: 'long', shirt: 0xa3392b, trousers: 0x1e293b, height: 0.98 },
+      },
+    ],
   },
   /** Seconds you fumble after trying the wrong key. */
   wrongKeyDelay: 1.2,

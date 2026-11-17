@@ -125,6 +125,12 @@ part of the building has an **arm console** (in the halls, in the north-west cor
 up to 2.3× faster) and a **second arm** for the whole hall (two bags at once). Bags are
 filed in the lowest free locker the belts reach, so the storage room fills first. The terminal lists every stored bag with where it is.
 
+**The deal office** (level 6, $1,200, needs the conveyor) is the road to the warehouse. It is a glass office east of the lobby. Once your reputation is
+55 or more, a **VIP** (parody names: Beff Jezoz, Elan Husk, Marc Zuckerburger, Bill Gaytes, Tim Cookie, Oprah Windfree) turns up and waits at the desk for a couple of
+minutes with an offer: so many crates of something, and a retainer paid when you sign. Aim at the desk and press `E`: **sign** (retainer, XP and a little reputation),
+**push for more money** (the retainer goes up 25 %, or they walk out and you lose a little reputation) or **decline**. Better reputations bring bigger deals. A wall board counts
+the deals you have signed. The crates themselves arrive when the warehouse opens (next phase), so for now a deal is a retainer and a promise.
+
 **Customers and bags (the rules that keep the shop honest).** Every bag in the shop looks different, so a customer can always tell which is theirs. Load a
 bag on the belt and the customer **leaves at once** (the belt does the "it is stored" step for you); with hand-stored bags you still tell them, and one who
 has waited too long for that leaves on their own, annoyed. If something goes wrong in a deposit you can **give their bag back** (they go, and you lose a little

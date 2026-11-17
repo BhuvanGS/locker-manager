@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM, SOUTH } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
 
 /**
@@ -16,7 +16,10 @@ export class Facility {
   private doorR: THREE.Mesh | null = null
   private doorOpen = 0
   /** The removable wall panel at each annex doorway, and the unit-next-door block that an annex replaces. */
-  private readonly plugs = new Map<'west' | 'east', THREE.Mesh>()
+  private readonly plugs = new Map<'west' | 'east' | 'office', THREE.Mesh>()
+  /** The front half of the unit east of the lobby (the deal office is built inside it), and the office's door frame. */
+  private neighbourFront: THREE.Mesh | null = null
+  private officeFrame: THREE.Group | null = null
   private readonly neighbourBack = new Map<'west' | 'east', THREE.Mesh>()
   private readonly doorFrames = new Map<'west' | 'east', THREE.Group>()
   /** The removable panel in the back wall where the south expansion's doorway is cut, and its door frame. */
@@ -206,13 +209,55 @@ export class Facility {
     const t = 0.2
     const wall = mat(0xe9e4da, 0.9)
     const x = side === 'west' ? minX - t / 2 : maxX + t / 2
-    const { z, halfWidth, height: doorH } = ANNEX_DOOR
-    const lo = z - halfWidth
-    const hi = z + halfWidth
-    this.solid(t, height, lo - minZ, wall, x, height / 2, (minZ + lo) / 2)
-    this.solid(t, height, maxZ - hi, wall, x, height / 2, (hi + maxZ) / 2)
-    this.solid(t, height - doorH, halfWidth * 2, wall, x, doorH + (height - doorH) / 2, z)
-    this.plugs.set(side, this.solid(t, doorH, halfWidth * 2, wall, x, doorH / 2, z))
+    // The east wall also has the deal office's doorway (up in the lobby); each doorway is a removable panel under a lintel.
+    const doors = [{ key: side as 'west' | 'east' | 'office', ...ANNEX_DOOR }]
+    if (side === 'east') doors.push({ key: 'office', ...OFFICE_DOOR })
+    doors.sort((p, q) => p.z - q.z)
+    let cursor = minZ
+    for (const { key, z, halfWidth, height: doorH } of doors) {
+      const lo = z - halfWidth
+      const hi = z + halfWidth
+      this.solid(t, height, lo - cursor, wall, x, height / 2, (cursor + lo) / 2)
+      this.solid(t, height - doorH, halfWidth * 2, wall, x, doorH + (height - doorH) / 2, z)
+      this.plugs.set(key, this.solid(t, doorH, halfWidth * 2, wall, x, doorH / 2, z))
+      cursor = hi
+    }
+    this.solid(t, height, maxZ - cursor, wall, x, height / 2, (cursor + maxZ) / 2)
+  }
+
+  /**
+   * Knock through (or wall up again) the doorway into the deal office. Opening removes the wall panel and its collider, shrinks the
+   * neighbour's front block to what is left of the unit east of the office, and adds a door frame.
+   */
+  setOfficeOpen(open: boolean): void {
+    const plug = this.plugs.get('office')
+    const block = this.neighbourFront
+    if (!plug || !block) return
+    const isOpen = plug.parent === null
+    if (open === isOpen) return
+    if (open) {
+      this.root.remove(plug)
+      this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
+      // The block spans x 6.2…16.2; the office takes the west part, leaving x 12.6…16.2.
+      block.scale.x = 3.6 / 10
+      block.position.x = 14.4
+      const frame = new THREE.Group()
+      const trim = mat(0x6b7280, 0.5, 0.4)
+      for (const dz of [-1, 1]) {
+        const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, OFFICE_DOOR.height, 0.1), trim)
+        jamb.position.set(ROOM.maxX + 0.1, OFFICE_DOOR.height / 2, OFFICE_DOOR.z + dz * (OFFICE_DOOR.halfWidth + 0.04))
+        frame.add(jamb)
+      }
+      this.officeFrame = frame
+      this.root.add(frame)
+    } else {
+      this.root.add(plug)
+      plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+      block.scale.x = 1
+      block.position.x = 11.2
+      if (this.officeFrame) this.root.remove(this.officeFrame)
+      this.officeFrame = null
+    }
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
@@ -272,7 +317,7 @@ export class Facility {
     const west = mat(0xb9a58f, 0.9)
     const east = mat(0xa9b6bf, 0.9)
     this.deco(10, 4.4, 8.5, west, -11.2, 2.2, 1.75)
-    this.deco(10, 3.8, 8.5, east, 11.2, 1.9, 1.75)
+    this.neighbourFront = this.deco(10, 3.8, 8.5, east, 11.2, 1.9, 1.75)
     this.neighbourBack.set('west', this.deco(10, 4.4, 6.5, west, -11.2, 2.2, -5.75))
     this.neighbourBack.set('east', this.deco(10, 3.8, 6.5, east, 11.2, 1.9, -5.75))
   }

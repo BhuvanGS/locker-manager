@@ -119,6 +119,10 @@ Rules:
   storage room's station), `AutomationConsole` (pedestal + screen, tag `console`). The Engine builds one station per zone when its `line-*` notice arrives
   (`addLine`) and finds a locker's opening with `lockerSlotWorld`. Positions: `STATION`, `BAY`, `CONSOLES` and `OCCUPANCY_BOARD` in `layout.ts`; `OccupancyBoard` is a wall board per tall hall (digital lockers), built by the Engine in `addOccupancyBoard`. Keep overhead rails west of the stairs (x < 4.45). To add a zone: `AutoZone`, `ZONE_ROWS`,
   `LINE_NEEDS`, tubes/extent in `STATION`, a console spot, and the Engine's `addLine`.
+- **Deal office and VIP deals** (`kind: 'office'`, `sim/DealManager.ts`, `world/Office.ts`, `ui/DealPanel.tsx`): after the office is bought `deals.update` (called from `GameManager.update`) makes one
+  `Offer` at a time once reputation allows; the player sits at the desk (`openDeal`, `dealOpen`, tag `dealDesk`) and `chooseDeal`s accept / haggle / decline. `deals.signed` is the list of contracts
+  the future warehouse will use. The Engine builds the room in `addOffice` (the doorway is a second removable panel in the east wall, `Facility.setOfficeOpen`, which also shrinks the neighbour block);
+  zone `office` (`zoneAt`, `ADJACENT_ZONES`). Positions: `OFFICE`, `OFFICE_DOOR` in `layout.ts`. VIP names and looks live in `CONFIG.deals.vips`.
 - **Deposit and return rules** (`GameManager`): `finishDeposit(c)` is the single "it is stored" step (telling them, loading the belt, or a customer's patience running out while
   their bag is in a locker). A deposit visit has `giveBack`. `takeItem` applies the rummaging penalty. A locker with `state: 'reserved'` belongs to the arm: `openLocker`, `closeLocker`,
   `putItem` and `takeItem` refuse it, and `ConveyorSystem` keeps it reserved from the moment a job takes it until the job is done. `CustomerFactory.item(..., avoid)` keeps bag descriptions unique.

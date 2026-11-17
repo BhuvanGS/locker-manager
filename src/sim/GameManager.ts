@@ -8,6 +8,7 @@ import {
   type AutomationUpgradeDef,
   type UpgradeDef,
 } from './config'
+import { DealManager, type Offer } from './DealManager'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { ConveyorSystem } from './ConveyorSystem'
@@ -72,6 +73,8 @@ export class GameManager {
   readonly economy: EconomyManager
   readonly scheduler: CustomerScheduler
   readonly upgrades = new UpgradeManager(CONFIG.upgrades)
+  /** VIP offers and the deals you have signed (the deal office). */
+  readonly deals = new DealManager()
   /** The conveyor belt and robot arm (idle until the upgrade is bought). */
   readonly conveyor: ConveyorSystem
   /** Which part of the building each locker bank is in, and which row of that part (an arm station). */
@@ -87,6 +90,8 @@ export class GameManager {
   catalogueOpen = false
   /** The conveyor terminal menu is open (player is picking a bag to fetch). */
   terminalOpen = false
+  /** The deal desk is open (the player is talking business with a VIP). */
+  dealOpen = false
   /** An automation console is open (`hub`, or the zone whose arms it controls). */
   consoleScope: 'hub' | AutoZone | null = null
   /** Game time until which the player is busy (e.g. fumbling a wrong key). */
@@ -136,6 +141,15 @@ export class GameManager {
       else this.onReturn(event.customerId)
     }
     this.conveyor.update(dt)
+    if (this.hasOffice) {
+      const event = this.deals.update(this.now, this.economy.reputation, this.rand)
+      const offer = this.deals.offer
+      if (event === 'offered' && offer) this.notify({ type: 'message', text: `${offer.name} (${offer.title}) is waiting in the deal office.` })
+      else if (event === 'expired') {
+        this.dealOpen = false
+        this.notify({ type: 'message', text: 'The VIP got tired of waiting and left the deal office.' })
+      }
+    }
     this.updatePatience(dt)
     this.updateIdleGuard(dt)
   }
@@ -544,6 +558,71 @@ export class GameManager {
     return this.upgrades.has('conveyor')
   }
 
+  /** The deal office is built. */
+  get hasOffice(): boolean {
+    return this.upgrades.has('office')
+  }
+
+  /** Sit down with the VIP at the deal desk. */
+  openDeal(): ActionResult {
+    if (!this.hasOffice) return fail('There is no deal office yet.')
+    if (this.dialogue) return fail('Finish talking first.')
+    if (!this.deals.offer) {
+      return fail(this.economy.reputation < CONFIG.deals.minReputation ? 'Nobody important comes to a shop with a name like yours yet. Build your reputation.' : 'No VIP is waiting. They will come.')
+    }
+    this.dealOpen = true
+    return ok()
+  }
+
+  closeDeal(): void {
+    this.dealOpen = false
+  }
+
+  /** What you can say to the VIP at the desk. */
+  dealOptions(): { id: 'accept' | 'haggle' | 'decline'; label: string; disabled: string | null }[] {
+    const o = this.deals.offer
+    return [
+      { id: 'accept', label: o ? `Sign: $${o.retainer} retainer now` : 'Sign', disabled: o ? null : 'Nobody is waiting.' },
+      { id: 'haggle', label: 'Push for more money (they may walk)', disabled: !o ? 'Nobody is waiting.' : o.haggled ? 'Already pushed once.' : null },
+      { id: 'decline', label: 'Not interested', disabled: o ? null : 'Nobody is waiting.' },
+    ]
+  }
+
+  chooseDeal(id: 'accept' | 'haggle' | 'decline'): ActionResult {
+    const o = this.deals.offer
+    if (!o) {
+      this.dealOpen = false
+      return fail('They have gone.')
+    }
+    if (id === 'accept') {
+      const deal = this.deals.accept(this.now, this.rand)
+      if (!deal) return fail('They have gone.')
+      this.economy.earn(deal.retainer)
+      this.gainXp(CONFIG.deals.signingXp)
+      this.economy.adjustReputation(CONFIG.deals.signingReputation)
+      this.dealOpen = false
+      return ok(`Signed with ${deal.name}: $${deal.retainer} retainer, ${deal.crates} crates of ${deal.cargo} once the warehouse opens.`)
+    }
+    if (id === 'haggle') {
+      const result = this.deals.haggle(this.now, this.rand)
+      if (result === null) return fail('Already pushed once.')
+      if (result === 'walked') {
+        this.economy.adjustReputation(CONFIG.deals.haggleWalkReputation)
+        this.dealOpen = false
+        return fail(`${o.name} did not like being pushed, and walked out.`)
+      }
+      return ok(`${o.name} raises the retainer to $${this.deals.offer?.retainer}.`)
+    }
+    this.deals.decline(this.now, this.rand)
+    this.dealOpen = false
+    return ok(`You turned ${o.name} down politely.`)
+  }
+
+  /** The offer waiting at the desk, if any. */
+  get offer(): Offer | null {
+    return this.deals.offer
+  }
+
   /** Whether the shop has grown into the unit next door (building expansion). */
   hasAnnex(side?: 'west' | 'east'): boolean {
     if (side) return this.upgrades.has(side === 'west' ? 'annexWest' : 'annexEast')
@@ -656,6 +735,9 @@ export class GameManager {
         racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
       }
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, hall: def.hall, banks, racks })
+    } else if (def.kind === 'office') {
+      this.deals.start(this.now)
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })
     } else if (def.kind === 'conveyor') {
       this.conveyor.cover('main')
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, zone: 'main' })
@@ -1103,6 +1185,7 @@ export class GameManager {
       return this.hasConveyor ? `Put the ${item.label} on the conveyor belt.` : `Store the ${item.label} in an empty locker.`
     }
     if (hands?.kind === 'key') return 'Hang the key on the key board — or try it on a locker.'
+    if (this.deals.offer) return `${this.deals.offer.name} is waiting in the deal office, off the lobby.`
     const jam = this.conveyor.jammedZones()[0]
     if (jam) return `A robot arm in the ${ZONE_TITLES[jam]} has jammed. Repair it at that arm console.`
     const lockers = this.lockers.all()

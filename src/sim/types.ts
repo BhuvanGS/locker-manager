@@ -181,7 +181,7 @@ export type SimNotice =
   | {
       type: 'upgradeBought'
       id: string
-      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'automation' | 'annex' | 'hall'
+      kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'digital' | 'conveyor' | 'automation' | 'office' | 'annex' | 'hall'
       index: number
       title: string
       /** Annex only: which neighbouring unit was knocked through, and the new bank and rack numbers. */

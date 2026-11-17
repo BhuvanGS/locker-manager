@@ -55,6 +55,8 @@ export class InteractionManager {
         return game.takeFromConveyor()
       case 'terminal':
         return game.openTerminal()
+      case 'dealDesk':
+        return game.openDeal()
       case 'console':
         return game.openConsole(t.scope)
       case 'hook':
@@ -90,6 +92,10 @@ export class InteractionManager {
       }
       case 'terminal':
         return { action: 'Use the terminal', hint: null }
+      case 'dealDesk': {
+        const offer = game.deals.offer
+        return offer ? { action: `Talk business with ${offer.name}`, hint: null } : none('Nobody is waiting at the desk')
+      }
       case 'console':
         return { action: t.scope === 'hub' ? 'Use the control hub' : 'Upgrade the robot arms here', hint: null }
       case 'customer': {

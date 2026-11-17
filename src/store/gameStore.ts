@@ -22,6 +22,21 @@ export type CatalogueView = { money: number; level: number; items: CatalogueItem
 /** An automation console as the HUD shows it: what it sells here. */
 export type ConsoleView = { title: string; money: number; level: number; items: CatalogueItem[] }
 
+/** A VIP's offer at the deal desk, as the HUD shows it. */
+export type DealView = {
+  name: string
+  title: string
+  cargo: string
+  crates: number
+  retainer: number
+  /** Seconds until they give up. */
+  waitLeft: number
+  haggled: boolean
+  signed: number
+  signedCrates: number
+  options: { id: 'accept' | 'haggle' | 'decline'; label: string; disabled: string | null }[]
+}
+
 /** The conveyor terminal as the HUD shows it: the bags the robot arm can fetch. */
 export type TerminalView = { entries: TerminalEntry[]; free: number }
 
@@ -60,6 +75,9 @@ export type GameStoreState = {
   catalogue: CatalogueView | null
   /** Which catalogue row is highlighted (E / Enter buys it). */
   catalogueIndex: number
+  deal: DealView | null
+  /** Which deal option is highlighted (E / Enter chooses it). */
+  dealIndex: number
   console: ConsoleView | null
   /** Which console row is highlighted (E / Enter buys it). */
   consoleIndex: number
@@ -74,6 +92,8 @@ export type GameStoreState = {
   pendingBuy: string | null
   /** Locker id of a terminal row clicked in the UI, consumed by the Engine. */
   pendingFetch: string | null
+  /** Deal option clicked in the UI, consumed by the Engine. */
+  pendingDeal: 'accept' | 'haggle' | 'decline' | null
   /** Console row clicked in the UI, consumed by the Engine. */
   pendingConsoleBuy: string | null
 
@@ -122,6 +142,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   dialogueIndex: 0,
   catalogue: null,
   catalogueIndex: 0,
+  deal: null,
+  dealIndex: 0,
   console: null,
   consoleIndex: 0,
   terminal: null,
@@ -130,6 +152,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   pendingChoice: null,
   pendingBuy: null,
   pendingFetch: null,
+  pendingDeal: null,
   pendingConsoleBuy: null,
   modOpen: false,
   modPause: true,

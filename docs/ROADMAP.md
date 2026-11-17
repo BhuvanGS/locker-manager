@@ -177,6 +177,16 @@ Requested as "the next major upgrade: automation".
       `FUZZ_SEEDS=150 npx vitest run src/sim/Fuzz.test.ts` for a long hunt).
 - Still open from the brief: more item kinds with their own models, a notebook for the early game, customers asking for something other than their own bag (a "wrong locker" story).
 
+## Interim work: the deal office (done)
+
+- [x] Upgrade `office` (level 6, needs the conveyor): a doorway in the lobby's east wall (`Facility.setOfficeOpen`, `OFFICE_DOOR`), the unit next door's front block shrinks, and `world/Office.ts`
+      builds the room (desk, plants, signs, a "signed deals" wall board). New zone `office`.
+- [x] `sim/DealManager.ts`: one VIP offer at a time (`CONFIG.deals`: parody names with their own looks, crates, retainer, patience), only above `minReputation`; sign, haggle (once; raises
+      the retainer or the VIP walks), decline; offers expire. The VIP stands behind the desk with their name over their head. UI: `ui/DealPanel.tsx`, `GameManager.openDeal / chooseDeal`.
+- [x] Tests: `sim/Deals.test.ts`.
+- **Next: the warehouse.** Signed deals (`deals.signed`) are the contracts it will fulfil: a small warehouse where kei-truck drivers (and the VIPs' trucks) drop crates, pallets and shelf space instead
+      of lockers, moved by hand first, then trolleys, then forklifts; missed deliveries cost reputation in both businesses. Not built yet.
+
 ## Interim work: mod menu (done)
 
 - [x] **Mod menu** (`M`): free cash, levels (+1, +100 XP, level 4, level 8), unlock any upgrade or everything (annexes included, built
