@@ -19,13 +19,13 @@ export class KeyRack {
   private pop = 1
 
   /** `placement` overrides the default spot on the partition (annex racks hang on the hall's own wall). */
-  constructor(index: number, hooksPerRack: number, placement?: { x: number; z: number; rotY: number }) {
+  constructor(index: number, hooksPerRack: number, placement?: { x: number; y?: number; z: number; rotY: number }) {
     this.index = index
     this.firstHook = index * hooksPerRack
     const { width, height, cols } = KEY_BOARD
     const x = placement?.x ?? KEY_RACKS[index]?.x ?? KEY_BOARD.center.x
     // Everything is positioned relative to the rack centre so the whole rack can scale in place.
-    this.root.position.set(x, KEY_BOARD.center.y, placement?.z ?? KEY_BOARD.center.z)
+    this.root.position.set(x, placement?.y ?? KEY_BOARD.center.y, placement?.z ?? KEY_BOARD.center.z)
     this.root.rotation.y = placement?.rotY ?? 0
 
     const board = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.04), mat(0x8a5a3b, 0.75))

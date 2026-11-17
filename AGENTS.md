@@ -89,6 +89,15 @@ Rules:
   `applyUpgrade` with `buyUpgrade`, `spawnExtraCustomer`, `skipStage`, `callBackStoredCustomers`, `mods.noPatienceLoss`), so level-ups,
   banners and the 3D furniture behave exactly as in normal play. Mod-spawned customers are not part of the stage plan. A new mod action
   = a `ModRequest` variant, a case in `applyMod`, a button, and a test. `CONFIG.modMenu.enabled = false` removes it.
+- **South expansion and floors** (`kind: 'hall'` in `CONFIG.upgrades`, `world/Hall.ts`, `world/Stairs.ts`): the south hall is behind the storage
+  room's back wall (doorway `SOUTH.door`, cut by `Facility.setSouthOpen`), with lockers in rows (`SOUTH.rowFrontZ`, `SOUTH.bankX`) and key racks along
+  the old back wall (`SOUTH.rackX`). Floors 1 and 2 are the same `Hall` at `level × FLOOR_HEIGHT`; a hall's ceiling slab is the floor above and has a
+  stairwell hole closed by a hatch (`Hall.openHatch`) until the next floor is bought, when the Engine adds `Stairs` (14 steps of 0.25 m, guard wall,
+  rail on the floor above). `LockerWall` takes a `BankPlacement` (`centerX`, `frontZ`, `floorY`) and `KeyRack` an optional `y`. Everything in a hall is
+  positioned relative to the hall's floor (`root.position.y`) so it can rise in place, while colliders use world y.
+- **Zones** (`zoneAt`, `ADJACENT_ZONES` in `layout.ts`, `Engine.applyZoneVisibility`): every locker bank, rack, annex, hall and stairs has
+  `root.userData.zone`; only the player's zone and its neighbours are visible. Do not hide PointLights this way (toggling lights recompiles
+  materials); the halls use emissive fixtures and no point lights.
 - **Levels and upgrades** (`GameManager.gainXp`, `buyUpgrade`): level-ups pay a bonus and emit `levelUp`; `upgradeBought` makes the
   Engine build a new `LockerWall` / `KeyRack` that animates in. New banks and racks must have a position in `world/layout.ts`
   (`LOCKER_BANKS`, `KEY_RACKS`). The catalogue is a menu mode like dialogue: `game.catalogueOpen`, movement frozen,

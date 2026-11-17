@@ -58,6 +58,13 @@ banks and racks placed by the Engine from `ANNEX[side]` in `layout.ts`. To add a
 Racks on a wall that faces −z need `rotY: Math.PI` (see `ANNEX_RACK`). Remember `LockerWall` takes its `centerX` explicitly, and that every
 new collider must be removable (`PhysicsWorld.removeBody`) so a new game can wall everything back up.
 
+### South hall and floors
+
+`Hall(kind, physics)` builds one hall (walls, ceiling slab with a hatch, fixtures, signs) at `level × FLOOR_HEIGHT`; `Stairs(flight, physics)` builds a flight and its
+guard rails. Constants (`SOUTH`, `STAIRS`, `stairHole`, `FLOOR_HEIGHT`) are in `layout.ts` and checked by `layout.test.ts`: change a number there and run the
+tests. Keep these true: steps ≤ 0.38 m (auto-step) with a tread ≥ 0.2 m; the stairs rise exactly one `FLOOR_HEIGHT`; the stairwell hole is covered by the hatch until
+the floor above exists; every collider is removable (`PhysicsWorld.removeBody`). Tag anything new in a zone with `root.userData.zone`.
+
 ### Add a room
 
 Extend `ROOM` / add a new bounds constant in `layout.ts`. Cut a doorway in the right wall (split it into `solid()`

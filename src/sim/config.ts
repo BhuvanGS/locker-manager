@@ -43,7 +43,7 @@ export interface UpgradeDef {
    * lockerBank / keyRack add storage; labels numbers the lockers and tags the keys; register adds the wall
    * board listing who left what.
    */
-  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex'
+  kind: 'lockerBank' | 'keyRack' | 'labels' | 'register' | 'annex' | 'hall'
   title: string
   description: string
   cost: number
@@ -53,9 +53,11 @@ export interface UpgradeDef {
   requires?: string
   /** Annex only: which neighbouring unit the building grows into. */
   side?: 'west' | 'east'
-  /** Annex only: how many locker banks and key racks the new hall comes with. */
+  /** Annex and hall: how many locker banks and key racks the new hall comes with. */
   banks?: number
   racks?: number
+  /** Hall only: the south expansion behind the storage room, or a floor above it. */
+  hall?: 'south' | 'floor1' | 'floor2'
 }
 
 export const CONFIG = {
@@ -68,7 +70,8 @@ export const CONFIG = {
   },
   /**
    * What the supplier catalogue sells. Bank and rack numbers are in order: bank B before bank C, rack 2
-   * before rack 3, the register board needs the labels, and the east annex needs the west one (`requires`). Positions are in `world/layout.ts` (LOCKER_BANKS, KEY_RACKS).
+   * before rack 3, the register board needs the labels, the east annex needs the west one, and the south expansion,
+   * floor 1 and floor 2 each need the one before (`requires`). Positions are in `world/layout.ts` (LOCKER_BANKS, KEY_RACKS).
    */
   upgrades: [
     {
@@ -147,6 +150,44 @@ export const CONFIG = {
       requires: 'annexWest',
       banks: 2,
       racks: 2,
+    },
+    // The next phase of the building: grow backwards (south) with lockers in rows, then upwards.
+    // Each hall has two rows of three locker banks (+36 lockers) and five key racks (+40 hooks).
+    {
+      id: 'southExpansion',
+      kind: 'hall',
+      hall: 'south',
+      title: 'South expansion',
+      description: 'Extend the storage room backwards: a big hall behind the lockers with lockers in rows (+36 lockers, +40 hooks)',
+      cost: 900,
+      level: 6,
+      requires: 'annexEast',
+      banks: 6,
+      racks: 5,
+    },
+    {
+      id: 'floor1',
+      kind: 'hall',
+      hall: 'floor1',
+      title: 'Floor 1',
+      description: 'A staircase from the south hall up to a new storage floor (+36 lockers, +40 hooks)',
+      cost: 1500,
+      level: 7,
+      requires: 'southExpansion',
+      banks: 6,
+      racks: 5,
+    },
+    {
+      id: 'floor2',
+      kind: 'hall',
+      hall: 'floor2',
+      title: 'Floor 2',
+      description: 'Another staircase and another storage floor on top (+36 lockers, +40 hooks)',
+      cost: 2200,
+      level: 8,
+      requires: 'floor1',
+      banks: 6,
+      racks: 5,
     },
   ] satisfies UpgradeDef[],
   /**

@@ -54,9 +54,10 @@ export const LOCKER = {
 
 /**
  * Where each wall of lockers stands along the back wall of the storage room. Bank 0 is the original; banks
- * 1 and 2 are the "Locker bank B / C" upgrades, left and right of it (each is 2.82 m wide).
+ * 1 and 2 are the "Locker bank B / C" upgrades, left and right of it (each is 2.82 m wide). The gaps between them are 1.4 m, so
+ * the south expansion's doorway fits in the one on the left (x = −2.15).
  */
-export const LOCKER_BANKS = [{ centerX: 0 }, { centerX: -3.9 }, { centerX: 3.9 }]
+export const LOCKER_BANKS = [{ centerX: 0 }, { centerX: -4.3 }, { centerX: 4.3 }]
 
 export const KEY_BOARD = {
   center: new THREE.Vector3(-2.6, 1.45, PARTITION.z + 0.12),
@@ -96,3 +97,85 @@ export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height
 
 /** How far you can reach to use something. */
 export const REACH = { default: 2.4, customer: 3.2 }
+
+/**
+ * Building expansion, phase 2: grow backwards (south). The south hall lies behind the storage room's back wall, entered
+ * through a doorway in the gap between the first two locker banks. Its lockers stand in ROWS (two rows of three banks side
+ * by side, doors facing the entrance, with an aisle between the rows) and its key racks hang on the old back wall.
+ * Floors 1 and 2 are the same hall stacked on top, reached by two flights of stairs along the east wall.
+ *
+ *    z = -9.2   ── old back wall (doorway at x = -2.15, key racks on its south face) ──────────
+ *    z = -12.4  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  row 1 (lockers face north)                     stairs →  ▲
+ *    z = -15.4  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  row 2                                          (x 4.5–5.8)
+ *    z = -21    ── far wall ────────────────────────────────────────────────────────────────
+ */
+export const FLOOR_HEIGHT = 3.5 // a 3.2 m room plus a 0.3 m slab
+export const SLAB = FLOOR_HEIGHT - ROOM.height
+export const SOUTH = {
+  minX: ROOM.minX,
+  maxX: ROOM.maxX,
+  /** Interior, from the far wall to the south face of the old back wall. */
+  minZ: -21,
+  maxZ: ROOM.minZ - 0.2,
+  /** The doorway cut in the old back wall (between locker banks 1 and 0). */
+  door: { x: -2.15, halfWidth: 0.7, height: 2.2 },
+  /** Fronts (door faces) of the two rows; each row is three banks side by side. */
+  rowFrontZ: [-12.4, -15.4],
+  bankX: [-4.5, -1.6, 1.3],
+  /** Five key racks along the old back wall (they avoid the doorway). */
+  rackX: [-4.7, -0.55, 0.85, 2.25, 3.65],
+  rackZ: ROOM.minZ - 0.2 - 0.12,
+} as const
+
+/**
+ * Two flights of stairs along the east wall, both climbing towards the north wall (+z). Steps are 0.25 m high and 0.3 m deep
+ * (the character controller auto-steps 0.38 m). Flight 0 goes ground → floor 1, flight 1 goes floor 1 → floor 2.
+ */
+export const STAIRS = {
+  x: 5.15,
+  width: 1.3,
+  steps: 14,
+  rise: 0.25,
+  tread: 0.3,
+  flights: [
+    { baseY: 0, startZ: -13.9 },
+    { baseY: FLOOR_HEIGHT, startZ: -18.7 },
+  ],
+  /** The open west side of a flight is closed by a guard wall for this many steps (the top steps stay open to step off). */
+  guardX: 4.45,
+  guardSteps: 12,
+} as const
+
+/** The stairwell hole in the ceiling above `flight` (x and z extents). */
+export function stairHole(flight: number): { x0: number; x1: number; z0: number; z1: number } {
+  const f = STAIRS.flights[flight] ?? STAIRS.flights[0]
+  return {
+    x0: STAIRS.x - STAIRS.width / 2,
+    x1: STAIRS.x + STAIRS.width / 2,
+    z0: f.startZ,
+    z1: f.startZ + STAIRS.steps * STAIRS.tread,
+  }
+}
+
+/** Parts of the building. Only the zone you are in and its neighbours are drawn (see Engine.applyZoneVisibility). */
+export type Zone = 'main' | 'west' | 'east' | 'south' | 'floor1' | 'floor2'
+
+/** Which zone a player is in, from their position (`feetY` = height of their feet above the ground floor). */
+export function zoneAt(x: number, z: number, feetY: number): Zone {
+  if (feetY > 2 * FLOOR_HEIGHT - 0.9) return 'floor2'
+  if (feetY > FLOOR_HEIGHT - 0.9) return 'floor1'
+  if (z < ROOM.minZ - 0.2 && x > ROOM.minX - 0.2 && x < ROOM.maxX + 0.2) return 'south'
+  if (x < ROOM.minX - 0.2) return 'west'
+  if (x > ROOM.maxX + 0.2) return 'east'
+  return 'main'
+}
+
+/** Zones you can see into from each zone (through doorways and stairwells). */
+export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
+  main: ['west', 'east', 'south'],
+  west: ['main'],
+  east: ['main'],
+  south: ['main', 'floor1'],
+  floor1: ['south', 'floor2'],
+  floor2: ['floor1'],
+}

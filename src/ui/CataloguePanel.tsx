@@ -25,6 +25,10 @@ export function CataloguePanel({ catalogue }: { catalogue: CatalogueView }) {
               type="button"
               role="option"
               aria-selected={i === selected}
+              ref={(el) => {
+                // Keep the highlighted row on screen when the list is longer than the window.
+                if (i === selected && el) el.scrollIntoView({ block: 'nearest' })
+              }}
               className={`catalogue-row ${item.state}${i === selected ? ' selected' : ''}`}
               onClick={() => patch({ pendingBuy: item.id })}
             >
@@ -44,7 +48,7 @@ export function CataloguePanel({ catalogue }: { catalogue: CatalogueView }) {
       </ol>
       <p className="dialogue-keys">
         <kbd>E</kbd> buy · <kbd>W</kbd>
-        <kbd>S</kbd> or scroll to choose · <kbd>1</kbd>–<kbd>{catalogue.items.length}</kbd> jump · <kbd>Q</kbd> close
+        <kbd>S</kbd> or scroll to choose · <kbd>1</kbd>–<kbd>{Math.min(9, catalogue.items.length)}</kbd> jump · <kbd>Q</kbd> close
       </p>
     </div>
   )

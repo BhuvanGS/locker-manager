@@ -102,7 +102,24 @@ Requested after playtesting Milestone 2.
       once. The header says "Expanded facility". The register board uses up to three columns for 42 bags
 - [x] Tests: `Progression.test.ts` ("The register only shows names you asked for", "Building expansion: annexes")
 
-Not done yet from the brief's expansion list: more locker rows, multiple floors, specialised compartments, warehouse sections.
+## Interim work: south expansion and floors (done, not yet play-tested)
+
+- [x] **South expansion** (level 6, $900, needs the east annex): the building grows **backwards**, with lockers in a **row configuration**.
+      A doorway is cut through the back wall (in the gap between locker banks 1 and 0, which moved to ±4.3 to make it 1.4 m wide) into
+      a 12 × 11.8 m hall with **two rows of three banks** (+36 lockers; doors face the entrance, 2.4 m aisle between the rows) and
+      **five key racks** along the old back wall (+40 hooks)
+- [x] **Floor 1** (level 7, $1,500) and **Floor 2** (level 8, $2,200), each needing the one before: the same hall stacked on top
+      (3.5 m floor to floor), each with the same two rows and five racks (+36 lockers, +40 hooks). Buying one removes the hatch in the
+      ceiling below and builds a flight of 14 steps (0.25 m high) with a guard wall; the stairs are along the east wall, climbing towards
+      the north wall (walk up from the south end, step off to the west at the top). Everything together: 150 lockers
+- [x] Only the part of the building you are in, and the parts you can see into, is drawn (`zoneAt`, `ADJACENT_ZONES`), so the
+      hundreds of locker meshes do not slow the game down
+- [x] The deposit register flips through pages (42 bags per page, every 7 s) when there are more bags than that
+- [x] Layout tests (`world/layout.test.ts`) check the geometry: rows fit, the doorway fits, aisles, racks clear of the door, stair rise
+- **Written without being run in a browser:** the 3D side of this (doorway, hall, stairs, floors, culling) was only type-checked and
+  checked by the layout tests. Play-test it: walk through the new doorway, up both flights of stairs, and look for gaps or overlaps
+
+Not done yet from the brief's expansion list: specialised compartments, warehouse sections, mechanisation.
 
 ## Interim work: mod menu (done)
 

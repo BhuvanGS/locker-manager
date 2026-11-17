@@ -22,6 +22,9 @@ type LockerView = {
   shownItem: ItemId | null
 }
 
+/** Where a bank of lockers stands. */
+export type BankPlacement = { centerX: number; frontZ: number; floorY: number }
+
 const OPEN_ANGLE = -1.85
 const PLATE_GEO = new THREE.PlaneGeometry(0.26, 0.13)
 const RISE_SECONDS = 1.1
@@ -41,10 +44,15 @@ export class LockerWall {
   /** True once the number plates and key tags have been added (labels upgrade). */
   private labelled = false
 
-  /** `centerX` is where this bank stands along its wall (see LOCKER_BANKS and ANNEX in layout.ts). */
-  constructor(game: GameManager, physics: PhysicsWorld, bank: number, centerX: number) {
+  /**
+   * `placement` says where this bank stands: its centre along the wall, the z of its door face, and the height of the floor
+   * it stands on (see LOCKER_BANKS, ANNEX and SOUTH in layout.ts).
+   */
+  constructor(game: GameManager, physics: PhysicsWorld, bank: number, placement: BankPlacement) {
     this.bank = bank
-    const { width, height, depth, gap, frontZ, baseY } = LOCKER
+    const { width, height, depth, gap, baseY } = LOCKER
+    const { centerX, frontZ, floorY } = placement
+    this.root.position.y = floorY // everything below is relative to the floor, so the bank can rise in place
     const lockers = game.lockers.all().filter((l) => l.bank === bank)
     const cols = Math.max(...lockers.map((l) => l.col)) + 1
     const rows = Math.max(...lockers.map((l) => l.row)) + 1
@@ -79,7 +87,7 @@ export class LockerWall {
     }
     this.bodies.push(
       physics.addStaticBox(
-        new THREE.Vector3(centerX, midY, midZ - 0.02),
+        new THREE.Vector3(centerX, midY + floorY, midZ - 0.02),
         new THREE.Vector3((totalW + 0.08) / 2, (totalH + 0.08) / 2, depth / 2 + 0.03),
       ),
     )

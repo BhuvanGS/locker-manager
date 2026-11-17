@@ -59,7 +59,7 @@ describe('Mod menu actions', () => {
     const g = new GameManager(3)
     expect(applyMod(g, { type: 'unlockAll' }).ok).toBe(true)
     expect(CONFIG.upgrades.every((def) => g.upgrades.has(def.id))).toBe(true)
-    expect(g.lockers.total).toBe(42)
+    expect(g.lockers.total).toBe(42 + 3 * 36) // both annexes, the south expansion and two floors
     expect(g.catalogueItems().every((i) => i.state === 'owned')).toBe(true)
     expect(applyMod(g, { type: 'unlockAll' }).ok).toBe(false)
   })

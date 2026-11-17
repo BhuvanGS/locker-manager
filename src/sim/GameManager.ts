@@ -452,9 +452,14 @@ export class GameManager {
     return this.upgrades.has('annexWest') || this.upgrades.has('annexEast')
   }
 
-  /** HUD label: basic → organised (labels or register) → expanded (an annex). The brief's stages 1, 2 and the start of 4. */
+  /** Whether the south expansion or a floor has been built. */
+  hasHall(kind: 'south' | 'floor1' | 'floor2'): boolean {
+    return this.upgrades.has(kind === 'south' ? 'southExpansion' : kind)
+  }
+
+  /** HUD label: basic → organised (labels or register) → expanded (an annex, the south hall or a floor). */
   facilityLabel(): string {
-    if (this.hasAnnex()) return 'Expanded facility'
+    if (this.hasAnnex() || this.hasHall('south')) return 'Expanded facility'
     return this.hasLabels || this.upgrades.has('register') ? 'Organised facility' : 'Basic facility'
   }
 
@@ -529,7 +534,7 @@ export class GameManager {
     } else if (def.kind === 'keyRack') {
       this.keys.addHooks(CONFIG.facility.hooksPerRack)
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: this.keys.hookCount / CONFIG.facility.hooksPerRack - 1, title: def.title })
-    } else if (def.kind === 'annex') {
+    } else if (def.kind === 'annex' || def.kind === 'hall') {
       // A new hall: its banks and racks are ordinary records, the 3D side builds the room around them.
       const banks: number[] = []
       for (let i = 0; i < (def.banks ?? 0); i++) {
@@ -542,7 +547,7 @@ export class GameManager {
         this.keys.addHooks(CONFIG.facility.hooksPerRack)
         racks.push(this.keys.hookCount / CONFIG.facility.hooksPerRack - 1)
       }
-      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, banks, racks })
+      this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title, side: def.side, hall: def.hall, banks, racks })
     } else {
       // labels / register: no new records; the 3D views react to `upgrades.has(...)`.
       this.notify({ type: 'upgradeBought', id: def.id, kind: def.kind, index: 0, title: def.title })

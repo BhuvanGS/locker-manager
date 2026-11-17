@@ -608,3 +608,77 @@ describe('Building expansion: annexes', () => {
     expect(open.maxActive! + extra(g)).toBe(before + 12)
   })
 })
+
+describe('Building expansion, phase 2: south expansion and floors', () => {
+  /** Level 8, plenty of cash, and everything before the south expansion already owned. */
+  function ready() {
+    const g = new GameManager(3)
+    g.economy.xp = 2800
+    g.economy.money = 100_000
+    for (const id of ['bank2', 'bank3', 'annexWest', 'annexEast']) expect(g.buyUpgrade(id).ok).toBe(true)
+    g.drainNotices()
+    return g
+  }
+
+  it('they come one after another: annexes, then the south expansion, then floor 1, then floor 2', () => {
+    const g = new GameManager(3)
+    g.economy.xp = 2800
+    g.economy.money = 100_000
+    expect(g.buyUpgrade('southExpansion').message).toBe('Buy Storage annex (east) first')
+    expect(g.buyUpgrade('floor1').message).toBe('Buy South expansion first')
+    expect(g.buyUpgrade('floor2').message).toBe('Buy Floor 1 first')
+  })
+
+  it('need the level and the money', () => {
+    const g = ready()
+    g.economy.xp = 50 * 5 * 4 // level 5
+    expect(g.economy.level.level).toBe(5)
+    expect(g.buyUpgrade('southExpansion').message).toBe('Needs level 6')
+    g.economy.xp = 2800
+    g.economy.money = 100
+    expect(g.buyUpgrade('southExpansion').message).toMatch(/Costs \$900/)
+  })
+
+  it('the south expansion adds 36 lockers in six banks and 40 hooks in five racks', () => {
+    const g = ready()
+    const lockers = g.lockers.total
+    const hooks = g.keys.hookCount
+    expect(g.hasHall('south')).toBe(false)
+    expect(g.buyUpgrade('southExpansion').ok).toBe(true)
+    expect(g.lockers.total).toBe(lockers + 36)
+    expect(g.keys.hookCount).toBe(hooks + 40)
+    expect(g.hasHall('south')).toBe(true)
+    expect(g.facilityLabel()).toBe('Expanded facility')
+    const notice = g.drainNotices().find((n) => n.type === 'upgradeBought')
+    expect(notice).toMatchObject({ id: 'southExpansion', kind: 'hall', hall: 'south' })
+    if (notice?.type !== 'upgradeBought') return
+    expect(notice.banks).toHaveLength(6)
+    expect(notice.racks).toHaveLength(5)
+    expect(notice.banks).toEqual([7, 8, 9, 10, 11, 12]) // after the main wall (banks 0–2) and the two annexes (3–6)
+  })
+
+  it('floor 1 and floor 2 each add the same again, with their own banks and racks', () => {
+    const g = ready()
+    g.buyUpgrade('southExpansion')
+    g.buyUpgrade('floor1')
+    g.buyUpgrade('floor2')
+    expect(g.lockers.total).toBe(6 + 6 + 6 + 12 + 12 + 3 * 36)
+    expect(g.keys.hookCount).toBe(8 + 16 + 16 + 3 * 40) // the start rack, both annexes and three halls (racks 2 and 3 not bought here)
+    const halls = g.drainNotices().filter((n) => n.type === 'upgradeBought' && n.kind === 'hall')
+    expect(halls.map((n) => (n.type === 'upgradeBought' ? n.hall : ''))).toEqual(['south', 'floor1', 'floor2'])
+    const all = halls.flatMap((n) => (n.type === 'upgradeBought' ? (n.banks ?? []) : []))
+    expect(new Set(all).size).toBe(18) // every bank number is new
+    expect(g.hasHall('floor2')).toBe(true)
+  })
+
+  it('every new locker works with its own key', () => {
+    const g = ready()
+    g.buyUpgrade('southExpansion')
+    for (const locker of g.lockers.all().filter((l) => l.bank >= 7)) {
+      expect(g.keys.get(locker.keyId).lockerId).toBe(locker.id)
+      expect(locker.state).toBe('available')
+    }
+    const last = g.lockers.all().at(-1)!
+    expect(g.openLocker(last.id).ok).toBe(true)
+  })
+})

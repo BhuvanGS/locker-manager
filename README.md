@@ -84,6 +84,9 @@ back-right corner of the staff area) and makes customers arrive a little faster.
 | Locker bank C | 3 | $160 | +6 lockers (right of the storage room) |
 | Storage annex (west) | 4 | $450 | **Building expansion:** knock through into the unit next door: a new hall with +12 lockers and +16 key hooks (needs bank C) |
 | Storage annex (east) | 5 | $600 | The same on the other side, for 42 lockers in total (needs the west annex) |
+| **South expansion** | 6 | $900 | Extend the storage room **backwards**: a doorway through the back wall into a big hall with lockers in **rows** (2 rows of 3 banks, +36 lockers, +40 key hooks). Needs the east annex |
+| **Floor 1** | 7 | $1,500 | A staircase up from the south hall to a new storage floor: another 36 lockers and 40 hooks |
+| **Floor 2** | 8 | $2,200 | Another staircase and storage floor on top: another 36 lockers and 40 hooks (150 lockers in total) |
 
 New lockers, racks, labels and the board all appear in the shop. More lockers mean more customers can be inside at once.
 
@@ -93,7 +96,13 @@ itself as you store and collect bags, so you no longer have to remember who is w
 **if you didn't ask a customer's name when you took their bag, the board shows "name not taken"** (asking on the way back
 doesn't fill it in).
 
-**The annexes** are the building expansion. Buying one knocks a doorway through the side wall of the storage room into
+**The south expansion and the floors** are the next phase of the building. The annexes spread the lockers sideways in banks along
+the walls; the south hall grows the shop **backwards** with the lockers in rows (aisles between them), through a new doorway in the back
+wall of the storage room, beside the first locker bank. Floors 1 and 2 are the same hall stacked on top, reached by two flights of
+stairs along the east wall of the south hall (walk up from the south end and step off to the west at the top). The deposit register
+flips through pages when it holds more than 42 bags.
+
+**The annexes** are the first building expansion. Buying one knocks a doorway through the side wall of the storage room into
 the neighbouring unit, and a new storage hall rises out of the ground with its own locker banks and key racks.
 
 ## Scripts

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
 
 /**
@@ -19,6 +19,9 @@ export class Facility {
   private readonly plugs = new Map<'west' | 'east', THREE.Mesh>()
   private readonly neighbourBack = new Map<'west' | 'east', THREE.Mesh>()
   private readonly doorFrames = new Map<'west' | 'east', THREE.Group>()
+  /** The removable panel in the back wall where the south expansion's doorway is cut, and its door frame. */
+  private southPlug: THREE.Mesh | null = null
+  private southFrame: THREE.Group | null = null
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
@@ -99,6 +102,54 @@ export class Facility {
     return frame
   }
 
+  /** The storage room's back wall, with a removable panel where the south expansion's doorway is cut. */
+  private buildBackWall(): void {
+    const { minX, maxX, minZ, height } = ROOM
+    const t = 0.2
+    const wall = mat(0xe9e4da, 0.9)
+    const { x, halfWidth, height: doorH } = SOUTH.door
+    const z = minZ - t / 2
+    const x0 = minX - t
+    const x1 = maxX + t
+    const lo = x - halfWidth
+    const hi = x + halfWidth
+    this.solid(lo - x0, height, t, wall, (x0 + lo) / 2, height / 2, z)
+    this.solid(x1 - hi, height, t, wall, (hi + x1) / 2, height / 2, z)
+    this.solid(halfWidth * 2, height - doorH, t, wall, x, doorH + (height - doorH) / 2, z)
+    this.southPlug = this.solid(halfWidth * 2, doorH, t, wall, x, doorH / 2, z)
+  }
+
+  /** Knock through (or wall up again) the doorway into the south expansion. */
+  setSouthOpen(open: boolean): void {
+    const plug = this.southPlug
+    if (!plug) return
+    const isOpen = plug.parent === null
+    if (open === isOpen) return
+    if (open) {
+      this.root.remove(plug)
+      this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
+      const frame = new THREE.Group()
+      const trim = mat(0x6b7280, 0.5, 0.4)
+      const { x, halfWidth, height } = SOUTH.door
+      const z = ROOM.minZ - 0.1
+      for (const dx of [-1, 1]) {
+        const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.34), trim)
+        jamb.position.set(x + dx * (halfWidth + 0.04), height / 2, z)
+        frame.add(jamb)
+      }
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.02, 0.34), mat(0x4b5563, 0.7))
+      sill.position.set(x, 0.011, z)
+      frame.add(sill)
+      this.southFrame = frame
+      this.root.add(frame)
+    } else {
+      this.root.add(plug)
+      plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+      if (this.southFrame) this.root.remove(this.southFrame)
+      this.southFrame = null
+    }
+  }
+
   /** A side wall of the storage room with a removable panel where an annex doorway can be cut. */
   private buildSideWall(side: 'west' | 'east'): void {
     const { minX, maxX, minZ, maxZ, height } = ROOM
@@ -177,7 +228,6 @@ export class Facility {
   }
 
   private buildShell(): void {
-    const wall = mat(0xe9e4da, 0.9)
     const { minX, maxX, minZ, maxZ, height } = ROOM
     const t = 0.2
     const width = maxX - minX
@@ -193,7 +243,7 @@ export class Facility {
     // Side walls (each has a panel that can be knocked out for an annex) and the back wall.
     this.buildSideWall('west')
     this.buildSideWall('east')
-    this.solid(width + t * 2, height, t, wall, 0, height / 2, minZ - t / 2)
+    this.buildBackWall()
 
     // Front wall with a glass entrance and two shop windows.
     const front = mat(0x2f3e4f, 0.6, 0.2)

@@ -8,6 +8,9 @@ const POP_SECONDS = 0.6
 const W = 1024
 const H = 640
 const HEADER = 76
+/** The board shows this many bags at a time (three columns). With more, it flips through pages. */
+const PER_PAGE = 42
+const PAGE_SECONDS = 7
 
 /**
  * The deposit register board: a whiteboard on the staff-area wall that lists every bag currently stored
@@ -20,6 +23,7 @@ export class RegisterBoard {
   private readonly ctx: CanvasRenderingContext2D | null
   private readonly texture: THREE.CanvasTexture
   private signature = ''
+  private clock = 0
   private pop = 1
 
   constructor() {
@@ -50,7 +54,7 @@ export class RegisterBoard {
       marker.position.set(-0.2 + i * 0.2, -height / 2 - 0.045, 0.04)
       this.root.add(marker)
     }
-    this.draw([])
+    this.draw([], 0, 0, 1)
   }
 
   /** Start the "pop onto the wall" animation (a freshly bought board). */
@@ -65,14 +69,17 @@ export class RegisterBoard {
       const t = this.pop - 1
       this.root.scale.setScalar(Math.max(0.001, 1 + 2.2 * t ** 3 + 1.2 * t ** 2))
     }
-    const entries = game.registerEntries()
-    const signature = JSON.stringify(entries)
+    this.clock += dt
+    const all = game.registerEntries()
+    const pages = Math.max(1, Math.ceil(all.length / PER_PAGE))
+    const page = pages > 1 ? Math.floor(this.clock / PAGE_SECONDS) % pages : 0
+    const signature = JSON.stringify([all, page])
     if (signature === this.signature) return
     this.signature = signature
-    this.draw(entries)
+    this.draw(all.slice(page * PER_PAGE, (page + 1) * PER_PAGE), all.length, page, pages)
   }
 
-  private draw(entries: RegisterEntry[]): void {
+  private draw(entries: RegisterEntry[], total: number, page: number, pages: number): void {
     const ctx = this.ctx
     if (!ctx) return
     this.texture.needsUpdate = true // drawn synchronously below, uploaded on the next render
@@ -89,7 +96,7 @@ export class RegisterBoard {
     ctx.fillStyle = '#e2e8f0'
     ctx.font = '600 32px system-ui, sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(`${entries.length} stored`, W - 28, HEADER / 2 + 2)
+    ctx.fillText(pages > 1 ? `${total} stored · page ${page + 1}/${pages}` : `${total} stored`, W - 28, HEADER / 2 + 2)
 
     if (entries.length === 0) {
       ctx.fillStyle = '#94a3b8'

@@ -9,12 +9,26 @@ import { useGameStore, type CatalogueView, type DialogueView } from '../store/ga
 import { CustomerAgents } from '../world/CustomerAgents'
 import { Annex, type AnnexSide } from '../world/Annex'
 import { Facility } from '../world/Facility'
+import { Hall, HALL_LEVEL, type HallKind } from '../world/Hall'
 import { HeldView } from '../world/HeldView'
 import { InteractionManager } from '../world/InteractionManager'
 import { KeyRack } from '../world/KeyBoard'
-import { LockerWall } from '../world/LockerWall'
+import { LockerWall, type BankPlacement } from '../world/LockerWall'
 import { RegisterBoard } from '../world/RegisterBoard'
-import { ANNEX, ANNEX_RACK, LOCKER_BANKS, PLAYER_SPAWN, REACH } from '../world/layout'
+import { Stairs } from '../world/Stairs'
+import {
+  ADJACENT_ZONES,
+  ANNEX,
+  ANNEX_RACK,
+  FLOOR_HEIGHT,
+  LOCKER,
+  LOCKER_BANKS,
+  PLAYER_SPAWN,
+  REACH,
+  SOUTH,
+  zoneAt,
+  type Zone,
+} from '../world/layout'
 import { isDebugEnabled } from './debug'
 import { InputManager, type InputSnapshot } from './InputManager'
 import { PhysicsWorld } from './PhysicsWorld'
@@ -39,6 +53,9 @@ export class Engine {
   private keyRacks: KeyRack[] = []
   /** Storage annexes built into the units next door (building expansion). */
   private annexes: Annex[] = []
+  /** The south expansion and the floors above it, and the stairs between them. */
+  private halls: Hall[] = []
+  private stairs: Stairs[] = []
   /** The deposit register board, once bought. */
   private registerBoard: RegisterBoard | null = null
   /** Everything the crosshair can hit; extended when upgrades add walls and racks. */
@@ -119,8 +136,14 @@ export class Engine {
     this.addKeyRack(0, false)
   }
 
-  private addLockerBank(bank: number, animate: boolean, centerX = LOCKER_BANKS[bank]?.centerX ?? 0): void {
-    const wall = new LockerWall(this.game, this.physics, bank, centerX)
+  private addLockerBank(
+    bank: number,
+    animate: boolean,
+    placement: BankPlacement = { centerX: LOCKER_BANKS[bank]?.centerX ?? 0, frontZ: LOCKER.frontZ, floorY: 0 },
+    zone: Zone = 'main',
+  ): void {
+    const wall = new LockerWall(this.game, this.physics, bank, placement)
+    wall.root.userData.zone = zone
     if (animate) wall.appear()
     this.lockerWalls.push(wall)
     this.scene.add(wall.root)
@@ -143,12 +166,69 @@ export class Engine {
     this.annexes.push(annex)
     this.scene.add(annex.root)
     this.interactionTargets.push(annex.root)
-    banks.forEach((bank, i) => this.addLockerBank(bank, true, ANNEX[side].bankX[i]))
-    racks.forEach((rack, i) => this.addKeyRack(rack, true, { x: ANNEX[side].rackX[i] ?? 0, z: ANNEX_RACK.z, rotY: ANNEX_RACK.rotY }))
+    annex.root.userData.zone = side
+    banks.forEach((bank, i) => this.addLockerBank(bank, true, { centerX: ANNEX[side].bankX[i] ?? 0, frontZ: LOCKER.frontZ, floorY: 0 }, side))
+    racks.forEach((rack, i) => this.addKeyRack(rack, true, { x: ANNEX[side].rackX[i] ?? 0, z: ANNEX_RACK.z, rotY: ANNEX_RACK.rotY }, side))
   }
 
-  private addKeyRack(index: number, animate: boolean, placement?: { x: number; z: number; rotY: number }): void {
+  /**
+   * Build the south expansion or a floor above it. The south hall is entered through a doorway cut in the old back wall;
+   * a floor is reached by stairs through a hatch in the ceiling of the hall below. Lockers stand in rows (two rows of three
+   * banks) and the key racks hang along the north wall.
+   */
+  private addHall(kind: HallKind, banks: number[], racks: number[]): void {
+    const level = HALL_LEVEL[kind]
+    const floorY = level * FLOOR_HEIGHT
+    if (kind === 'south') {
+      this.facility?.setSouthOpen(true)
+    } else {
+      this.halls.find((h) => h.level === level - 1)?.openHatch()
+      const stairs = new Stairs((level - 1) as 0 | 1, this.physics)
+      stairs.appear()
+      this.stairs.push(stairs)
+      this.scene.add(stairs.root)
+      this.interactionTargets.push(stairs.root)
+    }
+    const hall = new Hall(kind, this.physics)
+    hall.appear()
+    this.halls.push(hall)
+    this.scene.add(hall.root)
+    this.interactionTargets.push(hall.root)
+    banks.forEach((bank, i) => {
+      const placement = { centerX: SOUTH.bankX[i % 3] ?? 0, frontZ: SOUTH.rowFrontZ[Math.floor(i / 3)] ?? LOCKER.frontZ, floorY }
+      this.addLockerBank(bank, true, placement, kind)
+    })
+    racks.forEach((rack, i) => {
+      this.addKeyRack(rack, true, { x: SOUTH.rackX[i] ?? 0, y: floorY + 1.45, z: SOUTH.rackZ, rotY: Math.PI }, kind)
+    })
+  }
+
+  /**
+   * Only draw the part of the building you are in and the parts you can see into (through doorways and stairwells).
+   * Locker banks are hundreds of small meshes, so hiding the rest keeps the frame rate up in a big building.
+   */
+  private applyZoneVisibility(playerPos: THREE.Vector3): void {
+    const zone = zoneAt(playerPos.x, playerPos.z, playerPos.y - 0.9)
+    const visible = new Set<Zone>([zone, ...ADJACENT_ZONES[zone]])
+    const show = (root: THREE.Object3D) => {
+      const z = root.userData.zone as Zone | undefined
+      root.visible = z === undefined || visible.has(z)
+    }
+    for (const wall of this.lockerWalls) show(wall.root)
+    for (const rack of this.keyRacks) show(rack.root)
+    for (const annex of this.annexes) show(annex.root)
+    for (const hall of this.halls) show(hall.root)
+    for (const flight of this.stairs) show(flight.root)
+  }
+
+  private addKeyRack(
+    index: number,
+    animate: boolean,
+    placement?: { x: number; y?: number; z: number; rotY: number },
+    zone: Zone = 'main',
+  ): void {
     const rack = new KeyRack(index, CONFIG.facility.hooksPerRack, placement)
+    rack.root.userData.zone = zone
     if (animate) rack.appear()
     this.keyRacks.push(rack)
     this.scene.add(rack.root)
@@ -172,6 +252,17 @@ export class Engine {
       this.facility?.setAnnexOpen(annex.side, false)
     }
     this.annexes = []
+    for (const hall of this.halls) {
+      this.discard(hall.root)
+      hall.dispose()
+    }
+    for (const flight of this.stairs) {
+      this.discard(flight.root)
+      flight.dispose()
+    }
+    this.halls = []
+    this.stairs = []
+    this.facility?.setSouthOpen(false)
     this.lockerWalls = []
     this.keyRacks = []
   }
@@ -290,6 +381,7 @@ export class Engine {
         else if (notice.kind === 'keyRack') this.addKeyRack(notice.index, true)
         else if (notice.kind === 'register') this.addRegisterBoard(true)
         else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
+        else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
         // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
       } else store.pushToast(notice.text, 'info')
     }
@@ -301,6 +393,9 @@ export class Engine {
     for (const rack of this.keyRacks) rack.update(dt, this.game)
     this.registerBoard?.update(dt, this.game)
     for (const annex of this.annexes) annex.update(dt)
+    for (const hall of this.halls) hall.update(dt)
+    for (const flight of this.stairs) flight.update(dt)
+    this.applyZoneVisibility(playerPos)
     this.held.update(dt, camera, this.game, !talking && (input.forward !== 0 || input.right !== 0))
 
     // Interaction.
