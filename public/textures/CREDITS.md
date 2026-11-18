@@ -15,9 +15,11 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `floor-carpet` | Carpet012 | the office carpet and the lobby rug |
 | `wood` | Wood049 | the lobby bench and the office desk |
 | `ceiling-tiles` | OfficeCeiling001 | suspended ceilings in the shop, annexes, office and halls |
-| `duct-steel` | CorrugatedSteel009 | the bag ducts, and the warehouse's wall cladding and roof |
-| `shed-steel` | CorrugatedSteel005 | the cold room and staff room panels |
-| `diamond-plate` | DiamondPlate009 | the vault (walls and floor), rack decks, robot charging pads |
+| `duct-steel` | CorrugatedSteel009 | the bag ducts |
+| `shed-cladding` | CorrugatedSteel007A | the warehouse walls and the roof's pale lining |
+| `shed-roof` | CorrugatedSteel002 | the warehouse's red pitched roof |
+| `wire-mesh` | Fence003 | the vault cage |
+| `diamond-plate` | DiamondPlate009 | the vault floor, rack decks, robot charging pads |
 | `cardboard` | Cardboard004 | warehouse crates (tinted by cargo) |
 | `road-asphalt` | Road012A | the main street and the service road |
 | `yard-asphalt` | Asphalt031 | the truck yard (dock parking) |

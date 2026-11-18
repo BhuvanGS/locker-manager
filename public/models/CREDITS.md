@@ -11,4 +11,8 @@ All from [Poly Haven](https://polyhaven.com/models), CC0 (public domain). Downlo
 | `industrial_storage_cart` | the parts cart in the warehouse |
 | `power_box_01` | electrical boxes in the storage room, the halls and the warehouse |
 
+| `metal_office_desk` | the warehouse supervisor's desk |
+| `desk_lamp_arm_01` | the lamp on that desk |
+| `plastic_monobloc_chair_01` | the chair at that desk |
+
 Placed with `prop()` in `src/world/props.ts`.

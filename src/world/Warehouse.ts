@@ -9,11 +9,19 @@ import { markBlocker, tag } from './interactables'
 import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
 import { prop } from './props'
-import { cardboardMat, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, roofSheet, shedSteel, yardAsphalt } from './textures'
+import { cardboardMat, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
 const T = 0.2
+/** How far the roof's ridge rises above the eaves (the ridge runs north to south down the middle of the shed). */
+const ROOF_RISE = 2.0
+/** The height of the underside of the pitched roof at x (inside the shed). */
+function roofUnderside(x: number): number {
+  const half = (WAREHOUSE.maxX - WAREHOUSE.minX) / 2
+  const cx = WAREHOUSE.minX + half
+  return WAREHOUSE.height + ROOF_RISE * (1 - Math.abs(x - cx) / half)
+}
 /** Trucks come in from the main street. */
 const START_Z = 16
 const RISE_SECONDS = 1.4
@@ -52,6 +60,9 @@ export class Warehouse {
   private readonly doors: Door[] = []
   private readonly trucks = new Map<number, TruckView>()
   private readonly built = new Set<string>()
+  /** Fans and ventilators that turn all the time. */
+  private readonly spinners: { obj: THREE.Object3D; axis: 'y' | 'z'; speed: number }[] = []
+  private fanHead: THREE.Object3D | null = null
   private crateSignature = ''
   private police: { group: THREE.Group; lights: THREE.MeshBasicMaterial[] } | null = null
   private policeShown = false
@@ -74,10 +85,9 @@ export class Warehouse {
 
     // Inside, the roof shades everything from the sun, so the shed's own surfaces glow a little (no extra lights: see AGENTS.md, zones).
     // Ribbed steel cladding for the shed's walls and roof (the rooms inside use plainer panels).
-    const steel = roofSheet(0xc3ccd6, 0.3)
-    const roofMat = roofSheet(0x7b8794)
+    const steel = shedCladding(0x86a7b8, 0.3)
+    const roofMat = shedRoof(0x9c3a33, 0.25)
     this.deco(w, 0.03, d, concreteFloor(0x8f949a, 0.3), cx, 0.016, cz)
-    this.deco(w, 0.02, d, roofSheet(0xe5e7eb, 0.45), cx, H - 0.02, cz).receiveShadow = false
     const wall = (width: number, depth: number, x: number, z: number, y0 = 0, y1 = H) => {
       if (width < 0.01 || depth < 0.01) return
       this.solid(width, y1 - y0, depth, steel, x, (y0 + y1) / 2, z)
@@ -96,9 +106,7 @@ export class Warehouse {
     const edges = [north, ...docks.z.flatMap((z) => [z + docks.halfWidth, z - docks.halfWidth]), south]
     for (let i = 0; i < edges.length; i += 2) wall(T, edges[i]! - edges[i + 1]!, maxX + T / 2, (edges[i]! + edges[i + 1]!) / 2)
     for (const z of docks.z) wall(T, docks.halfWidth * 2, maxX + T / 2, z, docks.height, H)
-    // The roof casts a shadow, so the sun does not shine in through it (the shadow box follows the player in here too).
-    // It overhangs the north, south and east walls but stops at the west one: past that is the halls' wall (it cut into floor 1).
-    this.deco(w + 0.4, 0.12, d + 0.8, roofMat, minX + (w + 0.4) / 2, H + 0.06, cz).castShadow = true
+    this.buildRoof(roofMat, steel)
     // The blue stripe round the top of the outside walls.
     const stripe = mat(0x1d4ed8, 0.7)
     this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, maxZ + T + 0.01)
@@ -130,11 +138,19 @@ export class Warehouse {
 
     // Lights: rows of panels.
     const panel = lightPanel(0xfff8e7, 1.3)
+    const rodMat = mat(0x6b7280, 0.5, 0.5)
     for (let x = minX + 2.4; x < maxX - 1; x += 3.8) {
       for (let z = minZ + 2.6; z < maxZ - 1; z += 4.4) {
         const f = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.5), panel)
-        f.position.set(x, H - 0.05, z)
+        f.position.set(x, H - 0.4, z)
         this.root.add(f)
+        // Hung from the sloping roof on two rods.
+        for (const dx of [-0.7, 0.7]) {
+          const len = roofUnderside(x + dx) - (H - 0.4)
+          const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, len, 6), rodMat)
+          rod.position.set(x + dx, H - 0.4 + len / 2, z)
+          this.root.add(rod)
+        }
       }
     }
 
@@ -171,6 +187,17 @@ export class Warehouse {
       ...docks.z.map((z) => ({ x: lanes.dock + 1.2, z })),
       ...WAREHOUSE.robotHomes.map(([x, z]) => ({ x, z })),
     ])
+
+    // Stocked racks between the north wall and the first racks (no robot lanes there), the supervisor's desk under the board, and
+    // louvred vents high on the walls (inside and out on the dock wall).
+    this.stockRack(-13.0, 9.0, WAREHOUSE.rack.bays, WAREHOUSE.rack.pitch, WAREHOUSE.rack.levels, 1)
+    this.stockRack(-13.0, 14.4, WAREHOUSE.rack.bays, WAREHOUSE.rack.pitch, WAREHOUSE.rack.levels, 2)
+    this.buildDeskCorner(12.5, -9.95)
+    for (const vz of [-15.5, -20.9, -27.4]) {
+      this.wallVent(maxX - 0.03, 4.3, vz, -Math.PI / 2)
+      this.wallVent(maxX + T + 0.03, 4.3, vz, Math.PI / 2)
+    }
+    for (const vx of [8.6, 18.0, 22.6]) this.wallVent(vx, 4.3, minZ + 0.03, 0)
 
     // A parts cart along the north wall (clear of the robots' north lane) and an extinguisher by the hall door.
     this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
@@ -224,6 +251,8 @@ export class Warehouse {
     this.syncRobots(dt, game)
     this.syncPolice(game)
     this.syncDoors(dt, game, player)
+    for (const sp of this.spinners) sp.obj.rotation[sp.axis] += sp.speed * dt
+    if (this.fanHead) this.fanHead.rotation.y = Math.sin(performance.now() / 2600) * 0.7
     this.drawBoard(game)
     this.drawDesk(game)
   }
@@ -250,7 +279,7 @@ export class Warehouse {
       if (wh.sectionCapacity(section) <= 0 || this.built.has(section)) continue
       this.built.add(section)
       const r = WAREHOUSE[section as 'cold' | 'vault' | 'hidden']
-      this.room(r, wallColour, text, textColour, floorColour, section)
+      this.rackArea(r, wallColour, text, textColour, floorColour, section)
       this.rackAlongX(r.minZ + 0.75, roomX0(r), 4, r.pitch, section === 'vault' ? rack.levels.slice(0, 2) : rack.levels, section)
     }
     if (wh.robots.length > 0 && !this.built.has('lanes')) {
@@ -720,35 +749,259 @@ export class Warehouse {
     this.root.add(proxy)
   }
 
-  /** A walled room along the south wall: walls with a wide door in the north wall, a floor, a ceiling, a sign and a light. */
-  private room(rect: Rect, wallColour: number, text: string, textColour: string, floorColour: number, section: Section): void {
+  /**
+   * A rack area along the south wall (where the rooms used to be): a tinted floor with a painted border, a wall sign, and its fittings.
+   * Cold: two cooling units on the wall above the rack. Vault: a wire-mesh cage round the rack, open at the front for the robots.
+   * Hidden: an unmarked corner. The rack itself is built by the caller.
+   */
+  private rackArea(rect: Rect, _wallColour: number, text: string, textColour: string, floorColour: number, section: Section): void {
     const { minX, maxX, minZ, maxZ } = rect
-    const h = 3.4
-    // Insulated steel panels for the cold room and the staff room, steel plate for the vault (its floor too).
-    const vault = section === 'vault'
-    const wallMat = vault ? diamondPlate(wallColour, 0.3) : shedSteel(wallColour, 0.3)
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
+    const vault = section === 'vault'
     this.deco(maxX - minX, 0.02, maxZ - minZ, vault ? diamondPlate(floorColour, 0.25) : concreteFloor(floorColour, 0.25), cx, 0.045, cz)
-    const doorW = 1.8
-    const doorH = 2.4
-    const lo = cx - doorW / 2
-    const hi = cx + doorW / 2
-    const z = maxZ + T / 2
-    this.solid(lo - (minX - T), h, T, wallMat, (minX - T + lo) / 2, h / 2, z)
-    this.solid(maxX + T - hi, h, T, wallMat, (hi + maxX + T) / 2, h / 2, z)
-    this.solid(doorW, h - doorH, T, wallMat, cx, doorH + (h - doorH) / 2, z)
-    // Side walls (the shed's own west wall is the hidden room's west side).
-    if (minX > WAREHOUSE.minX + 0.3) this.solid(T, h, maxZ - minZ, wallMat, minX - T / 2, h / 2, cz)
-    this.solid(T, h, maxZ - minZ, wallMat, maxX + T / 2, h / 2, cz)
-    this.deco(maxX - minX + T * 2, 0.1, maxZ - minZ + T, wallMat, cx, h + 0.05, cz).castShadow = true // ceiling
-    const light = section === 'cold' ? lightPanel(0x7dd3fc, 1.5) : lightPanel(0xfff8e7, 1.1)
-    const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.4), light)
-    fixture.position.set(cx, h - 0.04, cz)
-    this.root.add(fixture)
-    const sign = makeSign(text, 1.4, 0.24, '#0f172a', textColour)
-    sign.position.set(cx, doorH + 0.35, maxZ + T + 0.03)
-    this.root.add(sign)
+    if (section !== 'hidden') {
+      const edge = mat(section === 'cold' ? 0x38bdf8 : 0xfacc15, 0.6)
+      for (const [w, d, x, z] of [
+        [maxX - minX, 0.08, cx, maxZ - 0.04],
+        [0.08, maxZ - minZ, minX + 0.04, cz],
+        [0.08, maxZ - minZ, maxX - 0.04, cz],
+      ] as const)
+        this.deco(w, 0.008, d, edge, x, 0.059, z)
+      const sign = makeSign(text, 1.6, 0.26, '#0f172a', textColour)
+      sign.position.set(cx, 3.05, minZ + 0.03)
+      this.root.add(sign)
+    }
+    if (section === 'cold') for (const x of [minX + 1.2, maxX - 1.2]) this.coolingUnit(x, 3.75, minZ + 0.3)
+    if (vault) this.cage(minX + 0.08, maxX - 0.08, minZ + 0.04, -29.3, 2.4)
+  }
+
+  /** A wire-mesh cage from (x0, z0) to (x1, z1), `h` tall, open on its north side (the robots reach in there); its gate stands open. */
+  private cage(x0: number, x1: number, z0: number, z1: number, h: number): void {
+    const frame = paintedSteel(0x374151)
+    const mesh = wireMesh()
+    const post = (x: number, z: number) => this.deco(0.06, h, 0.06, frame, x, h / 2, z)
+    for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]] as const) post(x, z)
+    const panel = (w: number, ph: number, d: number, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, ph, d)), mesh)
+      m.position.set(x, y, z)
+      this.root.add(m)
+    }
+    const midX = (x0 + x1) / 2
+    const midZ = (z0 + z1) / 2
+    panel(0.01, h, z1 - z0, x0, h / 2, midZ)
+    panel(0.01, h, z1 - z0, x1, h / 2, midZ)
+    panel(x1 - x0, 0.01, z1 - z0, midX, h, midZ)
+    this.deco(x1 - x0, 0.06, 0.06, frame, midX, h, z1)
+    this.deco(x1 - x0, 0.06, 0.06, frame, midX, h, z0)
+    // The gate, swung right open against the outside of the east side.
+    panel(0.01, h - 0.2, 1.1, x1 + 0.05, (h - 0.2) / 2 + 0.05, z1 - 0.55)
+    this.deco(0.04, h - 0.2, 0.04, frame, x1 + 0.05, (h - 0.2) / 2 + 0.05, z1 - 1.1)
+  }
+
+  /** A wall-mounted cooling unit facing north (+z) at (x, y), back against the wall at z: a casing with two spinning fans. */
+  private coolingUnit(x: number, y: number, z: number): void {
+    const casing = paintedSteel(0xe2e8f0)
+    const dark = mat(0x1f2937, 0.6)
+    this.deco(1.5, 0.62, 0.42, casing, x, y, z + 0.21)
+    for (const dx of [-0.36, 0.36]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.025, 8, 24), dark)
+      ring.position.set(x + dx, y, z + 0.43)
+      this.root.add(ring)
+      const hub = new THREE.Group()
+      hub.position.set(x + dx, y, z + 0.41)
+      for (let i = 0; i < 4; i++) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.19, 0.01), dark)
+        blade.position.y = 0.1
+        const arm = new THREE.Group()
+        arm.rotation.z = (i * Math.PI) / 2
+        arm.add(blade)
+        hub.add(arm)
+      }
+      this.root.add(hub)
+      this.spinners.push({ obj: hub, axis: 'z', speed: 9 })
+      for (let k = -2; k <= 2; k++) this.deco(0.44, 0.008, 0.008, dark, x + dx, y + k * 0.08, z + 0.455)
+    }
+    // Its pipes run up the wall to the roof.
+    for (const dx of [-0.6, 0.6]) {
+      const top = roofUnderside(x + dx)
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, top - y, 8), mat(0x9ca3af, 0.4, 0.6))
+      pipe.position.set(x + dx, (top + y) / 2, z + 0.06)
+      this.root.add(pipe)
+    }
+  }
+
+  /** A louvred wall vent at (x, y) on a wall facing `facing` (the direction into the shed). */
+  private wallVent(x: number, y: number, z: number, rotY: number): void {
+    const g = new THREE.Group()
+    g.position.set(x, y, z)
+    g.rotation.y = rotY
+    const frame = paintedSteel(0x4b5563)
+    const slat = mat(0x111827, 0.6)
+    const add = (w: number, h: number, d: number, m: THREE.Material, px: number, py: number, pz: number, rx = 0) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
+      mesh.position.set(px, py, pz)
+      mesh.rotation.x = rx
+      g.add(mesh)
+    }
+    add(1.0, 0.7, 0.04, frame, 0, 0, 0)
+    add(0.9, 0.6, 0.02, slat, 0, 0, 0.012)
+    for (let i = 0; i < 6; i++) add(0.88, 0.07, 0.012, frame, 0, -0.25 + i * 0.1, 0.035, -0.6)
+    this.root.add(g)
+  }
+
+  /** The pitched roof: two sloping sheets meeting at a ridge along z, gable ends on the north and south walls, ridge vents. */
+  private buildRoof(roofMat: THREE.Material, wallMat: THREE.Material): void {
+    const { minX, maxX, minZ, maxZ, height: H } = WAREHOUSE
+    const half = (maxX - minX) / 2
+    const cx = minX + half
+    const angle = Math.atan2(ROOF_RISE, half)
+    const lining = shedCladding(0xdde4e8, 0.45)
+    const len = maxZ - minZ + 0.8
+    const cz = (minZ + maxZ) / 2
+    // The west sheet stops at the west wall (past it are the halls); the east one overhangs the docks by 0.5 m.
+    for (const [side, run] of [
+      [-1, half],
+      [1, half + 0.5],
+    ] as const) {
+      const slope = run / Math.cos(angle)
+      const g = new THREE.Group()
+      g.position.set(cx + (side * run) / 2, H + ROOF_RISE - (run / 2) * Math.tan(angle) + 0.06, cz)
+      g.rotation.z = -side * angle
+      // The sheet's ribs run down the slope: its texture's long axis lies along the box's z, so the box is turned a quarter.
+      // Red sheet on top, a pale insulated lining underneath (faces: +x, −x, +y, −y, +z, −z).
+      const sheet = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(len, 0.12, slope)), [roofMat, roofMat, roofMat, lining, roofMat, roofMat])
+      sheet.rotation.y = Math.PI / 2
+      sheet.castShadow = true
+      sheet.receiveShadow = true
+      g.add(sheet)
+      this.root.add(g)
+    }
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, len), mat(0x7f1d1d, 0.6, 0.3))
+    ridge.position.set(cx, H + ROOF_RISE + 0.1, cz)
+    this.root.add(ridge)
+    // Gable ends: triangles of cladding on the north and south walls, from the eaves up to the ridge.
+    const shape = new THREE.Shape()
+    shape.moveTo(minX, H)
+    shape.lineTo(maxX + T, H)
+    shape.lineTo(cx, H + ROOF_RISE)
+    shape.closePath()
+    const gable = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false })
+    for (const z of [maxZ, minZ - T]) {
+      const m = new THREE.Mesh(gable, wallMat)
+      m.position.z = z
+      m.castShadow = true
+      m.receiveShadow = true
+      this.root.add(m)
+    }
+    // Turbine ventilators along the ridge, spinning in the wind.
+    for (const z of [minZ + 4, cz, maxZ - 4]) {
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.3, 16), mat(0x9ca3af, 0.4, 0.6))
+      base.position.set(cx, H + ROOF_RISE + 0.3, z)
+      this.root.add(base)
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xcbd5e1, 0.35, 0.7))
+      head.position.set(cx, H + ROOF_RISE + 0.45, z)
+      head.scale.y = 0.9
+      for (let i = 0; i < 10; i++) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.3, 0.12), mat(0x94a3b8, 0.4, 0.6))
+        const a = (i / 10) * Math.PI * 2
+        fin.position.set(Math.cos(a) * 0.3, 0.08, Math.sin(a) * 0.3)
+        fin.rotation.y = -a + 0.5
+        head.add(fin)
+      }
+      this.root.add(head)
+      this.spinners.push({ obj: head, axis: 'y', speed: 1.6 })
+    }
+  }
+
+  /**
+   * A stocked rack for show (not a section: the robots never use it): uprights, beams and decks like the others, loaded with cardboard
+   * boxes of mixed sizes and a pallet here and there. It has a collider.
+   */
+  private stockRack(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], seed: number): void {
+    const post = paintedSteel(0x1d4ed8)
+    const beam = paintedSteel(0xf59e0b)
+    const board = diamondPlate(0xa3abb5)
+    const len = bays * pitch
+    const xMid = x0 + len / 2
+    const top = levels[levels.length - 1]! + 1.0
+    for (let i = 0; i <= bays; i++) for (const dz of [-0.52, 0.52]) this.deco(0.08, top, 0.08, post, x0 + i * pitch, top / 2, z + dz)
+    const rnd = (k: number) => {
+      const v = Math.sin(seed * 91.7 + k * 12.9898) * 43758.5453
+      return v - Math.floor(v)
+    }
+    const tints = [0xb08a5a, 0xc49a63, 0x9c7748, 0xb8956b]
+    let k = 0
+    for (const level of levels) {
+      this.deco(len, 0.05, 1.12, board, xMid, level, z)
+      for (const dz of [-0.52, 0.52]) this.deco(len, 0.1, 0.05, beam, xMid, level - 0.08, z + dz)
+      for (let b = 0; b < bays; b++) {
+        const bx = x0 + pitch * (b + 0.5)
+        if (rnd(k++) < 0.15) continue
+        if (rnd(k++) < 0.3) {
+          // A pallet with a stack of boxes on it.
+          this.deco(pitch - 0.2, 0.12, 0.95, woodMat(0x9a7b55), bx, level + 0.085, z)
+          for (let s = 0; s < 2; s++) this.deco(pitch - 0.35, 0.3, 0.8, cardboardMat(tints[(k + s) % 4]!), bx, level + 0.3 + s * 0.31, z)
+          continue
+        }
+        let x = bx - pitch / 2 + 0.1
+        while (x < bx + pitch / 2 - 0.25) {
+          const w = 0.25 + rnd(k++) * 0.3
+          const h = 0.2 + rnd(k++) * 0.45
+          const d = 0.35 + rnd(k++) * 0.5
+          if (x + w > bx + pitch / 2 - 0.05) break
+          this.deco(w, h, d, cardboardMat(tints[k % 4]!), x + w / 2, level + 0.025 + h / 2, z + (rnd(k++) - 0.5) * 0.2)
+          x += w + 0.04
+        }
+      }
+    }
+    this.physicsBox(xMid, top / 2, z, len / 2, top / 2, 0.58)
+  }
+
+  /** The shift supervisor's desk against the north wall: a metal desk, a chair, a desk lamp and a little fan, and a paper or two. */
+  private buildDeskCorner(x: number, z: number): void {
+    this.root.add(prop('metal_office_desk', { x, z, rotY: Math.PI, height: 0.76, glow: 0.3 }))
+    this.physicsBox(x, 0.38, z, 0.7, 0.38, 0.4)
+    this.root.add(prop('plastic_monobloc_chair_01', { x: x + 0.1, z: z - 0.75, rotY: 0.25, height: 0.8, glow: 0.3 }))
+    this.root.add(prop('desk_lamp_arm_01', { x: x - 0.45, y: 0.76, z: z + 0.1, rotY: Math.PI + 0.6, height: 0.45, glow: 0.3 }))
+    this.deco(0.3, 0.004, 0.22, mat(0xf8fafc, 0.9), x - 0.05, 0.765, z - 0.05)
+    this.deco(0.24, 0.004, 0.3, mat(0xfef3c7, 0.9), x + 0.12, 0.768, z - 0.02)
+    // A table fan, its head turning slowly from side to side.
+    const fan = new THREE.Group()
+    fan.position.set(x + 0.5, 0.76, z + 0.05)
+    const white = mat(0xe5e7eb, 0.4)
+    const grey = mat(0x9ca3af, 0.4, 0.5)
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.03, 20), white)
+    base.position.y = 0.015
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 8), grey)
+    stem.position.y = 0.13
+    fan.add(base, stem)
+    const head = new THREE.Group()
+    head.position.y = 0.26
+    const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.09, 12), white)
+    motor.rotation.x = Math.PI / 2
+    motor.position.z = 0.02
+    const cage = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.006, 6, 28), grey)
+    cage.position.z = -0.05
+    const cageBack = cage.clone()
+    cageBack.position.z = -0.015
+    const blades = new THREE.Group()
+    blades.position.z = -0.035
+    for (let i = 0; i < 3; i++) {
+      const arm = new THREE.Group()
+      arm.rotation.z = (i * Math.PI * 2) / 3
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.004), mat(0x7dd3fc, 0.4))
+      blade.position.y = 0.055
+      blade.rotation.y = 0.35
+      arm.add(blade)
+      blades.add(arm)
+    }
+    head.add(motor, cage, cageBack, blades)
+    fan.add(head)
+    fan.rotation.y = Math.PI
+    this.root.add(fan)
+    this.spinners.push({ obj: blades, axis: 'z', speed: 22 })
+    this.fanHead = head
   }
 
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {

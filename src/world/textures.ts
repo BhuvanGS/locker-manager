@@ -103,7 +103,8 @@ const AVG = {
   wood: [0.198, 0.125, 0.074],
   ceiling: [0.905, 0.905, 0.905],
   duct: [0.223, 0.223, 0.22],
-  shed: [0.319, 0.328, 0.337],
+  cladding: [0.209, 0.402, 0.468],
+  roof: [0.376, 0.089, 0.093],
   plate: [0.159, 0.125, 0.093],
   cardboard: [0.485, 0.275, 0.074],
   road: [0.053, 0.053, 0.05],
@@ -119,10 +120,27 @@ export const woodMat = (color: number): THREE.MeshStandardMaterial => textured('
 /** Suspended ceiling tiles (about 60 cm each), in the ceiling's own colour. Ceiling boxes need `metreUVs`. */
 export const ceilingMat = (color: number): THREE.MeshStandardMaterial => textured('ceiling-tiles', { color, average: AVG.ceiling, repeat: 1 / 3.6, normalScale: 0.5 })
 /** The warehouse: steel cladding (walls), ribbed roof sheet, diamond plate (vault), cardboard (crates), asphalt (road and yard). */
-export const shedSteel = (color: number, glow = 0): THREE.MeshStandardMaterial =>
-  textured('shed-steel', { color, average: AVG.shed, repeat: 0.5, metalness: 0.2, glow })
-export const roofSheet = (color: number, glow = 0): THREE.MeshStandardMaterial =>
-  textured('duct-steel', { color, average: AVG.duct, repeat: 0.5, metalness: 0.2, glow })
+export const shedCladding = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('shed-cladding', { color, average: AVG.cladding, repeat: 0.5, metalness: 0.25, glow })
+export const shedRoof = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('shed-roof', { color, average: AVG.roof, repeat: 0.5, metalness: 0.25, glow })
+/** Steel wire mesh (cut out by its opacity map), for cages. */
+let mesh: THREE.MeshStandardMaterial | null = null
+export function wireMesh(): THREE.MeshStandardMaterial {
+  if (mesh) return mesh
+  const load = (file: string): THREE.Texture => {
+    const t = loader.load(`${BASE}wire-mesh/${file}.jpg`)
+    t.wrapS = THREE.RepeatWrapping
+    t.wrapT = THREE.RepeatWrapping
+    t.repeat.setScalar(2)
+    return t
+  }
+  const map = load('color')
+  map.colorSpace = THREE.SRGBColorSpace
+  // Blended, not cut out: the thin wires would vanish at a distance with alphaTest (the mipmaps average them away).
+  mesh = new THREE.MeshStandardMaterial({ map, alphaMap: load('opacity'), transparent: true, depthWrite: false, normalMap: load('normal'), metalness: 0.6, roughness: 0.45, side: THREE.DoubleSide, emissive: 0x555555, emissiveMap: map, emissiveIntensity: 0.35 })
+  return mesh
+}
 export const diamondPlate = (color: number, glow = 0): THREE.MeshStandardMaterial =>
   textured('diamond-plate', { color, average: AVG.plate, repeat: 1, metalness: 0.35, glow })
 export const cardboardMat = (color: number): THREE.MeshStandardMaterial => textured('cardboard', { color, average: AVG.cardboard, repeat: 1.5 })
