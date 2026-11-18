@@ -221,6 +221,11 @@ Rules:
   `game.meteor` every frame (sky approach, fireball, flash, dust and smoke sprites, crater, rising water, road, pier, harbour office) and owns its colliders
   (a fence round the water with a gap for the pier), so a new game resets it. The ground has a round hole for the crater, covered by `Lake`'s grass cap
   until the strike. Mod menu: **Meteor** starts the countdown, or makes it strike in 15 s.
+- **The coast and the ships** (`LAKE.coast`, `LAKE.berth` in `layout.ts`; `Lake.buildBeach`, `buildChannel`, `makeShip`, `updateShip`): west of the lake the grass
+  ends at `coast.grassX`, a beach (umbrellas, loungers, a BEACH sign at the end of the main street) runs to `shoreX`, then sand shelves into the sea
+  (`seaY`); a fence at `wadeX` stops you wading out. Before the strike the channel (`coast.channel`, z ±`halfWidth`) is beach; after it the channel is dug
+  and joins the crater to the sea. The ground's outline follows `craterNotch()`. Once the dock is built a container ship loops (sail in, moor at the
+  pier head's south face with lines to `BOLLARDS`, sail out, away). Visual only for now: container gameplay is still to come.
 - **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
   number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

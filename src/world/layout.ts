@@ -326,8 +326,34 @@ export const LAKE = {
   waterDrop: 0.28,
   road: { minX: -31, maxX: -25, minZ: -6, maxZ: 10.25 },
   apron: { minX: -42, maxX: -25, minZ: -10.6, maxZ: -4 },
-  pier: { x: -36, halfWidth: 1.5, fromZ: -10.6, toZ: -20 },
+  pier: { x: -36, halfWidth: 1.5, fromZ: -10.6, toZ: -20, head: { minX: -42, maxX: -30, minZ: -21.7, maxZ: -20 } },
+  /** Where a visiting ship lies alongside the pier head (its centre, facing east), and its size. */
+  berth: { x: -36, z: -24.4, length: 18, beam: 5 },
+  /**
+   * The coast west of town: grass to `grassX`, a flat beach to `shoreX`, then sand shelving into the sea (at `seaY`). The meteor's
+   * crater breaks through to it: a channel `channel.halfWidth` either side of `channel.z` runs from the lake to the sea.
+   */
+  coast: { grassX: -56, shoreX: -62, wadeX: -66.5, seaY: -0.3, channel: { z: -24, halfWidth: 5 } },
 } as const
+
+/**
+ * The crater and its channel to the sea seen from above, as world (x, z) points: from the channel's north bank at the grass edge, round
+ * the crater's east side, back to the channel's south bank. The grass has this notch cut out (the Lake covers it until the strike).
+ */
+export function craterNotch(): [number, number][] {
+  const { grassX, channel } = LAKE.coast
+  const hw = channel.halfWidth
+  const a = Math.atan2(channel.z + hw - LAKE.z, -Math.sqrt(LAKE.r ** 2 - (channel.z + hw - LAKE.z) ** 2))
+  const b = Math.atan2(channel.z - hw - LAKE.z, -Math.sqrt(LAKE.r ** 2 - (channel.z - hw - LAKE.z) ** 2))
+  const pts: [number, number][] = [[grassX, channel.z + hw]]
+  const span = b - a // the long way round, through the east (negative)
+  for (let i = 0; i <= 64; i++) {
+    const t = a + (span * i) / 64
+    pts.push([LAKE.x + Math.cos(t) * LAKE.r, LAKE.z + Math.sin(t) * LAKE.r])
+  }
+  pts.push([grassX, channel.z - hw])
+  return pts
+}
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }

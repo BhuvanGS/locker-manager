@@ -105,6 +105,7 @@ const AVG = {
   duct: [0.223, 0.223, 0.22],
   cladding: [0.209, 0.402, 0.468],
   grass: [0.13, 0.231, 0.025],
+  sand: [0.462, 0.342, 0.165],
   gravel: [0.147, 0.15, 0.136],
   roof: [0.376, 0.089, 0.093],
   plate: [0.159, 0.125, 0.093],
@@ -153,6 +154,8 @@ export const paintedSteel = (color: number): THREE.MeshStandardMaterial => textu
 
 /** The lawn round the buildings (the ground's UVs are in metres: tiled every 4 m). */
 export const grassMat = (color: number): THREE.MeshStandardMaterial => textured('grass', { color, average: AVG.grass, repeat: 0.25, normalScale: 0.6 })
+/** Beach sand (UVs in metres: tiled every 3 m). */
+export const sandMat = (color: number): THREE.MeshStandardMaterial => textured('sand', { color, average: AVG.sand, repeat: 1 / 3, normalScale: 0.7 })
 /** Gravel ballast on the flat roofs. */
 export const roofGravel = (color: number): THREE.MeshStandardMaterial => textured('roof-gravel', { color, average: AVG.gravel, repeat: 1.2, normalScale: 0.6, soften: { amount: 0.45, grey: 'rgb(108,110,103)' } })
 

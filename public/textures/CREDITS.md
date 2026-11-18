@@ -25,6 +25,7 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `yard-asphalt` | Asphalt031 | the truck yard (dock parking) |
 | `grass` | Grass005 | the lawn round the complex |
 | `roof-gravel` | Gravel043 | the flat roofs |
+| `sand` | Ground080 | the beach and the channel banks |
 
 `locker-door`, `arm-paint` and `till-plastic` are also used on the warehouse robots.
 

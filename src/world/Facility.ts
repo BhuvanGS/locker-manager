@@ -4,7 +4,7 @@ import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, craterNotch } from './layout'
 import { mat } from './models'
 import { prop } from './props'
 import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
@@ -309,12 +309,9 @@ export class Facility {
   private buildOutside(): void {
     // The ground, with the underground vault's shaft cut out of it (closed by a plug until the vault is built).
     const hole = UNDERGROUND.hatch
-    const shape = new THREE.Shape()
-    shape.moveTo(-100, -100)
-    shape.lineTo(100, -100)
-    shape.lineTo(100, 100)
-    shape.lineTo(-100, 100)
-    shape.closePath()
+    // Grass from the beach (west) to the far side, with the crater and its channel cut out of its west edge.
+    const outline: [number, number][] = [[100, -100], [100, 100], [LAKE.coast.grassX, 100], ...craterNotch(), [LAKE.coast.grassX, -100]]
+    const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, -z)))
     // Shape y becomes −z once the plane is laid flat.
     const cut = new THREE.Path()
     cut.moveTo(hole.minX, -hole.maxZ)
@@ -323,16 +320,12 @@ export class Facility {
     cut.lineTo(hole.maxX, -hole.maxZ)
     cut.closePath()
     shape.holes.push(cut)
-    // …and the meteor's crater (the Lake draws the grass over it until the meteor strikes).
-    const crater = new THREE.Path()
-    crater.absarc(LAKE.x, -LAKE.z, LAKE.r, 0, Math.PI * 2, true)
-    shape.holes.push(crater)
     const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape), grassMat(0x5f8a46))
     ground.rotation.x = -Math.PI / 2
     ground.position.y = FLOOR_Y - 0.02
     ground.receiveShadow = true
     this.root.add(ground)
-    for (const r of aroundHole(-60, 60, -60, 60, hole)) {
+    for (const r of aroundHole(LAKE.coast.shoreX, 60, -60, 60, hole)) {
       this.physics.addStaticBox(new THREE.Vector3((r.minX + r.maxX) / 2, -0.5, (r.minZ + r.maxZ) / 2), new THREE.Vector3((r.maxX - r.minX) / 2, 0.48, (r.maxZ - r.minZ) / 2))
     }
     const plug = new THREE.Mesh(new THREE.BoxGeometry(hole.maxX - hole.minX, 0.96, hole.maxZ - hole.minZ), new THREE.MeshBasicMaterial({ visible: false }))
@@ -344,7 +337,7 @@ export class Facility {
     // Trees round the complex: along the west side, behind the halls, and across the service road (none on a path or a drive).
     for (const [i, [x, z, h]] of ([
       [-19, -4, 5.5], [-21, -13, 6.5], [-18.5, -22, 5], [-21, -30, 6], [-10, -34, 5.5], [-1, -35, 4.8],
-      [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-20.5, 13, 6],
+      [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-21, 3, 6],
     ] as const).entries())
       this.root.add(tree(x, z, h, i + 1))
 
@@ -355,6 +348,11 @@ export class Facility {
     this.vaultCap = this.deco(hole.maxX - hole.minX, 0.01, hole.maxZ - hole.minZ, foundation, (hole.minX + hole.maxX) / 2, -0.006, (hole.minZ + hole.maxZ) / 2)
     this.deco(60, 0.04, 4, mat(0xbdb8b0, 0.95), 0, 0.0, 8.2)
     this.deco(60, 0.03, 8, roadAsphalt(0x3a3d43), 0, -0.005, 14.2)
+    // The main street carries on west to the beach, where it ends.
+    const extX = (LAKE.coast.grassX - 30) / 2 // the middle of x -30…grassX
+    this.deco(-30 - LAKE.coast.grassX, 0.03, 8, roadAsphalt(0x3a3d43), extX, -0.005, 14.2)
+    this.deco(-30 - LAKE.coast.grassX, 0.04, 4, mat(0xbdb8b0, 0.95), extX, 0.0, 8.2)
+    for (let x = -32; x > LAKE.coast.grassX + 2; x -= 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
 
     // Buildings across the street.
