@@ -6,10 +6,11 @@ import { CONFIG, type CargoType, type Section } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import type { RobotJob, Truck } from '../sim/WarehouseManager'
 import { markBlocker, tag } from './interactables'
-import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
-import { makeSign, mat } from './models'
+import { CONTACT_SPOT, FLOOR_HEIGHT, UNDERGROUND, WAREHOUSE } from './layout'
+import { makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
-import { cardboardMat, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
+import { aroundHole } from './Facility'
+import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
@@ -40,6 +41,12 @@ type TruckView = { id: number; group: THREE.Group; crates: THREE.Mesh[]; shown: 
 type CrateView = { group: THREE.Group; box: THREE.Mesh; band: THREE.Mesh }
 type Rect = { minX: number; maxX: number; minZ: number; maxZ: number }
 type Door = { roller: THREE.Mesh; body: RAPIER.RigidBody | null; open: number; z: number }
+/** The contact's walk in from the south hall's door to where he waits. */
+const CONTACT_WALK: readonly (readonly [number, number])[] = [
+  [5.0, WAREHOUSE.door.z],
+  [6.9, WAREHOUSE.door.z],
+  [CONTACT_SPOT.x, CONTACT_SPOT.z],
+]
 
 /**
  * The warehouse: a steel shed built against the south hall (its door opens straight in), pallet racks along a cross aisle, the cold room,
@@ -58,6 +65,11 @@ export class Warehouse {
   private readonly slots: Record<Section, Slot[]> = { shelves: [], cold: [], vault: [], hidden: [] }
   private readonly crates: Record<Section, CrateView[]> = { shelves: [], cold: [], vault: [], hidden: [] }
   private readonly doors: Door[] = []
+  /** The floor over the vault's shaft until the vault is built; then the sliding hatch door (and its collider while shut). */
+  private floorCap: THREE.Mesh | null = null
+  private hatchDoor: { mesh: THREE.Group; body: RAPIER.RigidBody | null; open: number } | null = null
+  /** The contact: a person by the door (shown while he is here), his name over his head, and an invisible target to aim at. */
+  private contactView: { group: THREE.Group; rig: PersonRig; label: THREE.Mesh | null; name: string } | null = null
   private readonly trucks = new Map<number, TruckView>()
   private readonly built = new Set<string>()
   /** Fans and ventilators that turn all the time. */
@@ -87,7 +99,10 @@ export class Warehouse {
     // Ribbed steel cladding for the shed's walls and roof (the rooms inside use plainer panels).
     const steel = shedCladding(0x86a7b8, 0.3)
     const roofMat = shedRoof(0x9c3a33, 0.25)
-    this.deco(w, 0.03, d, concreteFloor(0x8f949a, 0.3), cx, 0.016, cz)
+    const floor = concreteFloor(0x8f949a, 0.3)
+    for (const r of aroundHole(minX, maxX, minZ, maxZ, UNDERGROUND.hatch)) this.deco(r.maxX - r.minX, 0.03, r.maxZ - r.minZ, floor, (r.minX + r.maxX) / 2, 0.016, (r.minZ + r.maxZ) / 2)
+    const hatch = UNDERGROUND.hatch
+    this.floorCap = this.deco(hatch.maxX - hatch.minX, 0.03, hatch.maxZ - hatch.minZ, floor, (hatch.minX + hatch.maxX) / 2, 0.016, (hatch.minZ + hatch.maxZ) / 2)
     const wall = (width: number, depth: number, x: number, z: number, y0 = 0, y1 = H) => {
       if (width < 0.01 || depth < 0.01) return
       this.solid(width, y1 - y0, depth, steel, x, (y0 + y1) / 2, z)
@@ -156,9 +171,11 @@ export class Warehouse {
 
     // Slots for every rack, bought or not; the racks themselves appear when bought (the first two now).
     const { rack, shelves, lanes } = WAREHOUSE
-    for (const r of shelves) this.slots.shelves.push(...this.rowSlots(r.z, r.x0, rack.bays, rack.pitch, rack.levels, lanes.cross))
-    for (const r of shelves.slice(0, 2)) this.rackAlongX(r.z, r.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
-    for (const section of ['cold', 'vault', 'hidden'] as const) {
+    for (const r of shelves) this.slots.shelves.push(...this.rowSlots(r.z, r.x0, rack.bays, rack.pitch, rack.levels, r.lane))
+    for (const r of shelves.slice(0, 3)) this.rackAlongX(r.z, r.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
+    const u = UNDERGROUND.rack
+    this.slots.hidden.push(...this.rowSlots(u.z, u.x0, u.bays, u.pitch, u.levels, u.z, UNDERGROUND.floorY))
+    for (const section of ['cold', 'vault'] as const) {
       const room = WAREHOUSE[section]
       const levels = section === 'vault' ? rack.levels.slice(0, 2) : rack.levels
       this.slots[section].push(...this.rowSlots(room.minZ + 0.75, roomX0(room), 4, room.pitch, levels, lanes.room))
@@ -183,7 +200,7 @@ export class Warehouse {
 
     // The robots' lanes (painted once the robots are bought).
     this.lanes = new LaneGraph(laneSegments(), [
-      ...SECTIONS.flatMap((s) => this.slots[s].map((slot) => slot.approach)),
+      ...SECTIONS.filter((s) => s !== 'hidden').flatMap((s) => this.slots[s].map((slot) => slot.approach)),
       ...docks.z.map((z) => ({ x: lanes.dock + 1.2, z })),
       ...WAREHOUSE.robotHomes.map(([x, z]) => ({ x, z })),
     ])
@@ -202,7 +219,7 @@ export class Warehouse {
     // A parts cart along the north wall (clear of the robots' north lane) and an extinguisher by the hall door.
     this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
     this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(17.6, 0.45, -9.95), new THREE.Vector3(0.6, 0.45, 0.35)))
-    this.root.add(prop('korean_fire_extinguisher_01', { x: 6.55, z: -16.9, rotY: Math.PI / 2, height: 0.6, glow: 0.3 }))
+    this.root.add(prop('korean_fire_extinguisher_01', { x: 6.55, z: -19.6, rotY: Math.PI / 2, height: 0.6, glow: 0.3 }))
     this.root.add(prop('power_box_01', { x: 9.4, y: 1.0, z: maxZ - 0.2, rotY: Math.PI, height: 0.7, glow: 0.3 }))
     this.root.add(conduit([new THREE.Vector3(9.28, 1.66, maxZ - 0.2), new THREE.Vector3(9.28, H - 0.05, maxZ - 0.2)]))
 
@@ -251,6 +268,8 @@ export class Warehouse {
     this.syncRobots(dt, game)
     this.syncPolice(game)
     this.syncDoors(dt, game, player)
+    this.syncHatch(dt, player)
+    this.syncContact(game, player)
     for (const sp of this.spinners) sp.obj.rotation[sp.axis] += sp.speed * dt
     if (this.fanHead) this.fanHead.rotation.y = Math.sin(performance.now() / 2600) * 0.7
     this.drawBoard(game)
@@ -263,8 +282,8 @@ export class Warehouse {
     const wh = game.warehouse
     const { rack, shelves } = WAREHOUSE
     for (const [i, id] of [
-      [2, 'wh-cap-1'],
-      [3, 'wh-cap-2'],
+      [3, 'wh-cap-1'],
+      [4, 'wh-cap-2'],
     ] as const) {
       if (!wh.has(id) || this.built.has(id)) continue
       this.built.add(id)
@@ -273,12 +292,15 @@ export class Warehouse {
     const rooms: [Section, number, string, string, number][] = [
       ['cold', 0xe0f2fe, 'COLD ROOM', '#38bdf8', 0xbae6fd],
       ['vault', 0x475569, 'VAULT', '#fbbf24', 0x1e293b],
-      ['hidden', 0xa8a29e, 'STAFF ONLY', '#e2e8f0', 0x78716c],
     ]
+    if (wh.sectionCapacity('hidden') > 0 && !this.built.has('hidden')) {
+      this.built.add('hidden')
+      this.buildUnderground()
+    }
     for (const [section, wallColour, text, textColour, floorColour] of rooms) {
       if (wh.sectionCapacity(section) <= 0 || this.built.has(section)) continue
       this.built.add(section)
-      const r = WAREHOUSE[section as 'cold' | 'vault' | 'hidden']
+      const r = WAREHOUSE[section as 'cold' | 'vault']
       this.rackArea(r, wallColour, text, textColour, floorColour, section)
       this.rackAlongX(r.minZ + 0.75, roomX0(r), 4, r.pitch, section === 'vault' ? rack.levels.slice(0, 2) : rack.levels, section)
     }
@@ -715,12 +737,12 @@ export class Warehouse {
   // ------------------------------------------------------------------ building blocks
 
   /** Slots of a rack along x (crates in the middle of each bay), each with the spot on lane `laneZ` in front of it. */
-  private rowSlots(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], laneZ: number): Slot[] {
+  private rowSlots(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], laneZ: number, y0 = 0): Slot[] {
     const out: Slot[] = []
     for (const level of levels) {
       for (let b = 0; b < bays; b++) {
         const x = x0 + pitch * (b + 0.5)
-        out.push({ pos: new THREE.Vector3(x, level + 0.03 + CRATE.h / 2, z), approach: { x, z: laneZ } })
+        out.push({ pos: new THREE.Vector3(x, y0 + level + 0.03 + CRATE.h / 2, z), approach: { x, z: laneZ } })
       }
     }
     return out
@@ -730,23 +752,245 @@ export class Warehouse {
    * A pallet rack running along x from `x0`: posts, beams, boards, a collider, and an invisible box tagged with its section (aim at the
    * rack to store a crate on it, or to take one for a collection).
    */
-  private rackAlongX(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], section: Section): void {
+  private rackAlongX(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], section: Section, y0 = 0, topRoom = 1.0): void {
     const post = paintedSteel(0x1d4ed8)
     const beam = paintedSteel(0xf59e0b)
     const board = diamondPlate(0xa3abb5)
     const len = bays * pitch
     const xMid = x0 + len / 2
-    const top = levels[levels.length - 1]! + 1.0
-    for (let i = 0; i <= bays; i++) for (const dz of [-0.52, 0.52]) this.deco(0.08, top, 0.08, post, x0 + i * pitch, top / 2, z + dz)
+    const top = levels[levels.length - 1]! + topRoom
+    for (let i = 0; i <= bays; i++) for (const dz of [-0.52, 0.52]) this.deco(0.08, top, 0.08, post, x0 + i * pitch, y0 + top / 2, z + dz)
     for (const level of levels) {
-      this.deco(len, 0.05, 1.12, board, xMid, level, z)
-      for (const dz of [-0.52, 0.52]) this.deco(len, 0.1, 0.05, beam, xMid, level - 0.08, z + dz)
+      this.deco(len, 0.05, 1.12, board, xMid, y0 + level, z)
+      for (const dz of [-0.52, 0.52]) this.deco(len, 0.1, 0.05, beam, xMid, y0 + level - 0.08, z + dz)
     }
-    this.physicsBox(xMid, top / 2, z, len / 2, top / 2, 0.58)
+    this.physicsBox(xMid, y0 + top / 2, z, len / 2, top / 2, 0.58)
     const proxy = new THREE.Mesh(new THREE.BoxGeometry(len + 0.1, top, 1.3), new THREE.MeshBasicMaterial({ visible: false }))
-    proxy.position.set(xMid, top / 2, z)
+    proxy.position.set(xMid, y0 + top / 2, z)
     tag(proxy, { kind: 'section', section })
     this.root.add(proxy)
+  }
+
+  /**
+   * The underground vault: a concrete room under the floor (rack along the south wall, a work table with a lamp, a caged bulb), a small
+   * storage room off its east side, the shaft up to the warehouse floor with a ladder, and the sliding hatch door on top, covered by a mat
+   * the colour of the floor so it is easy to miss.
+   */
+  private buildUnderground(): void {
+    const U = UNDERGROUND
+    const { hatch, closet } = U
+    const y0 = U.floorY
+    const h = U.ceilingY - y0
+    const yMid = y0 + h / 2
+    if (this.floorCap) this.root.remove(this.floorCap)
+    this.floorCap = null
+    const wallMat = concreteFloor(0x8b8680, 0.35)
+    const floorMat = concreteFloor(0x77736d, 0.3)
+    const ceilMat = concreteFloor(0x6b6762, 0.25)
+    const cx = (U.minX + U.maxX) / 2
+    const cz = (U.minZ + U.maxZ) / 2
+    const W = U.maxX - U.minX
+    const D = U.maxZ - U.minZ
+    // Floor, ceiling (with the shaft through it) and walls; the east wall has the storage room's doorway.
+    this.solid(W + 2 * T, T, D + 2 * T, floorMat, cx, y0 - T / 2, cz)
+    for (const r of aroundHole(U.minX - T, U.maxX + T, U.minZ - T, U.maxZ + T, hatch)) {
+      const m = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(r.maxX - r.minX, 0.2, r.maxZ - r.minZ)), ceilMat)
+      m.position.set((r.minX + r.maxX) / 2, U.ceilingY + 0.1, (r.minZ + r.maxZ) / 2)
+      m.castShadow = true
+      this.root.add(m)
+    }
+    this.solid(W + 2 * T, h, T, wallMat, cx, yMid, U.minZ - T / 2)
+    this.solid(W + 2 * T, h, T, wallMat, cx, yMid, U.maxZ + T / 2)
+    this.solid(T, h, D, wallMat, U.minX - T / 2, yMid, cz)
+    const [d0, d1] = closet.doorZ
+    const doorH = 1.9
+    this.solid(T, h, d0 - U.minZ, wallMat, U.maxX + T / 2, yMid, (U.minZ + d0) / 2)
+    this.solid(T, h, U.maxZ - d1, wallMat, U.maxX + T / 2, yMid, (d1 + U.maxZ) / 2)
+    this.solid(T, h - doorH, d1 - d0, wallMat, U.maxX + T / 2, y0 + doorH + (h - doorH) / 2, (d0 + d1) / 2)
+    // The shaft: lined from the vault's ceiling up to the floor of the warehouse.
+    const sh = 0.03 - U.ceilingY
+    const sy = U.ceilingY + sh / 2
+    const hx = (hatch.minX + hatch.maxX) / 2
+    const hz = (hatch.minZ + hatch.maxZ) / 2
+    this.deco(hatch.maxX - hatch.minX + 0.1, sh, 0.05, wallMat, hx, sy, hatch.minZ - 0.025).castShadow = true
+    this.deco(hatch.maxX - hatch.minX + 0.1, sh, 0.05, wallMat, hx, sy, hatch.maxZ + 0.025).castShadow = true
+    this.deco(0.05, sh, hatch.maxZ - hatch.minZ, wallMat, hatch.minX - 0.025, sy, hz).castShadow = true
+    this.deco(0.05, sh, hatch.maxZ - hatch.minZ, wallMat, hatch.maxX + 0.025, sy, hz).castShadow = true
+    // A steel frame round the opening.
+    const frame = paintedSteel(0x4b5563)
+    for (const [w, d, x, z] of [
+      [hatch.maxX - hatch.minX + 0.16, 0.08, hx, hatch.minZ - 0.04],
+      [hatch.maxX - hatch.minX + 0.16, 0.08, hx, hatch.maxZ + 0.04],
+      [0.08, hatch.maxZ - hatch.minZ, hatch.minX - 0.04, hz],
+      [0.08, hatch.maxZ - hatch.minZ, hatch.maxX + 0.04, hz],
+    ] as const)
+      this.deco(w, 0.02, d, frame, x, 0.04, z)
+
+    // The ladder: two rails from the vault floor to a little above the warehouse floor, rungs every 30 cm.
+    const steel = mat(0x9ca3af, 0.4, 0.6)
+    const { x: lx, z: lz } = U.ladder
+    const top = 0.95
+    for (const dx of [-0.22, 0.22]) {
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, top - y0, 8), steel)
+      rail.position.set(lx + dx, (top + y0) / 2, lz)
+      rail.castShadow = true
+      this.root.add(rail)
+    }
+    for (let y = y0 + 0.3; y < 0; y += 0.3) {
+      const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.44, 6), steel)
+      rung.rotation.z = Math.PI / 2
+      rung.position.set(lx, y, lz)
+      this.root.add(rung)
+    }
+    // Two targets: the top of the ladder (on the warehouse floor) and its foot (in the vault).
+    for (const [to, y, dy] of [
+      ['down', 0.5, 1.0],
+      ['up', y0 + 1.0, 1.6],
+    ] as const) {
+      const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.7, dy, 0.6), new THREE.MeshBasicMaterial({ visible: false }))
+      proxy.position.set(lx, y, lz - 0.15)
+      tag(proxy, { kind: 'ladder', to })
+      this.root.add(proxy)
+    }
+
+    // The sliding hatch door: a steel plate with a mat on it the colour of the floor; it slides east, over the floor.
+    const door = new THREE.Group()
+    door.position.set(hx, 0.045, hz)
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(hatch.maxX - hatch.minX + 0.12, 0.03, hatch.maxZ - hatch.minZ + 0.12), paintedSteel(0x374151))
+    plate.castShadow = true
+    const mat0 = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(hatch.maxX - hatch.minX + 0.04, 0.012, hatch.maxZ - hatch.minZ + 0.04)), carpetFloor(0x7f8894))
+    mat0.position.y = 0.021
+    door.add(plate, mat0)
+    this.root.add(door)
+    // Its rails on the floor to the east.
+    for (const z of [hatch.minZ - 0.02, hatch.maxZ + 0.02]) this.deco(1.5, 0.012, 0.03, frame, hatch.maxX + 0.7, 0.036, z)
+    this.hatchDoor = { mesh: door, body: this.hatchBody(), open: 0 }
+
+    // The rack for the vault's slots, along the south wall.
+    const r = U.rack
+    this.rackAlongX(r.z, r.x0, r.bays, r.pitch, r.levels, 'hidden', y0, 0.62)
+    // A work table with a lamp in the north-west corner, and a stool.
+    const wood = woodMat(0x6b4f35)
+    this.deco(1.1, 0.05, 0.6, wood, U.minX + 0.65, y0 + 0.76, U.maxZ - 0.4)
+    for (const [dx, dz] of [[-0.5, -0.25], [0.5, -0.25], [-0.5, 0.25], [0.5, 0.25]] as const) this.deco(0.05, 0.74, 0.05, mat(0x374151, 0.6), U.minX + 0.65 + dx, y0 + 0.37, U.maxZ - 0.4 + dz)
+    this.root.add(prop('desk_lamp_arm_01', { x: U.minX + 0.35, y: y0 + 0.785, z: U.maxZ - 0.35, rotY: Math.PI * 0.8, height: 0.42, glow: 0.4 }))
+    this.deco(0.26, 0.004, 0.2, mat(0xf8fafc, 0.9), U.minX + 0.8, y0 + 0.79, U.maxZ - 0.42)
+    this.physicsBox(U.minX + 0.65, y0 + 0.4, U.maxZ - 0.4, 0.55, 0.4, 0.3)
+    this.bulb(cx - 0.6, U.ceilingY, cz - 0.6)
+
+    // The small storage room: a doorway in the vault's east wall, shelves of boxes along its east wall, its own bulb.
+    const ccx = (closet.minX + closet.maxX) / 2
+    const ccz = (closet.minZ + closet.maxZ) / 2
+    const cw = closet.maxX - closet.minX
+    const cd = closet.maxZ - closet.minZ
+    this.solid(cw + T, T, cd + 2 * T, floorMat, ccx + T / 2, y0 - T / 2, ccz)
+    const ceil = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(cw + T, 0.2, cd + 2 * T)), ceilMat)
+    ceil.position.set(ccx + T / 2, U.ceilingY + 0.1, ccz)
+    ceil.castShadow = true
+    this.root.add(ceil)
+    this.solid(cw + T, h, T, wallMat, ccx + T / 2, yMid, closet.minZ - T / 2)
+    this.solid(cw + T, h, T, wallMat, ccx + T / 2, yMid, closet.maxZ + T / 2)
+    this.solid(T, h, cd, wallMat, closet.maxX + T / 2, yMid, ccz)
+    const sx = closet.maxX - 0.3
+    for (const level of [0.3, 0.9, 1.5]) this.deco(0.5, 0.04, cd - 0.3, wood, sx, y0 + level, ccz)
+    for (const dz of [-1, 1]) this.deco(0.05, 1.8, 0.05, mat(0x374151, 0.6), sx, y0 + 0.9, ccz + dz * (cd / 2 - 0.2))
+    const tints = [0xb08a5a, 0x9c7748, 0xc49a63]
+    let k = 0
+    for (const level of [0.3, 0.9, 1.5])
+      for (let z = closet.minZ + 0.35; z < closet.maxZ - 0.4; z += 0.55) {
+        const bh = 0.2 + ((k * 37) % 7) * 0.04
+        this.deco(0.36, bh, 0.42, cardboardMat(tints[k++ % 3]!), sx, y0 + level + 0.02 + bh / 2, z)
+      }
+    this.physicsBox(sx, y0 + 0.9, ccz, 0.28, 0.9, cd / 2)
+    this.bulb(ccx - 0.3, U.ceilingY, ccz)
+  }
+
+  /** A caged bulb hanging from a ceiling at `ceilingY` (it glows; no real light, see AGENTS.md). */
+  private bulb(x: number, ceilingY: number, z: number): void {
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.4, 6), mat(0x111827, 0.6))
+    cord.position.set(x, ceilingY - 0.2, z)
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 10), new THREE.MeshStandardMaterial({ color: 0xfff7d6, emissive: 0xffe9a8, emissiveIntensity: 2.2 }))
+    glass.position.set(x, ceilingY - 0.47, z)
+    const cage = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshStandardMaterial({ color: 0x1f2937, wireframe: true }))
+    cage.position.copy(glass.position)
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.06, 10), mat(0x1f2937, 0.5, 0.4))
+    cap.position.set(x, ceilingY - 0.4, z)
+    this.root.add(cord, glass, cage, cap)
+  }
+
+  private hatchBody(): RAPIER.RigidBody {
+    const { hatch } = UNDERGROUND
+    return this.physics.addStaticBox(
+      new THREE.Vector3((hatch.minX + hatch.maxX) / 2, 0.03, (hatch.minZ + hatch.maxZ) / 2),
+      new THREE.Vector3((hatch.maxX - hatch.minX) / 2, 0.03, (hatch.maxZ - hatch.minZ) / 2),
+    )
+  }
+
+  /** The hatch slides open when you walk up to it, and stays open while you are down in the vault. */
+  private syncHatch(dt: number, player: THREE.Vector3): void {
+    const d = this.hatchDoor
+    if (!d) return
+    const { hatch } = UNDERGROUND
+    const hx = (hatch.minX + hatch.maxX) / 2
+    const hz = (hatch.minZ + hatch.maxZ) / 2
+    const below = player.y < -0.3
+    const near = Math.hypot(player.x - hx, player.z - hz) < 2.4
+    d.open += ((below || near ? 1 : 0) - d.open) * Math.min(1, dt * 3)
+    d.mesh.position.x = hx + d.open * (hatch.maxX - hatch.minX + 0.12)
+    const shut = d.open < 0.5
+    if (shut && !d.body) d.body = this.hatchBody()
+    else if (!shut && d.body) {
+      this.physics.removeBody(d.body)
+      d.body = null
+    }
+  }
+
+  /** The contact by the door: shown while he is here, walking in and out along `CONTACT_WALK`. */
+  private syncContact(game: GameManager, player: THREE.Vector3): void {
+    const c = game.warehouse.contact
+    if (!c) {
+      if (this.contactView) this.contactView.group.visible = false
+      return
+    }
+    if (!this.contactView || this.contactView.name !== c.name) {
+      if (this.contactView) this.root.remove(this.contactView.group)
+      const rig = makePerson({ skin: 0xc68e5e, hair: 0x111827, hairStyle: 'cap', shirt: 0x1f2937, trousers: 0x111111, height: 1.02 })
+      const group = new THREE.Group()
+      group.add(rig.root)
+      const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.9, 0.7), new THREE.MeshBasicMaterial({ visible: false }))
+      proxy.position.y = 0.95
+      tag(proxy, { kind: 'contact' })
+      group.add(proxy)
+      const label = makeSign(c.name, 0.7, 0.16, '#0f172a', '#a3e635')
+      label.position.y = 2.15
+      group.add(label)
+      // Two plain crates at his feet while he has something to hand over.
+      this.root.add(group)
+      this.contactView = { group, rig, label, name: c.name }
+    }
+    const v = this.contactView
+    v.group.visible = true
+    const walk = (u: number) => {
+      const k = Math.min(1, Math.max(0, u)) * (CONTACT_WALK.length - 1)
+      const i = Math.min(CONTACT_WALK.length - 2, Math.floor(k))
+      const f = k - i
+      const [ax, az] = CONTACT_WALK[i]!
+      const [bx, bz] = CONTACT_WALK[i + 1]!
+      return { x: ax + (bx - ax) * f, z: az + (bz - az) * f, yaw: Math.atan2(bx - ax, bz - az) }
+    }
+    const secs = CONFIG.warehouse.contact.walkSeconds
+    const moving = c.phase === 'arriving' || c.phase === 'leaving'
+    const u = c.phase === 'arriving' ? c.t / secs : c.phase === 'leaving' ? 1 - c.t / secs : 1
+    const p = walk(u)
+    v.group.position.set(p.x, 0.035, p.z)
+    // Walking: face the way he goes (back to the door when leaving); waiting: face you.
+    v.group.rotation.y = moving ? (c.phase === 'leaving' ? p.yaw + Math.PI : p.yaw) : Math.atan2(player.x - p.x, player.z - p.z)
+    const swing = moving ? Math.sin(performance.now() / 160) * 0.5 : 0
+    v.rig.legL.rotation.x = swing
+    v.rig.legR.rotation.x = -swing
+    v.rig.armL.rotation.x = moving ? -swing * 0.6 : -0.3
+    v.rig.armR.rotation.x = moving ? swing * 0.6 : -0.3
+    if (v.label) v.label.lookAt(v.label.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(1, 0, 0)))
   }
 
   /**
@@ -1050,7 +1294,7 @@ function laneSegments(): [number, number, number, number][] {
     [lanes.west, lanes.cross, lanes.west, lanes.south],
     [robotHomes[0]![0], robotHomes[0]![1], robotHomes[robotHomes.length - 1]![0], robotHomes[0]![1]],
   ]
-  for (const section of ['hidden', 'cold', 'vault'] as const) {
+  for (const section of ['cold', 'vault'] as const) {
     const r = WAREHOUSE[section]
     const cx = (r.minX + r.maxX) / 2
     segs.push([cx, lanes.south, cx, lanes.room], [r.minX + 0.5, lanes.room, r.maxX - 0.5, lanes.room])

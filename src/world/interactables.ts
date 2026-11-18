@@ -24,6 +24,10 @@ export type Interactable =
   | { kind: 'truck'; truckId: number }
   /** A warehouse rack or room: store the crate you carry there, or take one out for a collection. */
   | { kind: 'section'; section: Section }
+  /** The ladder down to the underground vault (its top) or up out of it (its foot). */
+  | { kind: 'ladder'; to: 'down' | 'up' }
+  /** The contact waiting by the warehouse door. */
+  | { kind: 'contact' }
 
 export function tag(object: THREE.Object3D, data: Interactable): void {
   object.userData.interact = data

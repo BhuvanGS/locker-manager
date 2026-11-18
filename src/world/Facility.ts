@@ -4,7 +4,7 @@ import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND } from './layout'
 import { mat } from './models'
 import { prop } from './props'
 import { carpetFloor, ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, roadAsphalt, textured, tileFloor, wallMat, woodMat } from './textures'
@@ -38,6 +38,10 @@ export class Facility {
   /** The removable panel in the partition where the conveyor belts pass through, and its frame. */
   private hatchPlug: THREE.Mesh | null = null
   private hatchFrame: THREE.Group | null = null
+  /** The ground's plug over the underground vault's shaft (its collider) and the foundation piece over it, until the vault is built. */
+  private vaultPlug: THREE.Mesh | null = null
+  private vaultCap: THREE.Mesh | null = null
+  private vaultOpen = false
   /** The "KEYS" sign over the key board (it goes when the keys do). */
   private keysSign: THREE.Object3D | null = null
 
@@ -229,6 +233,20 @@ export class Facility {
     this.solid(t, height, maxZ - cursor, wall, x, height / 2, (cursor + maxZ) / 2)
   }
 
+  /** Open the shaft down to the underground vault (or close it again for a new game). */
+  setVaultOpen(open: boolean): void {
+    const plug = this.vaultPlug
+    if (!plug || open === this.vaultOpen) return
+    this.vaultOpen = open
+    if (open) {
+      this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
+      if (this.vaultCap) this.root.remove(this.vaultCap)
+    } else {
+      plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+      if (this.vaultCap) this.root.add(this.vaultCap)
+    }
+  }
+
   /**
    * Knock through (or wall up again) the doorway into the deal office. Opening removes the wall panel and its collider, shrinks the
    * neighbour's front block to what is left of the unit east of the office, and adds a door frame.
@@ -289,16 +307,41 @@ export class Facility {
   // ------------------------------------------------------------------ parts
 
   private buildOutside(): void {
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), mat(0x5d7a4e, 1))
+    // The ground, with the underground vault's shaft cut out of it (closed by a plug until the vault is built).
+    const hole = UNDERGROUND.hatch
+    const shape = new THREE.Shape()
+    shape.moveTo(-100, -100)
+    shape.lineTo(100, -100)
+    shape.lineTo(100, 100)
+    shape.lineTo(-100, 100)
+    shape.closePath()
+    // Shape y becomes −z once the plane is laid flat.
+    const cut = new THREE.Path()
+    cut.moveTo(hole.minX, -hole.maxZ)
+    cut.lineTo(hole.minX, -hole.minZ)
+    cut.lineTo(hole.maxX, -hole.minZ)
+    cut.lineTo(hole.maxX, -hole.maxZ)
+    cut.closePath()
+    shape.holes.push(cut)
+    const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat(0x5d7a4e, 1))
     ground.rotation.x = -Math.PI / 2
     ground.position.y = FLOOR_Y - 0.02
     ground.receiveShadow = true
     this.root.add(ground)
-    this.physics.addStaticBox(new THREE.Vector3(0, -0.5, 0), new THREE.Vector3(60, 0.48, 60))
+    for (const r of aroundHole(-60, 60, -60, 60, hole)) {
+      this.physics.addStaticBox(new THREE.Vector3((r.minX + r.maxX) / 2, -0.5, (r.minZ + r.maxZ) / 2), new THREE.Vector3((r.maxX - r.minX) / 2, 0.48, (r.maxZ - r.minZ) / 2))
+    }
+    const plug = new THREE.Mesh(new THREE.BoxGeometry(hole.maxX - hole.minX, 0.96, hole.maxZ - hole.minZ), new THREE.MeshBasicMaterial({ visible: false }))
+    plug.position.set((hole.minX + hole.maxX) / 2, -0.5, (hole.minZ + hole.maxZ) / 2)
+    plug.userData.half = new THREE.Vector3((hole.maxX - hole.minX) / 2, 0.48, (hole.maxZ - hole.minZ) / 2)
+    plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
+    this.vaultPlug = plug
 
     // A concrete foundation under the whole building, just below every floor: no grass shows through at door thresholds
     // or where a floor stops short of a wall (from the pavement back to the warehouse, the shop's west wall to the yard).
-    this.deco(30.6, 0.01, 37.75, concreteFloor(0x9a9ea3), 9.0, -0.006, -12.625)
+    const foundation = concreteFloor(0x9a9ea3)
+    for (const r of aroundHole(-6.3, 24.3, -31.5, 6.25, hole)) this.deco(r.maxX - r.minX, 0.01, r.maxZ - r.minZ, foundation, (r.minX + r.maxX) / 2, -0.006, (r.minZ + r.maxZ) / 2)
+    this.vaultCap = this.deco(hole.maxX - hole.minX, 0.01, hole.maxZ - hole.minZ, foundation, (hole.minX + hole.maxX) / 2, -0.006, (hole.minZ + hole.maxZ) / 2)
     this.deco(60, 0.04, 4, mat(0xbdb8b0, 0.95), 0, 0.0, 8.2)
     this.deco(60, 0.03, 8, roadAsphalt(0x3a3d43), 0, -0.005, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
@@ -560,4 +603,15 @@ export class Facility {
       this.root.add(fixture)
     }
   }
+}
+
+type Rect = { minX: number; maxX: number; minZ: number; maxZ: number }
+/** The rectangle `minX…maxX` × `minZ…maxZ` cut into four pieces around `hole` (which lies inside it). */
+export function aroundHole(minX: number, maxX: number, minZ: number, maxZ: number, hole: Rect): Rect[] {
+  return [
+    { minX, maxX: hole.minX, minZ, maxZ },
+    { minX: hole.maxX, maxX, minZ, maxZ },
+    { minX: hole.minX, maxX: hole.maxX, minZ, maxZ: hole.minZ },
+    { minX: hole.minX, maxX: hole.maxX, minZ: hole.maxZ, maxZ },
+  ]
 }

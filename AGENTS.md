@@ -129,6 +129,14 @@ Rules:
   section at `grabAt` of the job (`robotGrab`; the job is dropped if it has gone) and arrives at the end (`robotDrop`); collections first; jobs start `stagger` apart. Spoilage (food after `foodShelfLife`, cold chain outside the cold room after `coldSpoilSeconds`), theft (metals outside the vault),
   collection pay `cargo fee × crates` (0 if spoiled), and the police (`updatePolice`, only once `stored ≥ police.minCrates`; `inspectBuilding` fines and seizes). `GameManager.handleWarehouseEvents` turns events into
   money, reputation and toasts. Upgrades: `buyAutomation('wh-…')` (console scope `warehouse`) → `WarehouseManager.applyUpgrade`. **Add to `Fuzz.test.ts` and `check()` when you add a new way for crates to move.**
+- **The contact and the underground vault** (`WarehouseManager.contact`, `CONFIG.warehouse.contact`): contraband no longer comes on trucks. A contact
+  walks in through the hall door and waits at `CONTACT_SPOT`: `drop` (asking → you `agreeContact` → handing: `takeFromContact`, one crate at a time) or
+  `pickup` (waiting: `takeForCollection` from any section, then `giveToContact`; pays the contraband fee per crate). His crates are `kind: 'contra'`:
+  no truck, so the robots never touch them, and `placeFor` never picks `hidden`. You may store them anywhere; the police always find contraband except in
+  `hidden`, the **underground vault** (`UNDERGROUND` in `layout.ts`), which only takes contraband. It is built under the shed's south-west corner when
+  `wh-hidden-1` is bought: a sliding hatch with a floor-coloured mat (opens when you are near or below), a ladder (tag `ladder`, the Engine's `startClimb`
+  / `updateClimb` moves you along it), a rack, a work table with a lamp, a storage room and caged bulbs. The ground has a shaft cut out
+  (`Facility.setVaultOpen` removes its plug; `aroundHole` splits floors round it).
 - **Warehouse view** (`kind: 'warehouse'`, `world/Warehouse.ts`, `WAREHOUSE` in `layout.ts`): the shed stands against the south hall's east wall (x = 6.2; the hall's wall closes that side up to its roof, the shed's
   own wall above it) and reaches north to the back of the east annex, so there is no gap. Two roots, `root` (the shed, zone `warehouse`) and `yard` (road, truck yard, trucks, police car); BOTH are interaction targets.
   Racks run along x (`rackAlongX`; `WAREHOUSE.shelves` in buying order, the rooms' racks along the south wall), each with an invisible proxy tagged `{ kind: 'section', section }`; every section has crate `slots` that fill in

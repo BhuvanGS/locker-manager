@@ -5,7 +5,8 @@ import type { DealManager } from './DealManager'
 export interface CrateData {
   loadId: number
   owner: string
-  kind: 'kei' | 'vip'
+  /** `contra`: the contact's contraband (only you carry it; there is no truck). */
+  kind: 'kei' | 'vip' | 'contra'
   cargo: CargoType
   dealId: number | null
   spoiled: boolean
@@ -77,6 +78,23 @@ export interface RobotJob {
   crate: CrateData | null
 }
 
+/**
+ * The contact: he walks in through the warehouse door and stands by it. `drop`: he asks you to keep his crates (`asking`), and once you
+ * agree hands them over one at a time (`handing`). `pickup`: he is back for them and waits while you bring them (`waiting`).
+ */
+export interface Contact {
+  name: string
+  job: 'drop' | 'pickup'
+  loadId: number
+  /** Drop: crates he brought. Both: crates handed over so far, and (pickup) what they earned. */
+  crates: number
+  handed: number
+  paid: number
+  phase: 'arriving' | 'asking' | 'handing' | 'waiting' | 'leaving'
+  t: number
+  collectAt: number
+}
+
 export interface PoliceVisit {
   phase: 'arriving' | 'inspecting' | 'leaving'
   t: number
@@ -93,6 +111,8 @@ export type WarehouseEvent =
   | { type: 'spoiled'; owner: string; crates: number; cargo: CargoType }
   | { type: 'stolen'; owner: string; crates: number }
   | { type: 'policeArrived' }
+  | { type: 'contactArrived'; name: string; job: Contact['job']; crates: number }
+  | { type: 'contactLeft'; name: string; reason: 'ignored' | 'impatient' | 'seized'; crates: number }
   | { type: 'police'; fine: number; seizedCrates: number; illegalFound: boolean; metalsFined: boolean }
 
 export type Result = { ok: true; message: string } | { ok: false; message: string }
@@ -100,7 +120,7 @@ export type Result = { ok: true; message: string } | { ok: false; message: strin
 const KEI_NAMES = ['Hiro', 'Daichi', 'Kenji', 'Sota', 'Ayumi', 'Ren', 'Yuki', 'Takumi', 'Mei', 'Haruto']
 /** "Hiro (kei truck)" → "Hiro". */
 const shortName = (owner: string): string => owner.split(' (')[0]!
-const SECTION_WORDS: Record<Section, string> = { shelves: 'on the shelves', cold: 'in the cold room', vault: 'in the vault', hidden: 'in the hidden room' }
+const SECTION_WORDS: Record<Section, string> = { shelves: 'on the shelves', cold: 'in the cold room', vault: 'in the vault', hidden: 'in the underground vault' }
 
 /**
  * The warehouse: pure simulation. Trucks bring loads of crates (kei truckers at random, your VIP deals in box trucks) and park in the
@@ -119,6 +139,7 @@ export class WarehouseManager {
   /** One entry per robot: its job, or null while it is idle. */
   robots: (RobotJob | null)[] = []
   police: PoliceVisit | null = null
+  contact: Contact | null = null
   capacity: number = CONFIG.warehouse.startShelves
   coldCapacity = 0
   vaultCapacity = 0
@@ -133,6 +154,7 @@ export class WarehouseManager {
   private queue: Queued[] = []
   private nextKeiAt: number | null = null
   private nextPoliceAt: number | null = null
+  private nextContactAt: number | null = null
   private nextTheftAt = 0
   private seq = 0
   private truckSeq = 0
@@ -144,6 +166,7 @@ export class WarehouseManager {
   start(now: number): void {
     this.nextKeiAt = now + CONFIG.warehouse.firstKeiDelay
     this.nextTheftAt = now + CONFIG.warehouse.theft.every
+    this.nextContactAt = now + CONFIG.warehouse.contact.firstDelay
   }
 
   // ------------------------------------------------------------------ room
@@ -195,7 +218,8 @@ export class WarehouseManager {
 
   /** Where a load that looks like `visible` belongs, with the fallback to the shelves; null if there is no room for `crates` of it. */
   placeFor(visible: CargoType, crates: number): Section | null {
-    const preferred: Section = visible === 'cold' ? 'cold' : visible === 'metals' ? 'vault' : visible === 'illegal' ? 'hidden' : 'shelves'
+    // Never the underground vault: only you take anything down there.
+    const preferred: Section = visible === 'cold' ? 'cold' : visible === 'metals' ? 'vault' : 'shelves'
     if (this.sectionFree(preferred) >= crates) return preferred
     return this.sectionFree('shelves') >= crates ? 'shelves' : null
   }
@@ -269,6 +293,7 @@ export class WarehouseManager {
     if (!crate) return { ok: false, message: 'You are not carrying a crate.' }
     if (this.sectionCapacity(section) <= 0) return { ok: false, message: 'There is no such place yet.' }
     if (this.sectionFree(section) < 1) return { ok: false, message: 'No room left here.' }
+    if (section === 'hidden' && crate.cargo !== 'illegal') return { ok: false, message: 'The vault downstairs is for the contact’s crates only.' }
     this.addCrates(crate, section, 1)
     this.carrying = null
     this.bookDelivered(crate, 1, deals)
@@ -278,6 +303,16 @@ export class WarehouseManager {
   /** Take a crate out of `section` for a collection truck that is waiting for it. */
   takeForCollection(section: Section): Result {
     if (this.carrying) return { ok: false, message: 'You are already carrying a crate.' }
+    const contact = this.contact
+    if (contact?.job === 'pickup' && contact.phase === 'waiting') {
+      const mine = this.consignments.find((o) => o.section === section && o.loadId === contact.loadId)
+      if (mine) {
+        this.removeCrates(mine, 1)
+        const { id: _id, section: _s, crates: _c, ...data } = mine
+        this.carrying = data
+        return { ok: true, message: `You took one of ${contact.name}'s crates: hand it to him by the door.` }
+      }
+    }
     const truck = this.collectionFrom(section)
     if (!truck) return { ok: false, message: 'Nobody is waiting for anything kept here.' }
     const c = this.consignments.find((o) => o.section === section && o.loadId === truck.loadId)
@@ -300,6 +335,98 @@ export class WarehouseManager {
     this.loadOne(truck, crate)
     this.finishCollection(truck, events)
     return { ok: true, message: (truck.phase as Truck['phase']) === 'leaving' ? `${shortName(truck.owner)} has everything and pays $${truck.paid}.` : 'Loaded.' }
+  }
+
+  // ------------------------------------------------------------------ the contact
+
+  /** Say yes to the contact: he will hand you his crates. */
+  agreeContact(): Result {
+    const c = this.contact
+    if (!c || c.job !== 'drop' || c.phase !== 'asking') return { ok: false, message: 'Nobody is asking you anything.' }
+    c.phase = 'handing'
+    c.t = 0
+    return { ok: true, message: `${c.name}: "Good. Take them one at a time, and put them where nobody looks."` }
+  }
+
+  /** Take one of the contact's crates from him. */
+  takeFromContact(now: number): Result {
+    if (this.carrying) return { ok: false, message: 'You are already carrying a crate.' }
+    const c = this.contact
+    if (!c || c.job !== 'drop') return { ok: false, message: 'He has nothing for you.' }
+    if (c.phase === 'asking') return { ok: false, message: 'He is waiting for an answer first.' }
+    if (c.phase !== 'handing' || c.handed >= c.crates) return { ok: false, message: 'He has nothing for you.' }
+    c.handed += 1
+    this.carrying = { loadId: c.loadId, owner: c.name, kind: 'contra', cargo: 'illegal', dealId: null, spoiled: false, deliveredAt: now, collectAt: c.collectAt }
+    if (c.handed >= c.crates) this.contactLeaves(c)
+    return { ok: true, message: `You took a crate from ${c.name} (${c.handed} of ${c.crates}).` }
+  }
+
+  /** Hand the crate you are carrying back to the contact (it must be his). */
+  giveToContact(events: WarehouseEvent[] = []): Result {
+    const crate = this.carrying
+    if (!crate) return { ok: false, message: 'You are not carrying a crate.' }
+    const c = this.contact
+    if (!c || c.job !== 'pickup' || c.phase !== 'waiting') return { ok: false, message: 'He is not here to collect anything.' }
+    if (crate.loadId !== c.loadId) return { ok: false, message: `That crate is not ${c.name}'s.` }
+    this.carrying = null
+    c.handed += 1
+    c.paid += CONFIG.warehouse.cargo.illegal.fee
+    this.finishContact(c, events)
+    return { ok: true, message: (c.phase as Contact['phase']) === 'leaving' ? `${c.name} has everything and pays $${c.paid}.` : 'He takes it without a word.' }
+  }
+
+  /** A pickup is done when none of his crates is left in the warehouse or in your hands. */
+  private finishContact(c: Contact, events: WarehouseEvent[]): void {
+    if (c.job !== 'pickup' || c.phase !== 'waiting' || this.cratesOf(c.loadId) > 0 || this.carrying?.loadId === c.loadId) return
+    if (c.handed === 0) {
+      events.push({ type: 'contactLeft', name: c.name, reason: 'seized', crates: 0 })
+    } else {
+      this.earned += c.paid
+      this.collected += c.handed
+      events.push({ type: 'collected', owner: c.name, crates: c.handed, paid: c.paid, vip: false, spoiled: false })
+    }
+    this.contactLeaves(c)
+  }
+
+  private contactLeaves(c: Contact): void {
+    c.phase = 'leaving'
+    c.t = 0
+  }
+
+  private updateContact(dt: number, now: number, rand: () => number, events: WarehouseEvent[]): void {
+    const cfg = CONFIG.warehouse.contact
+    let c = this.contact
+    if (!c) {
+      // He comes back for anything of his that is due; otherwise, now and then, he brings more.
+      const held = this.carrying?.kind === 'contra' && now >= this.carrying.collectAt ? this.carrying : null
+      const due = this.consignments.find((o) => o.kind === 'contra' && now >= o.collectAt) ?? held
+      if (due) {
+        c = { name: due.owner, job: 'pickup', loadId: due.loadId, crates: this.cratesOf(due.loadId), handed: 0, paid: 0, phase: 'arriving', t: 0, collectAt: due.collectAt }
+      } else if (this.nextContactAt !== null && now >= this.nextContactAt) {
+        const [lo, hi] = cfg.crates
+        const [sLo, sHi] = cfg.stay
+        const [gLo, gHi] = cfg.gap
+        const name = cfg.names[Math.floor(rand() * cfg.names.length)]!
+        c = { name, job: 'drop', loadId: ++this.loadSeq, crates: lo + Math.floor(rand() * (hi - lo + 1)), handed: 0, paid: 0, phase: 'arriving', t: 0, collectAt: now + sLo + (sHi - sLo) * rand() }
+        this.nextContactAt = now + gLo + (gHi - gLo) * rand()
+      } else return
+      this.contact = c
+    }
+    c.t += dt
+    if (c.phase === 'arriving' && c.t >= cfg.walkSeconds) {
+      c.phase = c.job === 'drop' ? 'asking' : 'waiting'
+      c.t = 0
+      events.push({ type: 'contactArrived', name: c.name, job: c.job, crates: c.job === 'drop' ? c.crates : this.cratesOf(c.loadId) })
+      if (c.job === 'pickup') this.finishContact(c, events)
+    } else if (c.phase === 'asking' && c.t >= cfg.askPatience) {
+      events.push({ type: 'contactLeft', name: c.name, reason: 'ignored', crates: c.crates })
+      this.contactLeaves(c)
+    } else if (c.phase === 'handing' && c.t >= cfg.handPatience) {
+      events.push({ type: 'contactLeft', name: c.name, reason: 'impatient', crates: c.crates - c.handed })
+      this.contactLeaves(c)
+    } else if (c.phase === 'leaving' && c.t >= cfg.walkSeconds) {
+      this.contact = null
+    }
   }
 
   /** Open a crate of a parked load to see what is really in it (it takes a few seconds). */
@@ -383,6 +510,7 @@ export class WarehouseManager {
     this.updateSpoilage(now, events)
     this.updateTheft(now, rand, events)
     this.updatePolice(dt, now, rand, events)
+    this.updateContact(dt, now, rand, events)
     return events
   }
 
@@ -469,7 +597,7 @@ export class WarehouseManager {
     }
     // Owners come back for a load once its time is up and it is all in the warehouse (none on a truck or in your hands).
     const due = new Set<number>()
-    for (const c of this.consignments) if (now >= c.collectAt) due.add(c.loadId)
+    for (const c of this.consignments) if (now >= c.collectAt && c.kind !== 'contra') due.add(c.loadId)
     for (const loadId of due) {
       if (this.queue.some((q) => q.loadId === loadId && q.job === 'collect') || this.trucks.some((t) => t.loadId === loadId)) continue
       if (this.loads.some((l) => l.id === loadId) || this.carrying?.loadId === loadId || this.robotHolds(loadId)) continue
@@ -509,7 +637,7 @@ export class WarehouseManager {
       if (!job) {
         if (now < this.nextRobotStart) continue
         const seconds = cfg.seconds[this.autoLevel] ?? 10
-        this.robots[i] = this.nextRobotJob(seconds, deals, events)
+        this.robots[i] = this.nextRobotJob(seconds)
         if (this.robots[i]) this.nextRobotStart = now + seconds * cfg.stagger
         continue
       }
@@ -525,7 +653,7 @@ export class WarehouseManager {
     }
   }
 
-  private nextRobotJob(seconds: number, deals: DealManager, events: WarehouseEvent[]): RobotJob | null {
+  private nextRobotJob(seconds: number): RobotJob | null {
     const parked = this.trucks.filter((t) => t.phase === 'parked')
     for (const t of parked) {
       if (t.job !== 'collect') continue
@@ -539,12 +667,6 @@ export class WarehouseManager {
       const load = this.loadOf(t)
       if (!load || load.inspectDone !== null) continue
       if (load.crates - load.taken - this.pending(load.id, 'in') <= 0) continue
-      // With the scanner, contraband that cannot all be hidden is sent back before anything is unloaded.
-      if (this.scanner && load.cargo === 'illegal' && load.taken === 0 && this.pending(load.id, 'in') === 0 && this.sectionFree('hidden') < load.crates) {
-        const refused = this.refuse(load.id, deals)
-        if (refused) events.push({ type: 'refused', owner: refused.owner, crates: refused.crates, vip: refused.kind === 'vip' })
-        continue
-      }
       const section = this.placeFor(this.visibleCargo(load), 1)
       if (section) return { dir: 'in', truckId: t.id, loadId: load.id, section, t: 0, duration: seconds, crate: null }
     }

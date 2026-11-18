@@ -217,7 +217,7 @@ export const OFFICE = {
 /**
  * The warehouse extension, south-east of the shop. The shed is built right against the south hall's east wall (no gap: the hall's door at
  * `door` opens straight into it) and reaches north to the back of the east annex. Inside: a cross aisle from the hall door to the docks, four
- * pallet racks along it (two at first, one more per capacity upgrade), the cold room, the vault and the hidden room along the south wall,
+ * pallet racks along it (two at first, one more per capacity upgrade), the cold racks and the vault cage along the south wall (the underground vault below),
  * each with its own rack, and painted lanes the warehouse robots follow. Three loading docks in the east wall open onto the truck yard: a
  * private yard with its own way in and out from the service road, so trucks turn in, drive down the yard, back into a dock, and leave by the
  * yard's south exit. The service road joins the main street (z = 10).
@@ -238,16 +238,19 @@ export const WAREHOUSE = {
   yard: { minX: 24.2, maxX: 42, minZ: -40, maxZ: -2.5, aisleX: 36.1, inZ: -6, outZ: -36.5, turn: 7 },
   /** The service road: southbound lane `laneX` (the trucks), the other lane for the police. */
   road: { minX: 42, maxX: 48, minZ: -90, maxZ: 10.2, laneX: 43.5, upLaneX: 46.5 },
-  /** Racks run along x (4 bays of `pitch`, 3 shelves): the shelves' four racks, in the order they are bought (2 base, then 1 per capacity upgrade). */
+  /**
+   * Racks run along x (4 bays of `pitch`, 3 shelves): the shelves' racks in the order they are bought (3 to start with, then 1 per
+   * capacity upgrade). `lane` is the robot lane their crates are reached from.
+   */
   rack: { bays: 4, pitch: 1.2, levels: [0.12, 1.02, 1.92] },
   shelves: [
-    { z: -16.0, x0: 9.0 },
-    { z: -20.4, x0: 9.0 },
-    { z: -16.0, x0: 14.4 },
-    { z: -20.4, x0: 14.4 },
+    { z: -16.0, x0: 9.0, lane: -18.2 },
+    { z: -20.4, x0: 9.0, lane: -18.2 },
+    { z: -20.4, x0: 14.4, lane: -18.2 },
+    { z: -16.0, x0: 14.4, lane: -18.2 },
+    { z: -22.8, x0: 9.0, lane: -25.0 },
   ],
   /** The rooms along the south wall (interiors); each has a door in its north wall and a rack along its south wall. */
-  hidden: { minX: 6.6, maxX: 10.2, minZ: -31, maxZ: -26.6, pitch: 0.8 },
   cold: { minX: 10.8, maxX: 15.6, minZ: -31, maxZ: -26.6, pitch: 1.0 },
   vault: { minX: 16.2, maxX: 20.4, minZ: -31, maxZ: -26.6, pitch: 0.9 },
   /** Robot lanes (painted on the floor): the cross aisle, the south aisle, the dock lane, a west link, and the lane inside each room. */
@@ -260,6 +263,30 @@ export const WAREHOUSE = {
   /** The receiving desk, by the docks. */
   desk: { x: 19.8, z: -11.4 },
 }
+
+/**
+ * The underground vault (the `hidden` section): a small concrete room under the warehouse's south-west corner, reached through a sliding
+ * hatch in the floor (`hatch`, covered by a mat the colour of the floor) and a ladder down its north side. Its rack is along the south wall;
+ * a small storage room opens off its east side. Only the player goes down there.
+ */
+export const UNDERGROUND = {
+  minX: 6.6,
+  maxX: 10.6,
+  minZ: -31,
+  maxZ: -26.4,
+  floorY: -3.2,
+  ceilingY: -1.0,
+  hatch: { minX: 8.8, maxX: 10.0, minZ: -27.6, maxZ: -26.4 },
+  ladder: { x: 9.4, z: -26.55 },
+  /** Where you stand after climbing: at the foot of the ladder, and on the warehouse floor beside the hatch. */
+  bottom: { x: 9.4, z: -27.05 },
+  top: { x: 9.4, z: -28.15 },
+  rack: { z: -30.25, x0: 6.8, bays: 4, pitch: 0.9, levels: [0.1, 0.8, 1.5] },
+  closet: { minX: 10.6, maxX: 12.8, minZ: -29.8, maxZ: -26.4, doorZ: [-28.3, -27.3] as [number, number] },
+} as const
+
+/** Where the contact stands while he waits: just inside the warehouse door from the south hall, clear of the robot lanes. */
+export const CONTACT_SPOT = { x: 6.95, z: -16.5 }
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }

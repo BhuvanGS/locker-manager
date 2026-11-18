@@ -37,8 +37,13 @@ function check(g: GameManager): void {
     expect(truck!.onBoard).toBe(load.crates - load.taken)
   }
   expect(new Set(wh.trucks.map((t) => t.spot)).size, 'two trucks in one parking spot').toBe(wh.trucks.length)
+  if (wh.contact) expect(wh.contact.handed, 'the contact handed over more than he brought').toBeLessThanOrEqual(Math.max(wh.contact.crates, wh.contact.handed))
+  if (wh.contact?.job === 'drop') expect(wh.contact.handed).toBeLessThanOrEqual(wh.contact.crates)
+  for (const c of wh.consignments) if (c.section === 'hidden') expect(c.cargo, 'only contraband goes down to the underground vault').toBe('illegal')
   for (const job of wh.robots) {
     if (!job) continue
+    expect(job.section, 'a robot went to the underground vault').not.toBe('hidden')
+    expect(job.crate?.kind, 'a robot touched the contact\'s crate').not.toBe('contra')
     if (job.crate) expect(job.crate.loadId, 'a robot holds the wrong crate').toBe(job.loadId)
     expect(wh.sectionStored(job.section)).toBeLessThanOrEqual(wh.sectionCapacity(job.section))
   }
@@ -157,8 +162,11 @@ function play(seed: number, setup: string[]): void {
       const wh = g.warehouse
       const truck = pick(wh.trucks)
       const section = pick(['shelves', 'shelves', 'cold', 'vault', 'hidden'] as const)!
-      const a = Math.floor(rand() * 4)
-      if (a === 0 && truck) g.takeCrateFromTruck(truck.id)
+      const a = Math.floor(rand() * 7)
+      if (a === 4) g.agreeContact()
+      else if (a === 5) g.takeCrateFromContact()
+      else if (a === 6) g.giveCrateToContact()
+      else if (a === 0 && truck) g.takeCrateFromTruck(truck.id)
       else if (a === 1) g.storeCrate(section)
       else if (a === 2) g.takeCrateFrom(section)
       else if (truck) g.loadCrate(truck.id)

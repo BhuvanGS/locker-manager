@@ -752,6 +752,21 @@ export class GameManager {
       } else if (e.type === 'stolen') {
         this.economy.adjustReputation(w.theft.reputation)
         this.notify({ type: 'alert', text: `Thieves took ${e.crates} crate${e.crates === 1 ? '' : 's'} of ${e.owner}'s special metals from the open shelves.` })
+      } else if (e.type === 'contactArrived') {
+        this.notify(
+          e.job === 'drop'
+            ? { type: 'alert', text: `A man called ${e.name} is waiting by the warehouse door with ${e.crates} unmarked crates. He wants them kept, no questions asked.` }
+            : { type: 'alert', text: `${e.name} is back by the warehouse door for his ${e.crates} crate${e.crates === 1 ? '' : 's'}.` },
+        )
+      } else if (e.type === 'contactLeft') {
+        if (e.reason === 'seized') this.economy.adjustReputation(-3)
+        this.notify(
+          e.reason === 'ignored'
+            ? { type: 'message', text: `${e.name} got no answer and left with his crates.` }
+            : e.reason === 'impatient'
+              ? { type: 'message', text: `${e.name} gave up waiting and left with ${e.crates} crate${e.crates === 1 ? '' : 's'}.` }
+              : { type: 'alert', text: `${e.name} came for his crates, but the police have them. He leaves without a word.` },
+        )
       } else if (e.type === 'policeArrived') {
         this.notify({ type: 'alert', text: 'Police are at the gate: a routine inspection of the warehouse.' })
       } else {
@@ -858,10 +873,36 @@ export class GameManager {
     return r.ok ? ok(r.message) : fail(r.message)
   }
 
+  /** Say yes to the contact by the warehouse door. */
+  agreeContact(): ActionResult {
+    if (!this.hasWarehouse) return fail('There is no warehouse yet.')
+    const r = this.warehouse.agreeContact()
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** Take one of the contact's crates from him. */
+  takeCrateFromContact(): ActionResult {
+    if (this.hands) return fail('Your hands are full.')
+    const r = this.warehouse.takeFromContact(this.now)
+    if (r.ok) this.hands = { kind: 'crate' }
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
+  /** Hand one of his crates back to the contact. */
+  giveCrateToContact(): ActionResult {
+    if (this.hands?.kind !== 'crate') return fail('You are not carrying a crate.')
+    const events: WarehouseEvent[] = []
+    const r = this.warehouse.giveToContact(events)
+    if (r.ok) this.hands = null
+    this.handleWarehouseEvents(events)
+    return r.ok ? ok(r.message) : fail(r.message)
+  }
+
   /** What the crate in your hands is, in words (for the HUD). */
   carryingLabel(): string | null {
     const c = this.warehouse.carrying
     if (!c) return null
+    if (c.kind === 'contra') return `${c.owner}'s unmarked crate`
     const what = this.warehouse.scanner || this.warehouse.loads.find((l) => l.id === c.loadId)?.inspected ? CONFIG.warehouse.cargo[c.cargo].label : 'crate'
     return `${c.owner.split(' (')[0]}'s ${what.toLowerCase()}${c.spoiled ? ' (spoiled)' : ''}`
   }

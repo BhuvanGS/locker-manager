@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import type { ActionResult } from '../sim/types'
 import { findInteractable, type Interactable } from './interactables'
@@ -17,7 +18,7 @@ export type Aim = {
  * Finds what is under the crosshair and turns it into a context action against the simulation.
  * One button (E or left click) does the obvious thing for whatever you are looking at.
  */
-const SECTION_NAMES: Record<Section, string> = { shelves: 'racks', cold: 'cold room', vault: 'vault', hidden: 'hidden room' }
+const SECTION_NAMES: Record<Section, string> = { shelves: 'racks', cold: 'cold room', vault: 'vault', hidden: 'underground vault' }
 
 export class InteractionManager {
   private readonly raycaster = new THREE.Raycaster()
@@ -68,6 +69,14 @@ export class InteractionManager {
         return game.hands?.kind === 'crate' ? game.loadCrate(t.truckId) : game.takeCrateFromTruck(t.truckId)
       case 'section':
         return game.hands?.kind === 'crate' ? game.storeCrate(t.section) : game.takeCrateFrom(t.section)
+      case 'ladder':
+        return { ok: true, message: '' } // the Engine does the climbing
+      case 'contact': {
+        const c = game.warehouse.contact
+        if (c?.job === 'drop' && c.phase === 'asking') return game.agreeContact()
+        if (c?.job === 'drop') return game.takeCrateFromContact()
+        return game.giveCrateToContact()
+      }
       case 'hook':
         return game.hands?.kind === 'key' ? game.hangKey(t.hook) : game.takeKeyFromHook(t.hook)
       case 'lockerKey':
@@ -124,9 +133,30 @@ export class InteractionManager {
         if (hands) return none(hands.kind === 'crate' ? 'Store the crate you carry first' : 'Hands full')
         return truck.onBoard > 0 ? { action: `Take a crate off ${name}'s truck (${truck.onBoard} left)`, hint: null } : none('Empty')
       }
+      case 'ladder':
+        if (hands?.kind === 'crate' || hands?.kind === 'item') return { action: t.to === 'down' ? 'Climb down the ladder (with the crate)' : 'Climb up the ladder (with the crate)', hint: null }
+        return { action: t.to === 'down' ? 'Climb down the ladder' : 'Climb up the ladder', hint: null }
+      case 'contact': {
+        const c = game.warehouse.contact
+        if (!c || c.phase === 'arriving' || c.phase === 'leaving') return none(c?.phase === 'leaving' ? `${c.name} is leaving` : '')
+        const fee = CONFIG.warehouse.cargo.illegal.fee
+        if (c.job === 'drop' && c.phase === 'asking') return { action: `Agree to keep ${c.name}'s ${c.crates} crates ($${fee} each when he collects)`, hint: 'Walk away to say no' }
+        if (c.job === 'drop') {
+          if (hands) return none(hands.kind === 'crate' ? 'Put the crate somewhere first' : 'Hands full')
+          return { action: `Take a crate from ${c.name} (${c.crates - c.handed} left)`, hint: null }
+        }
+        const left = game.warehouse.cratesOf(c.loadId)
+        if (game.warehouse.carrying?.loadId === c.loadId) return { action: `Hand ${c.name} his crate`, hint: null }
+        return none(`${c.name} wants his crates back: ${left} left`)
+      }
       case 'section': {
         const wh = game.warehouse
         const name = SECTION_NAMES[t.section]
+        if (hands?.kind === 'crate' && t.section === 'hidden' && wh.carrying?.cargo !== 'illegal') return none('Only the contact\'s crates go down here')
+        const contact = wh.contact
+        if (!hands && contact?.job === 'pickup' && contact.phase === 'waiting' && wh.consignments.some((o) => o.section === t.section && o.loadId === contact.loadId)) {
+          return { action: `Take ${contact.name}'s crate for him`, hint: null }
+        }
         if (hands?.kind === 'crate') {
           return wh.sectionFree(t.section) > 0 ? { action: `Store the crate in the ${name}`, hint: null } : none(`The ${name} is full`)
         }

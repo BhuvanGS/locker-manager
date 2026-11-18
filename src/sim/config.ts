@@ -190,16 +190,16 @@ export interface WarehouseUpgradeDef {
 }
 
 export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
-  { id: 'wh-cap-1', title: 'Rack row (north)', description: '+12 shelf slots along the north wall', cost: 900, level: 8 },
-  { id: 'wh-cap-2', title: 'Rack row (south)', description: '+12 more shelf slots along the south wall', cost: 1400, level: 8, requires: 'wh-cap-1' },
-  { id: 'wh-cold', title: 'Cold room', description: 'A refrigerated room with 12 slots: cold-chain loads keep fresh in it, and spoil in 90 s anywhere else', cost: 1800, level: 8 },
-  { id: 'wh-vault', title: 'Vault', description: 'A steel vault with 8 slots for special metals, which get stolen from the open shelves', cost: 2200, level: 9 },
+  { id: 'wh-cap-1', title: 'Extra rack', description: '+12 shelf slots on a fourth rack', cost: 900, level: 8 },
+  { id: 'wh-cap-2', title: 'Fifth rack', description: '+12 more shelf slots on a rack by the south aisle', cost: 1400, level: 8, requires: 'wh-cap-1' },
+  { id: 'wh-cold', title: 'Cold racks', description: 'Racks under cooling units with 12 slots: cold-chain loads keep fresh there, and spoil in 90 s anywhere else', cost: 1800, level: 8 },
+  { id: 'wh-vault', title: 'Vault cage', description: 'A locked wire cage with 8 slots for special metals, which get stolen from the open shelves', cost: 2200, level: 9 },
   { id: 'wh-permit', title: 'Special goods licence', description: 'Special metals become fully legal: no fine when the police check', cost: 1500, level: 9 },
   { id: 'wh-scanner', title: 'Scanner arch', description: 'Every load that arrives shows what is really in it (and what it was declared as)', cost: 1200, level: 9 },
-  { id: 'wh-hidden-1', title: 'Hidden compartments', description: 'A false-walled room with 8 slots for contraband. The police find what is hidden 40 % of the time instead of always', cost: 2000, level: 10 },
-  { id: 'wh-hidden-2', title: 'Deeper hiding', description: '+4 hidden slots (12 in all), and the police find hidden loads only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
+  { id: 'wh-hidden-1', title: 'Underground vault', description: 'A secret room under the warehouse floor: a sliding hatch under a mat, a ladder down, 8 slots that only you can fill (the robots never go there). The police find what is down there 40 % of the time; anywhere else, always', cost: 2000, level: 10 },
+  { id: 'wh-hidden-2', title: 'Deeper vault', description: '+4 slots in the underground vault (12 in all), and the police find what is down there only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
   { id: 'wh-auto-1', title: 'Receiving robots', description: 'A warehouse robot with a big clamp carries crates for you: off parked trucks to where they look like they belong, and out to collection trucks (20 s a crate)', cost: 2500, level: 10, requires: 'wh-cap-1' },
-  { id: 'wh-auto-2', title: 'Second robot', description: 'A second robot, and both work faster (14 s a crate). With the scanner they refuse contraband (or hide it, if you have the room)', cost: 3500, level: 11, requires: 'wh-auto-1' },
+  { id: 'wh-auto-2', title: 'Second robot', description: 'A second robot, and both work faster (14 s a crate). They never touch contraband', cost: 3500, level: 11, requires: 'wh-auto-1' },
 ]
 
 export const CONFIG = {
@@ -615,8 +615,24 @@ export const CONFIG = {
       illegal: { label: 'Contraband', fee: 110 },
     },
     vipFeeFactor: 0.7,
-    /** What a kei trucker's load is, at random (metals only ever come from VIP deals). Contraband is declared as general goods. */
-    keiMix: { general: 0.5, food: 0.25, cold: 0.15, illegal: 0.1 },
+    /** What a kei trucker's load is, at random (metals only ever come from VIP deals; contraband only from the contact). */
+    keiMix: { general: 0.55, food: 0.27, cold: 0.18 },
+    /**
+     * The contact: a man who walks in through the warehouse door now and then with a few crates of contraband and asks you to keep them,
+     * no questions asked. He waits `askPatience` s for an answer and `handPatience` s for you to take his crates; he comes back for them
+     * after `stay` s and pays the contraband fee per crate when you hand them all back. Only you handle his crates (the robots never do),
+     * and you can put them anywhere: the police always find contraband, except in the underground vault.
+     */
+    contact: {
+      firstDelay: 150,
+      gap: [240, 420] as [number, number],
+      crates: [2, 4] as [number, number],
+      stay: [180, 300] as [number, number],
+      walkSeconds: 4,
+      askPatience: 60,
+      handPatience: 150,
+      names: ['Vex', 'Moss', 'Rook', 'Sly', 'Dace', 'Nico'],
+    },
     /** Parking spots beside the shed: trucks park there while their crates are carried in or out; with all spots taken, the next truck waits in the road. */
     parkingSpots: 3,
     /** Food spoils this long after it arrives; cold-chain goods spoil this soon anywhere but in the cold room (the dock counts). */
@@ -627,7 +643,7 @@ export const CONFIG = {
     /** Opening a load to see what is in it takes this long. */
     inspectSeconds: 6,
     /** Shelf slots at the start; the other sections start with none and come with upgrades. */
-    startShelves: 24,
+    startShelves: 36,
     /** Seconds between loads for the receiving robots, by level (0 = none). */
     /**
      * The warehouse robots (bought with wh-auto-1 / wh-auto-2): how many there are and the seconds each takes per crate. A robot job carries

@@ -1,7 +1,7 @@
 import { CONFIG, type CargoType, type Section } from '../sim/config'
 import { useGameStore, type ReceivingView } from '../store/gameStore'
 
-const SECTION_NAME: Record<Section, string> = { shelves: 'Shelves', cold: 'Cold room', vault: 'Vault', hidden: 'Hidden' }
+const SECTION_NAME: Record<Section, string> = { shelves: 'Shelves', cold: 'Cold room', vault: 'Vault', hidden: 'Underground' }
 const label = (c: CargoType) => CONFIG.warehouse.cargo[c].label
 
 /**

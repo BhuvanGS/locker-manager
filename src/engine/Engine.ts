@@ -39,6 +39,7 @@ import {
   STATION,
   zoneAt,
   type Zone,
+  UNDERGROUND,
 } from '../world/layout'
 import { isDebugEnabled } from './debug'
 import { InputManager, type InputSnapshot } from './InputManager'
@@ -49,6 +50,9 @@ import { setGlassEnvironment } from '../world/textures'
  * Owns the renderer and the main loop, and wires the simulation (src/sim) to the 3D views (src/world)
  * and the HUD (store). Frame order: input → player → physics → sim → views → interaction → HUD.
  */
+/** Seconds to climb the vault ladder from one end to the other. */
+const CLIMB_SECONDS = 2.2
+
 export class Engine {
   private readonly canvas: HTMLCanvasElement
   private readonly renderer: THREE.WebGLRenderer
@@ -88,6 +92,8 @@ export class Engine {
   private warehouse: Warehouse | null = null
   /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
   private stations: StationView[] = []
+  /** Climbing the vault ladder: from one end to the other over `CLIMB_SECONDS`, the player moved along it each frame. */
+  private climb: { from: THREE.Vector3; to: THREE.Vector3; t: number } | null = null
   /** Upgrade consoles by scope (`hub`, or a zone). */
   private consoles = new Map<string, AutomationConsole>()
   /** Everything the crosshair can hit; extended when upgrades add walls and racks. */
@@ -637,6 +643,8 @@ export class Engine {
 
     // Views.
     this.agents.update(playing ? dt : 0, this.game, playerPos, camera)
+    this.facility.setVaultOpen(this.game.hasWarehouse && this.game.warehouse.sectionCapacity('hidden') > 0)
+    this.updateClimb(dt)
     this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
     this.facility.update(dt, this.agents.nearDoor() || !!this.vipCar?.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
@@ -676,11 +684,43 @@ export class Engine {
         this.handleReceivingInput(input)
       } else {
         if (store.pendingChoice) store.patch({ pendingChoice: null })
-        if (input.interactPressed && aim) this.report(this.interaction.perform(aim, this.game))
+        if (input.interactPressed && aim) {
+          if (aim.target.kind === 'ladder' && aim.action && !this.climb) this.startClimb(aim.target.to)
+          else this.report(this.interaction.perform(aim, this.game))
+        }
       }
     }
 
     this.syncHud(dt, aim)
+  }
+
+  private startClimb(to: 'down' | 'up'): void {
+    const U = UNDERGROUND
+    const top = new THREE.Vector3(U.top.x, 0.04, U.top.z)
+    const bottom = new THREE.Vector3(U.bottom.x, U.floorY, U.bottom.z)
+    this.climb = to === 'down' ? { from: top, to: bottom, t: 0 } : { from: bottom, to: top, t: 0 }
+  }
+
+  /** Moves the player along the ladder: over to it, up or down it, then off it. */
+  private updateClimb(dt: number): void {
+    const c = this.climb
+    if (!c || !this.player) return
+    c.t = Math.min(1, c.t + dt / CLIMB_SECONDS)
+    const u = c.t * c.t * (3 - 2 * c.t)
+    const ladder = UNDERGROUND.ladder
+    // Close in on the ladder, climb it, step off: the horizontal part happens at the start (going down) or the end (going up).
+    const going = c.to.y < c.from.y ? 'down' : 'up'
+    const k = going === 'down' ? Math.min(1, u * 4) : Math.max(0, u * 4 - 3)
+    const end = going === 'down' ? c.to : c.from
+    const off = going === 'down' ? c.from : c.to
+    const near = new THREE.Vector3(ladder.x, 0, end.z)
+    const xz = going === 'down' ? off.clone().lerp(near, k) : near.clone().lerp(off, k)
+    const y = c.from.y + (c.to.y - c.from.y) * u
+    this.player.teleport(xz.x, xz.z, y)
+    if (c.t >= 1) {
+      this.player.teleport(c.to.x, c.to.z, c.to.y)
+      this.climb = null
+    }
   }
 
   /**
@@ -1048,6 +1088,10 @@ export class Engine {
       },
       interact: () => {
         const aim = this.interaction?.aim(this.cameraRig.camera, this.game)
+        if (aim?.target.kind === 'ladder' && aim.action && !this.climb) {
+          this.startClimb(aim.target.to)
+          return { aim, result: null }
+        }
         const result = aim ? this.interaction?.perform(aim, this.game) : null
         this.report(result ?? null)
         return { aim, result }

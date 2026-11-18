@@ -62,6 +62,17 @@ function parked(b: Bare, cargo: CargoType, crates = 3, declared: CargoType = car
   return load
 }
 
+/** Run until the contact turns up with a drop, agree, and take his first crate: returns his record (you are left holding one crate). */
+function contactDrop(b: ReturnType<typeof bare>, crates = 3) {
+  for (let i = 0; i < 2000 && !(b.wh.contact?.job === 'drop' && b.wh.contact.phase === 'asking'); i++) b.run(1)
+  const c = b.wh.contact!
+  expect(c).toMatchObject({ job: 'drop', phase: 'asking' })
+  c.crates = crates
+  expect(b.wh.agreeContact().ok).toBe(true)
+  expect(b.wh.takeFromContact(b.now).ok).toBe(true)
+  return c
+}
+
 /** Carry every crate of a parked load in, to `section` (or where it looks like it belongs). */
 function carryIn(b: Bare, load: Load, section?: Section): void {
   const target = section ?? b.wh.placeFor(b.wh.visibleCargo(load), load.crates)!
@@ -235,9 +246,8 @@ describe('The receiving desk', () => {
     expect(b.wh.placeFor('metals', 3)).toBe('shelves')
     b.wh.applyUpgrade('wh-vault')
     expect(b.wh.placeFor('metals', 3)).toBe('vault')
-    expect(b.wh.placeFor('illegal', 3)).toBe('shelves')
     b.wh.applyUpgrade('wh-hidden-1')
-    expect(b.wh.placeFor('illegal', 3)).toBe('hidden')
+    expect(b.wh.placeFor('illegal', 3)).toBe('shelves') // never the underground vault: only you go down there
     expect(b.wh.placeFor('general', b.wh.capacity + 1)).toBeNull() // nothing has room for that
   })
 
@@ -485,29 +495,21 @@ describe('Automation: the warehouse robots', () => {
     expect(b.events.find((e) => e.type === 'collected')).toMatchObject({ crates: 2 })
   })
 
-  it('without the scanner the robots happily put contraband on the shelves; with it they refuse it, or hide it if there is room', () => {
-    const long = crateSeconds(1) * 3
-    const blind = bare()
-    blind.wh.applyUpgrade('wh-auto-1')
-    parked(blind, 'illegal', 2)
-    blind.run(long)
-    expect(blind.wh.consignments[0]?.section).toBe('shelves')
-
-    const refuses = bare()
-    refuses.wh.applyUpgrade('wh-auto-1')
-    refuses.wh.applyUpgrade('wh-scanner')
-    parked(refuses, 'illegal', 2)
-    refuses.run(long)
-    expect(refuses.wh.consignments.some((c) => c.cargo === 'illegal')).toBe(false)
-    expect(refuses.events.some((e) => e.type === 'refused')).toBe(true)
-
-    const hides = bare()
-    hides.wh.applyUpgrade('wh-auto-1')
-    hides.wh.applyUpgrade('wh-scanner')
-    hides.wh.applyUpgrade('wh-hidden-1')
-    parked(hides, 'illegal', 2)
-    hides.run(long)
-    expect(hides.wh.consignments[0]?.section).toBe('hidden')
+  it('the robots never take anything down to the underground vault, and never touch the contact\'s crates', () => {
+    const b = bare()
+    b.wh.applyUpgrade('wh-auto-1')
+    b.wh.applyUpgrade('wh-hidden-1')
+    parked(b, 'general', 2)
+    b.run(crateSeconds(1) * 3)
+    expect(b.wh.sectionStored('hidden')).toBe(0)
+    // His crate on the shelves, due for pickup: no truck comes, so the robots have nothing to carry out.
+    const c = contactDrop(b, 1)
+    expect(b.wh.storeCarried('shelves', b.deals).ok).toBe(true)
+    c.collectAt = b.now
+    b.run(crateSeconds(1) * 2)
+    expect(b.wh.trucks.some((t) => t.loadId === c.loadId)).toBe(false)
+    expect(b.wh.cratesOf(c.loadId)).toBe(1)
+    expect(b.wh.robots.every((j) => j === null || j.loadId !== c.loadId)).toBe(true)
   })
 
   it('signed VIP deals are delivered in box trucks and collected, with the robots doing the carrying', () => {
@@ -537,7 +539,7 @@ describe('Warehouse upgrades (the warehouse console)', () => {
     expect(g.consoleItems('warehouse').map((i) => i.id)).toEqual(WAREHOUSE_UPGRADES.map((u) => u.id))
     g.economy.money = 100_000
     g.economy.xp = 2800 // level 8
-    expect(g.buyAutomation('wh-cap-2').message).toBe('Buy Rack row (north) first')
+    expect(g.buyAutomation('wh-cap-2').message).toBe('Buy Extra rack first')
     expect(g.buyAutomation('wh-vault').message).toBe('Needs level 9')
     g.economy.xp = 6000
     const money = g.economy.money
@@ -553,5 +555,83 @@ describe('Warehouse upgrades (the warehouse console)', () => {
     const g = new GameManager(3)
     expect(g.grantUpgrade('wh-auto-2').ok).toBe(true)
     for (const id of ['warehouse', 'wh-cap-1', 'wh-auto-1', 'wh-auto-2']) expect(g.upgrades.has(id) || g.warehouse.has(id)).toBe(true)
+  })
+})
+
+describe('The contact (contraband by hand)', () => {
+  function bigWarehouse() {
+    const b = bare()
+    b.wh.applyUpgrade('wh-cap-1')
+    return b
+  }
+  function visit(b: ReturnType<typeof bare>, rand: () => number) {
+    hold(b)
+    b.run(w.police.gap[1] + w.police.arriveSeconds + w.police.inspectSeconds + w.police.leaveSeconds + 5, rand, 1)
+    return b.events.find((e) => e.type === 'police')
+  }
+  it('no kei truck brings contraband any more', () => {
+    expect(Object.keys(w.keiMix)).not.toContain('illegal')
+  })
+
+  it('he waits by the door for an answer, and leaves if you ignore him', () => {
+    const b = bare()
+    b.run(w.contact.firstDelay + w.contact.walkSeconds + 1)
+    expect(b.wh.contact).toMatchObject({ job: 'drop', phase: 'asking' })
+    expect(b.wh.takeFromContact(b.now).ok).toBe(false) // not before you agree
+    b.run(w.contact.askPatience + 1)
+    expect(b.events.some((e) => e.type === 'contactLeft' && e.reason === 'ignored')).toBe(true)
+    b.run(w.contact.walkSeconds + 1)
+    expect(b.wh.contact).toBeNull()
+  })
+
+  it('you take his crates one at a time and can put them anywhere, but the underground vault takes nothing else', () => {
+    const b = bigWarehouse()
+    b.wh.applyUpgrade('wh-hidden-1')
+    b.wh.applyUpgrade('wh-cold')
+    const c = contactDrop(b, 3)
+    expect(b.wh.carrying).toMatchObject({ kind: 'contra', cargo: 'illegal', loadId: c.loadId })
+    expect(b.wh.storeCarried('cold', b.deals).ok).toBe(true)
+    expect(b.wh.takeFromContact(b.now).ok).toBe(true)
+    expect(b.wh.storeCarried('hidden', b.deals).ok).toBe(true)
+    expect(b.wh.takeFromContact(b.now).ok).toBe(true)
+    expect(b.wh.contact?.phase).toBe('leaving') // that was his last
+    expect(b.wh.storeCarried('shelves', b.deals).ok).toBe(true)
+    // Ordinary crates cannot go down there.
+    const load = parked(b, 'general', 1)
+    expect(b.wh.takeFromTruck(load.truckId, b.now).ok).toBe(true)
+    expect(b.wh.storeCarried('hidden', b.deals).ok).toBe(false)
+    expect(b.wh.cratesOf(c.loadId)).toBe(3)
+  })
+
+  it('he comes back for them, you hand them over, and he pays the contraband fee for each', () => {
+    const b = bigWarehouse()
+    b.wh.applyUpgrade('wh-hidden-1')
+    const c = contactDrop(b, 2)
+    expect(b.wh.storeCarried('hidden', b.deals).ok).toBe(true)
+    expect(b.wh.takeFromContact(b.now).ok).toBe(true)
+    expect(b.wh.storeCarried('shelves', b.deals).ok).toBe(true)
+    for (const o of b.wh.consignments) if (o.loadId === c.loadId) o.collectAt = b.now
+    b.run(w.contact.walkSeconds * 2 + 2)
+    expect(b.wh.contact).toMatchObject({ job: 'pickup', phase: 'waiting', loadId: c.loadId })
+    for (const section of ['hidden', 'shelves'] as const) {
+      expect(b.wh.takeForCollection(section).ok).toBe(true)
+      expect(b.wh.giveToContact(b.events).ok).toBe(true)
+    }
+    expect(b.events.find((e) => e.type === 'collected')).toMatchObject({ crates: 2, paid: 2 * w.cargo.illegal.fee })
+    expect(b.wh.contact?.phase).toBe('leaving')
+  })
+
+  it('the police always find his crates in the open, but only sometimes in the underground vault', () => {
+    const b = bigWarehouse()
+    b.wh.applyUpgrade('wh-hidden-1')
+    const c = contactDrop(b, 2)
+    expect(b.wh.storeCarried('hidden', b.deals).ok).toBe(true)
+    expect(b.wh.takeFromContact(b.now).ok).toBe(true)
+    expect(b.wh.storeCarried('shelves', b.deals).ok).toBe(true)
+    carryIn(b, parked(b, 'general', w.police.minCrates))
+    hold(b)
+    const ev = visit(b, always(0.5)) // 0.5 is above the 40 % chance: the vault stays secret
+    expect(ev).toMatchObject({ illegalFound: true, seizedCrates: 1 })
+    expect(b.wh.consignments.find((o) => o.loadId === c.loadId)?.section).toBe('hidden')
   })
 })
