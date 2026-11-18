@@ -233,6 +233,9 @@ export function setGlassEnvironment(renderer: THREE.WebGLRenderer): void {
   }
 }
 
+/** Console and kiosk pedestals: brushed steel, only slightly metallic (with nothing to reflect, metal renders black). */
+export const consoleSteel = (): THREE.MeshStandardMaterial => textured('locker-door', { color: 0x9aa3ae, metalness: 0.15, normalScale: 0.6, repeat: 0.5 })
+
 /** The robots' dark parts: scuffed black plastic. */
 export const armDark = (): THREE.MeshStandardMaterial => textured('till-plastic', { color: 0x8a94a3, metalness: 0.3, repeat: 0.5 })
 

@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import type { RobotJob } from '../sim/WarehouseManager'
-import { mat } from './models'
 import { armDark, textured } from './textures'
 import { Leg } from './paths'
 
@@ -194,7 +193,8 @@ export class WarehouseRobot {
       jaw.userData.side = side
       this.jaws.push(jaw)
     }
-    this.crate = add(new THREE.BoxGeometry(CRATE.w, CRATE.h, CRATE.d), mat(0xb08a5a, 0.85), 0, 0, 0, this.claw)
+    // Its own material, not one from mat()'s cache: it is recoloured to the crate it carries.
+    this.crate = add(new THREE.BoxGeometry(CRATE.w, CRATE.h, CRATE.d), new THREE.MeshStandardMaterial({ color: 0xb08a5a, roughness: 0.85 }), 0, 0, 0, this.claw)
     this.crate.visible = false
     parent.add(this.claw)
     this.lastClaw.copy(this.carryPoint())

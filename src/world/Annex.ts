@@ -39,7 +39,7 @@ export class Annex {
     const outer = wallMat(side === 'west' ? 0xb9a58f : 0xa9b6bf)
 
     // Floor, ceiling and the roof slab seen from outside.
-    this.deco(w, 0.02, depth, concreteFloor(0x8f949a), cx, 0.005, cz)
+    this.deco(w, 0.02, maxZ - minZ, concreteFloor(0x8f949a), cx, 0.005, (minZ + maxZ) / 2)
     this.deco(w, 0.1, depth, mat(0xf4f2ee, 1), cx, h + 0.05, cz)
     this.deco(w + 0.6, 0.18, depth + 0.5, mat(0x59544e, 0.9), cx, h + 0.19, cz)
 

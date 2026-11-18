@@ -4,6 +4,7 @@ import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
+import { prop } from './props'
 import { carpetFloor, concreteFloor, glassMat, lightPanel, metreUVs, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
@@ -319,6 +320,9 @@ export class Facility {
     this.root.add(ground)
     this.physics.addStaticBox(new THREE.Vector3(0, -0.5, 0), new THREE.Vector3(60, 0.48, 60))
 
+    // A concrete foundation under the whole building, just below every floor: no grass shows through at door thresholds
+    // or where a floor stops short of a wall (from the pavement back to the warehouse, the shop's west wall to the yard).
+    this.deco(30.6, 0.01, 37.75, concreteFloor(0x9a9ea3), 9.0, -0.006, -12.625)
     this.deco(60, 0.04, 4, mat(0xbdb8b0, 0.95), 0, 0.0, 8.2)
     this.deco(60, 0.03, 8, mat(0x3a3d43, 0.9), 0, -0.005, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
@@ -409,17 +413,21 @@ export class Facility {
     const steel = mat(0x4b5563, 0.4, 0.6)
     this.solid(0.5, 0.08, 2.4, wood, ROOM.minX + 0.4, 0.46, 3.8)
     for (const z of [2.8, 4.8]) this.deco(0.06, 0.42, 0.06, steel, ROOM.minX + 0.4, 0.21, z)
-    // Plants in the corners.
+    // Plants in the corners, a bin by the counter's west end, and fire extinguishers either side of the storage doorway.
     for (const [x, z] of [
       [ROOM.maxX - 0.5, 5.4],
       [ROOM.minX + 0.5, 5.4],
     ] as const) {
-      this.deco(0.4, 0.45, 0.4, mat(0x9a6b4f, 0.8), x, 0.225, z)
-      const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), mat(0x2f6b3a, 0.85))
-      leaves.position.set(x, 0.85, z)
-      leaves.scale.y = 1.3
-      this.root.add(leaves)
+      this.root.add(prop('potted_plant_02', { x, z, height: 1.4 }))
+      this.physics.addStaticBox(new THREE.Vector3(x, 0.5, z), new THREE.Vector3(0.25, 0.5, 0.25))
     }
+    this.root.add(prop('metal_trash_can', { x: ROOM.minX + 0.4, z: 2.1, height: 0.75 }))
+    this.physics.addStaticBox(new THREE.Vector3(ROOM.minX + 0.4, 0.37, 2.1), new THREE.Vector3(0.22, 0.37, 0.22))
+    for (const [x, z] of [
+      [1.35, PARTITION.z + 0.26],
+      [-1.35, PARTITION.z - 0.26],
+    ] as const)
+      this.root.add(prop('korean_fire_extinguisher_01', { x, z, height: 0.6 }))
     // Rug and queue posts.
     this.deco(2.4, 0.01, 2.6, carpetFloor(0x7c2d12), 0, 0.02, 3.3)
     const price = this.sign('Storage $15 · pay on collection', 2.4, 0.4, '#1e293b', '#e2e8f0')
@@ -504,8 +512,9 @@ export class Facility {
       this.solid(0.5, 0.04, 2.6, shelf, x, 0.6, -6)
       this.solid(0.5, 0.04, 2.6, shelf, x, 1.3, -6)
       for (const dz of [-1.25, 1.25]) this.deco(0.04, 1.4, 0.04, shelf, x, 0.7, -6 + dz)
-      this.deco(0.35, 0.28, 0.3, mat(0xb08a5a, 0.85), x, 0.76, -6.6)
-      this.deco(0.3, 0.22, 0.3, mat(0xb08a5a, 0.85), x, 1.43, -5.4)
+      this.root.add(prop('cardboard_box_01', { x, y: 0.62, z: -6.6, rotY: 0.2, height: 0.3 }))
+      this.root.add(prop('cardboard_box_01', { x, y: 0.62, z: -5.9, rotY: -0.15, height: 0.24 }))
+      this.root.add(prop('plastic_crate_02', { x, y: 1.32, z: -5.4, rotY: Math.PI / 2, height: 0.26 }))
     }
   }
 

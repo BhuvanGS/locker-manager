@@ -6,6 +6,7 @@ import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
+import { prop } from './props'
 import { carpetFloor, glassMat, leatherMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
 
 const T = 0.2
@@ -83,9 +84,12 @@ export class Office {
 
     // A plant in each far corner, and the signs.
     for (const pz of [minZ + 0.5, maxZ - 0.5]) {
-      this.deco(0.4, 0.4, 0.4, mat(0x9a6b4f, 0.8), maxX - 0.5, 0.2, pz)
-      this.deco(0.45, 0.8, 0.45, mat(0x2f6b3a, 0.9), maxX - 0.5, 0.8, pz)
+      this.root.add(prop('potted_plant_02', { x: maxX - 0.5, z: pz, height: 1.3 }))
+      this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(maxX - 0.5, 0.5, pz), new THREE.Vector3(0.25, 0.5, 0.25)))
     }
+    // A visitor's armchair by the door, facing the desk.
+    this.root.add(prop('modern_arm_chair_01', { x: minX + 0.7, z: maxZ - 0.75, rotY: Math.PI / 2 + 0.5, height: 0.85 }))
+    this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(minX + 0.7, 0.42, maxZ - 0.75), new THREE.Vector3(0.38, 0.42, 0.38)))
     const door = makeSign('DEAL OFFICE', 1.5, 0.24, '#0f172a', '#fbbf24')
     door.position.set(minX + 0.05, 2.65, OFFICE.desk.z)
     door.rotation.y = Math.PI / 2 // faces into the office (+x)

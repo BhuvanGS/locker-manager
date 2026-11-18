@@ -7,6 +7,7 @@ import type { RobotJob, Truck } from '../sim/WarehouseManager'
 import { markBlocker, tag } from './interactables'
 import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
+import { prop } from './props'
 import { concreteFloor, lightPanel, metreUVs } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
@@ -166,6 +167,11 @@ export class Warehouse {
       ...docks.z.map((z) => ({ x: lanes.dock + 1.2, z })),
       ...WAREHOUSE.robotHomes.map(([x, z]) => ({ x, z })),
     ])
+
+    // A parts cart along the north wall (clear of the robots' north lane) and an extinguisher by the hall door.
+    this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
+    this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(17.6, 0.45, -9.95), new THREE.Vector3(0.6, 0.45, 0.35)))
+    this.root.add(prop('korean_fire_extinguisher_01', { x: 6.55, z: -16.9, rotY: Math.PI / 2, height: 0.6, glow: 0.3 }))
 
     // Signs, the notice board and the receiving desk.
     const outside = makeSign('WAREHOUSE', 3.4, 0.56, '#0f172a', '#fbbf24')

@@ -4,7 +4,8 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { AUTO_ZONES, ZONE_TITLES, type AutoZone } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
-import { makeSign, mat } from './models'
+import { makeSign } from './models'
+import { consoleSteel } from './textures'
 
 const W = 512
 const H = 340
@@ -32,7 +33,7 @@ export class AutomationConsole {
     this.root.userData.zone = zone
     this.root.position.set(x, floorY, z)
     this.root.rotation.y = rotY // 0 faces +z; a quarter turn faces along x
-    const steel = mat(0x1f2937, 0.5, 0.4)
+    const steel = consoleSteel()
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.95, 0.34), steel)
     pedestal.position.y = 0.475
     pedestal.castShadow = true

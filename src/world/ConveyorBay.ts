@@ -8,6 +8,7 @@ import { beltTexture, TEXTURE_TILE } from './belts'
 import { markBlocker, tag } from './interactables'
 import { CONVEYOR, PARTITION, STATION } from './layout'
 import { makeSign, mat } from './models'
+import { consoleSteel } from './textures'
 import { PICKUP_Z, StationView } from './StationView'
 
 const RISE_SECONDS = 1.5
@@ -219,7 +220,7 @@ export class ConveyorBay {
 
   private buildKiosk(): void {
     const { x, z } = CONVEYOR.kiosk
-    const body = mat(0x1f2937, 0.5, 0.4)
+    const body = consoleSteel()
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.95, 0.36), body)
     pedestal.position.set(x, 0.475, z)
     pedestal.castShadow = true
