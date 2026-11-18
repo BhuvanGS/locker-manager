@@ -4,7 +4,7 @@ import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
-import { textured } from './textures'
+import { glassMat, lightPanel, metreUVs, textured, wallMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -76,7 +76,7 @@ export class Facility {
 
   /** Solid box: rendered, collides with the player, blocks reach. */
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     mesh.castShadow = true
@@ -135,7 +135,7 @@ export class Facility {
   private buildBackWall(): void {
     const { minX, maxX, minZ, height } = ROOM
     const t = 0.2
-    const wall = mat(0xe9e4da, 0.9)
+    const wall = wallMat(0xe9e4da)
     const { x, halfWidth, height: doorH } = SOUTH.door
     const z = minZ - t / 2
     const x0 = minX - t
@@ -228,7 +228,7 @@ export class Facility {
   private buildSideWall(side: 'west' | 'east'): void {
     const { minX, maxX, minZ, maxZ, height } = ROOM
     const t = 0.2
-    const wall = mat(0xe9e4da, 0.9)
+    const wall = wallMat(0xe9e4da)
     const x = side === 'west' ? minX - t / 2 : maxX + t / 2
     // The east wall also has the deal office's doorway (up in the lobby); each doorway is a removable panel under a lintel.
     const doors = [{ key: side as 'west' | 'east' | 'office', ...ANNEX_DOOR }]
@@ -282,7 +282,7 @@ export class Facility {
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)
@@ -335,8 +335,8 @@ export class Facility {
     }
     // Neighbouring shops on our side.
     // Each is a front half and a back half: the back half is what an annex replaces when it is built.
-    const west = mat(0xb9a58f, 0.9)
-    const east = mat(0xa9b6bf, 0.9)
+    const west = wallMat(0xb9a58f)
+    const east = wallMat(0xa9b6bf)
     this.deco(10, 4.4, 8.5, west, -11.2, 2.2, 1.75)
     this.neighbourFront = this.deco(10, 3.8, 8.5, east, 11.2, 1.9, 1.75)
     this.neighbourBack.set('west', this.deco(10, 4.4, 6.5, west, -11.2, 2.2, -5.75))
@@ -372,7 +372,7 @@ export class Facility {
       this.solid(0.2, 1.6, t, front, s * (maxX - 0.1), 1.7, maxZ + t / 2)
       const glass = new THREE.Mesh(
         new THREE.BoxGeometry(sideW - 0.4, 1.6, 0.04),
-        new THREE.MeshStandardMaterial({ color: 0xbcd7e6, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.4 }),
+        glassMat(0.28),
       )
       glass.position.set(s * sideX, 1.7, maxZ + t / 2)
       markBlocker(glass)
@@ -382,7 +382,7 @@ export class Facility {
     this.solid(ENTRANCE.halfWidth * 2, height - ENTRANCE.height, t, front, 0, ENTRANCE.height + (height - ENTRANCE.height) / 2, maxZ + t / 2)
 
     // Sliding glass doors (visual only; customers and the player pass when open).
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0xcfe6f2, transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.5 })
+    const doorMat = glassMat(0.32, 0xcfe6f2)
     const frameMat = mat(0x6b7280, 0.4, 0.6)
     const makeDoor = (x: number) => {
       const door = new THREE.Mesh(new THREE.BoxGeometry(1, ENTRANCE.height - 0.05, 0.04), doorMat)
@@ -475,7 +475,7 @@ export class Facility {
   }
 
   private buildStaffArea(): void {
-    const wall = mat(0xdcd6cb, 0.9)
+    const wall = wallMat(0xdcd6cb)
     const { z, doorHalfWidth } = PARTITION
     const t = 0.2
     const sideW = ROOM.maxX - doorHalfWidth
@@ -555,7 +555,7 @@ export class Facility {
     sun.shadow.normalBias = 0.03
     this.root.add(sun, sun.target)
 
-    const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.2 })
+    const panel = lightPanel(0xfff8e7, 1.2)
     for (const [x, z] of [
       [-2.5, 3.8],
       [2.5, 3.8],

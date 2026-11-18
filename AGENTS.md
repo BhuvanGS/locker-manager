@@ -185,6 +185,10 @@ Rules:
 - `InteractionManager` raycasts from the screen centre against tagged objects (`interactables.ts`:
   `tag()` / `markBlocker()`). `describe()` gives the prompt and `perform()` calls the sim. Invisible proxy meshes
   (`MeshBasicMaterial({ visible: false })`) make small things like keys and hooks easy to aim at.
+- **Textures** (`world/textures.ts`, files in `public/textures/<name>/` with `CREDITS.md`): `textured(name, surface)` caches image materials
+  like `mat()`; `wallMat(colour)` (plaster), `glassMat(opacity)` (smudged, reflects the room via `setGlassEnvironment`), `lightPanel()`.
+  Box faces stretch a texture, so boxes with tiled textures use `metreUVs(geometry)` (the buildings' `solid()`/`deco()` already do).
+  Never put a texture on a material from `mat()`'s cache: it is shared by everything of that colour.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind
   the same functions.
 

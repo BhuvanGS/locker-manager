@@ -7,6 +7,7 @@ import type { RobotJob, Truck } from '../sim/WarehouseManager'
 import { markBlocker, tag } from './interactables'
 import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
+import { lightPanel } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
@@ -123,7 +124,7 @@ export class Warehouse {
     })
 
     // Lights: rows of panels.
-    const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.3 })
+    const panel = lightPanel(0xfff8e7, 1.3)
     for (let x = minX + 2.4; x < maxX - 1; x += 3.8) {
       for (let z = minZ + 2.6; z < maxZ - 1; z += 4.4) {
         const f = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.5), panel)
@@ -720,7 +721,7 @@ export class Warehouse {
     if (minX > WAREHOUSE.minX + 0.3) this.solid(T, h, maxZ - minZ, wallMat, minX - T / 2, h / 2, cz)
     this.solid(T, h, maxZ - minZ, wallMat, maxX + T / 2, h / 2, cz)
     this.deco(maxX - minX + T * 2, 0.1, maxZ - minZ + T, wallMat, cx, h + 0.05, cz).castShadow = true // ceiling
-    const light = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: section === 'cold' ? 0x7dd3fc : 0xfff8e7, emissiveIntensity: section === 'cold' ? 1.5 : 1.1 })
+    const light = section === 'cold' ? lightPanel(0x7dd3fc, 1.5) : lightPanel(0xfff8e7, 1.1)
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.4), light)
     fixture.position.set(cx, h - 0.04, cz)
     this.root.add(fixture)

@@ -43,6 +43,7 @@ import {
 import { isDebugEnabled } from './debug'
 import { InputManager, type InputSnapshot } from './InputManager'
 import { PhysicsWorld } from './PhysicsWorld'
+import { setGlassEnvironment } from '../world/textures'
 
 /**
  * Owns the renderer and the main loop, and wires the simulation (src/sim) to the 3D views (src/world)
@@ -131,6 +132,7 @@ export class Engine {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
+    setGlassEnvironment(this.renderer)
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))

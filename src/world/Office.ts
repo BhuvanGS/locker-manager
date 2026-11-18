@@ -6,6 +6,7 @@ import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
+import { glassMat, lightPanel, metreUVs, wallMat } from './textures'
 
 const T = 0.2
 const RISE_SECONDS = 1.2
@@ -32,8 +33,8 @@ export class Office {
     const d = maxZ - minZ
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    const wall = mat(0xe3ddd0, 0.9)
-    const outside = mat(0xa9b6bf, 0.9)
+    const wall = wallMat(0xe3ddd0)
+    const outside = wallMat(0xa9b6bf)
 
     // Floor (carpet), ceiling and roof.
     this.deco(w, 0.03, d, mat(0x3b4a5c, 0.95), cx, 0.016, cz)
@@ -47,7 +48,7 @@ export class Office {
     // A window in the far wall.
     const glass = new THREE.Mesh(
       new THREE.BoxGeometry(0.04, 1.4, 2.6),
-      new THREE.MeshStandardMaterial({ color: 0xbcd7e6, transparent: true, opacity: 0.25, roughness: 0.05, depthWrite: false }),
+      glassMat(0.25),
     )
     glass.position.set(maxX - 0.05, 1.7, cz)
     this.root.add(glass)
@@ -57,7 +58,7 @@ export class Office {
     this.deco(0.02, h, d, wall, maxX - 0.01, h / 2, cz)
 
     // Lights: two emissive panels (the lobby's lights spill in through the doorway).
-    const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.3 })
+    const panel = lightPanel(0xfff8e7, 1.3)
     for (const dz of [-1.6, 1.6]) {
       const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.4), panel)
       fixture.position.set(cx, h - 0.03, OFFICE.desk.z + dz)
@@ -203,7 +204,7 @@ export class Office {
 
   /** Solid wall: rendered, collides with the player, blocks reach. */
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     mesh.castShadow = true
@@ -213,7 +214,7 @@ export class Office {
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)

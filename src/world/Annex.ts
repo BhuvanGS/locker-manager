@@ -4,6 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { ANNEX, ANNEX_DOOR, ANNEX_ZONE, ROOM } from './layout'
 import { makeSign, mat } from './models'
+import { lightPanel, metreUVs, wallMat } from './textures'
 
 export type AnnexSide = 'west' | 'east'
 
@@ -34,8 +35,8 @@ export class Annex {
     const cz = (minZ + maxZ - 0.1) / 2
 
     // Each side has its own colour, matching the unit it replaces.
-    const wallMat = mat(side === 'west' ? 0xd8c3a5 : 0xc3d0da, 0.9)
-    const outer = mat(side === 'west' ? 0xb9a58f : 0xa9b6bf, 0.9)
+    const inner = wallMat(side === 'west' ? 0xd8c3a5 : 0xc3d0da)
+    const outer = wallMat(side === 'west' ? 0xb9a58f : 0xa9b6bf)
 
     // Floor, ceiling and the roof slab seen from outside.
     this.deco(w, 0.02, depth, mat(0x8f949a, 0.85), cx, 0.005, cz)
@@ -46,12 +47,12 @@ export class Annex {
     const x0 = side === 'west' ? a.minX - T : a.minX
     const x1 = side === 'west' ? a.maxX : a.maxX + T
     const outerX = side === 'west' ? a.minX - T / 2 : a.maxX + T / 2
-    this.solid((x1 - x0), h, T, wallMat, (x0 + x1) / 2, h / 2, minZ - T / 2)
-    this.solid((x1 - x0), h, T, wallMat, (x0 + x1) / 2, h / 2, maxZ + T / 2)
+    this.solid((x1 - x0), h, T, inner, (x0 + x1) / 2, h / 2, minZ - T / 2)
+    this.solid((x1 - x0), h, T, inner, (x0 + x1) / 2, h / 2, maxZ + T / 2)
     this.solid(T, h, maxZ - minZ + T * 2, outer, outerX, h / 2, (minZ + maxZ) / 2)
 
     // Light: two ceiling fixtures.
-    const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.2 })
+    const panel = lightPanel(0xfff8e7, 1.2)
     for (const dx of [-2.4, 2.4]) {
       const light = new THREE.PointLight(0xfff4e0, 9, 9, 1.6)
       light.position.set(cx + dx, h - 0.25, cz)
@@ -92,7 +93,7 @@ export class Annex {
 
   /** Solid wall: rendered, collides with the player, blocks reach. */
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     mesh.castShadow = true
@@ -102,7 +103,7 @@ export class Annex {
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)

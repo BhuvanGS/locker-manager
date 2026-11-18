@@ -4,6 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
+import { glassMat, lightPanel, metreUVs, wallMat } from './textures'
 
 export type HallKind = 'south' | 'floor1' | 'floor2'
 
@@ -17,14 +18,6 @@ const RISE_SECONDS = 1.6
 const WIN_W = 1.6
 const WIN_H = 1.4
 const SILL = 0.9
-const GLASS = new THREE.MeshStandardMaterial({
-  color: 0xbcd7e6,
-  transparent: true,
-  opacity: 0.22,
-  roughness: 0.05,
-  metalness: 0.1,
-  depthWrite: false,
-})
 
 /**
  * One big storage hall: the south expansion behind the storage room, or a floor stacked on top of it. They all share one
@@ -56,7 +49,7 @@ export class Hall {
     this.root.userData.zone = kind
 
     const { minX, maxX, minZ, maxZ } = SOUTH
-    const wall = mat(0xd5d9de, 0.9)
+    const wall = wallMat(0xd5d9de)
     const slab = mat(0xbfbab0, 0.95)
     const z0 = minZ - T // far end, outer face
     const z1 = maxZ + T // old back wall's south face plane, outer face
@@ -91,7 +84,7 @@ export class Hall {
     this.buildCeilingSlab(slab, z0, z1)
 
     // Ceiling light fixtures (no real lights: the global light already fills the room, and many point lights are costly).
-    const panel = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff8e7, emissiveIntensity: 1.3 })
+    const panel = lightPanel(0xfff8e7, 1.3)
     for (const x of [-2.5, 2.5]) {
       for (const z of [-13.5, -18]) {
         const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.4), panel)
@@ -179,7 +172,7 @@ export class Hall {
       piece(cursor, c - WIN_W / 2, SILL, SILL + WIN_H) // the pier between windows
       cursor = c + WIN_W / 2
       const glassY = SILL + WIN_H / 2
-      const pane = axis === 'z' ? this.solid(0.04, WIN_H, WIN_W, GLASS, fixed, glassY, c) : this.solid(WIN_W, WIN_H, 0.04, GLASS, c, glassY, fixed)
+      const pane = axis === 'z' ? this.solid(0.04, WIN_H, WIN_W, glassMat(0.22), fixed, glassY, c) : this.solid(WIN_W, WIN_H, 0.04, glassMat(0.22), c, glassY, fixed)
       pane.mesh.castShadow = false
       // A sill ledge on the inside.
       const sill = new THREE.Mesh(
@@ -220,7 +213,7 @@ export class Hall {
 
   /** Solid box: rendered, collides with the player, blocks reach. `y` is relative to this hall's floor. */
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     mesh.castShadow = true
