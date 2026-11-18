@@ -1,8 +1,10 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { conduit } from './cables'
+import { prop } from './props'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
-import { ANNEX, ANNEX_DOOR, ANNEX_ZONE, ROOM } from './layout'
+import { ANNEX, ANNEX_DOOR, ANNEX_ZONE, ROOM, POWER_FEEDS } from './layout'
 import { makeSign, mat } from './models'
 import { ceilingMat, concreteFloor, lightPanel, metreUVs, wallMat } from './textures'
 
@@ -50,6 +52,13 @@ export class Annex {
     this.solid((x1 - x0), h, T, inner, (x0 + x1) / 2, h / 2, minZ - T / 2)
     this.solid((x1 - x0), h, T, inner, (x0 + x1) / 2, h / 2, maxZ + T / 2)
     this.solid(T, h, maxZ - minZ + T * 2, outer, outerX, h / 2, (minZ + maxZ) / 2)
+
+    // The east annex's electrical box on its far wall (its arm console's cables run to it), fed from the ceiling.
+    if (side === 'east') {
+      const { x: bx, z: bz } = POWER_FEEDS.east.riser
+      this.root.add(prop('power_box_01', { x: a.maxX - 0.22, y: 1.0, z: bz - 0.12, rotY: -Math.PI / 2, height: 0.6 }))
+      this.root.add(conduit([new THREE.Vector3(bx, 1.56, bz), new THREE.Vector3(bx, h - 0.05, bz)]))
+    }
 
     // Light: two ceiling fixtures.
     const panel = lightPanel(0xfff8e7, 1.2)

@@ -193,8 +193,11 @@ Rules:
 - **3D props** (`world/props.ts`, `public/models/<name>/model.gltf`, `CREDITS.md`): `prop(name, { x, y, z, rotY, height, glow })` returns a group
   that fills with a clone once the glTF loads (stands on `y`, scaled to `height`). Decoration only: add a collider yourself, and keep props out of
   `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Props are drawn opaque and double-sided.
-- **Cables** (`world/cables.ts`): `festoon` (looped cable along a gantry rail), `cable` (smooth rubber cable through points) and `conduit`
-  (straight pipe ending in a ceiling junction box). Rails, the counter arm, consoles, the kiosk and the electrical boxes (`power_box_01`) use them. A new model = download, shrink textures, add it to `PropName`.
+- **Cables** (`world/cables.ts`): `floorBundle` (several cables side by side along the floor, then up the wall into a power box), `festoon`
+  (looped cable along a gantry rail, first rail of each station only), `cable` and `conduit` (pipe to a ceiling junction box). Every room with
+  robotics has an electrical box (`power_box_01`) as its supply: arm consoles run a bundle to it (`POWER_FEEDS` in `layout.ts`; the console
+  parents it with its own transform undone), and so do the belt drives (`ConveyorBay`) and the warehouse chargers. Cables use the CC0 Rubber004
+  grain (there is no CC0 cable texture); they lie above the thickest floor (the warehouse's). A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind
   the same functions.
 

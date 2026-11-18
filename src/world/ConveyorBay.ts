@@ -1,13 +1,13 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { conduit } from './cables'
+import { conduit, floorBundle } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { makeBag } from './bags'
 import { beltTexture, TEXTURE_TILE } from './belts'
 import { markBlocker, tag } from './interactables'
-import { CONVEYOR, PARTITION, STATION } from './layout'
+import { CONVEYOR, PARTITION, STATION, POWER_FEEDS } from './layout'
 import { makeSign, mat } from './models'
 import { consoleSteel } from './textures'
 import { PICKUP_Z, StationView } from './StationView'
@@ -127,6 +127,8 @@ export class ConveyorBay {
   // ------------------------------------------------------------------ building
 
   private buildBelts(): void {
+    // The belt drives' power: a bundle from the far end of the belts, beside the arm console's, to the storage room's electrical box.
+    this.root.add(floorBundle([[CONVEYOR.outX + 0.45, CONVEYOR.endZ + 0.15], [-2.85, CONVEYOR.endZ + 0.15], [-2.85, -2.82], [4.55, -2.82]], { ...POWER_FEEDS.main.riser, x: POWER_FEEDS.main.riser.x - 0.14 }, 5))
     const { inX, outX, width, topY, startZ, endZ } = CONVEYOR
     const len = startZ - endZ
     const midZ = (startZ + endZ) / 2

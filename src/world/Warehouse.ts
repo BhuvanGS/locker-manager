@@ -1,6 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { conduit } from './cables'
+import { conduit, floorBundle } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, type CargoType, type Section } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
@@ -316,6 +316,12 @@ export class Warehouse {
       this.deco(1.1, 0.012, 1.3, paint, x, 0.037, z)
       this.deco(1.0, 0.014, 1.2, mat(0x1f2937, 0.7), x, 0.039, z)
     }
+    // The chargers' own electrical box on the east wall, with a bundle from each pad running to it.
+    const box = { x: WAREHOUSE.maxX - 0.22, z: -28.6 }
+    this.root.add(prop('power_box_01', { x: box.x, y: 1.0, z: box.z - 0.12, rotY: -Math.PI / 2, height: 0.7, glow: 0.3 }))
+    this.root.add(conduit([new THREE.Vector3(box.x, 1.66, box.z), new THREE.Vector3(box.x, WAREHOUSE.height - 0.05, box.z)]))
+    this.root.add(floorBundle([[21.2, -29.0], [21.2, -28.7], [23.6, -28.7]], { ...box, top: 1.0 }, 4))
+    this.root.add(floorBundle([[23.0, -29.0], [23.0, -28.9], [23.55, -28.9]], { x: box.x, z: box.z - 0.08, top: 1.0 }, 3))
     const sign = makeSign('ROBOT CHARGING', 1.4, 0.22, '#0f172a', '#facc15')
     sign.position.set(22.1, 2.2, WAREHOUSE.minZ + 0.03)
     this.root.add(sign)

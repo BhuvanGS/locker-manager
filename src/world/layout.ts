@@ -175,6 +175,18 @@ export const CONSOLES = {
   warehouse: { x: 7.0, z: -11.2, rotY: Math.PI / 2 },
 } as const
 
+/**
+ * Power for the robot consoles: each one's cable bundle runs along the floor (`route`, x z from beside the console) to its room's
+ * electrical box and climbs the wall into it (`riser`: the box body's x z, `top`: the box's bottom edge above the floor). The halls
+ * share one plan (each floor is the same). The hub console keeps its ceiling conduit.
+ */
+export const POWER_FEEDS: Record<'main' | 'east' | 'hall' | 'warehouse', { route: readonly (readonly [number, number])[]; riser: { x: number; z: number; top: number } }> = {
+  main: { route: [[-3.05, -6.1], [-3.05, -2.62], [4.6, -2.62]], riser: { x: 4.88, z: -2.74, top: 1.0 } },
+  east: { route: [[11.78, -5.8], [15.7, -5.8]], riser: { x: 15.8, z: -5.68, top: 1.0 } },
+  hall: { route: [[-5.72, -10.25], [-5.82, -20.68], [-5.1, -20.68]], riser: { x: -4.98, z: -20.8, top: 1.0 } },
+  warehouse: { route: [[6.72, -11.2], [6.72, -9.72], [9.05, -9.72]], riser: { x: 9.28, z: -9.6, top: 1.0 } },
+}
+
 /** The front of locker `col`, `row` of a storage-room bank: x, the height of the middle of its opening, and the z of the item. */
 export function lockerSlot(bank: number, row: number, col: number): { x: number; y: number; z: number } {
   const pitch = LOCKER.width + LOCKER.gap

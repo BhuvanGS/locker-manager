@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { conduit } from './cables'
-import { WAREHOUSE } from './layout'
+import { conduit, floorBundle } from './cables'
+import { POWER_FEEDS, WAREHOUSE } from './layout'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { AUTO_ZONES, ZONE_TITLES, type AutoZone } from '../sim/config'
@@ -41,9 +41,16 @@ export class AutomationConsole {
     pedestal.castShadow = true
     markBlocker(pedestal)
     this.root.add(pedestal)
-    // Wired up: conduit from the back of the pedestal into a junction box on the ceiling.
-    const ceiling = zone === 'warehouse' ? WAREHOUSE.height : 3.2
-    this.root.add(conduit([new THREE.Vector3(0, 0.25, -0.2), new THREE.Vector3(0, ceiling - 0.05, -0.2)]))
+    // Wired up: arm consoles get a cable bundle along the floor to the room's electrical box (laid out in world coordinates, then
+    // moved into this root by undoing its position and turn, so it hides and goes with the console); the hub keeps a ceiling conduit.
+    const feed = scope === 'hub' ? null : POWER_FEEDS[zone === 'south' || zone === 'floor1' || zone === 'floor2' ? 'hall' : zone]
+    if (feed) {
+      const wiring = floorBundle(feed.route, feed.riser, 6, floorY)
+      this.root.updateMatrix()
+      wiring.applyMatrix4(this.root.matrix.clone().invert())
+      this.root.add(wiring)
+    }
+    else this.root.add(conduit([new THREE.Vector3(0, 0.25, -0.2), new THREE.Vector3(0, (zone === 'warehouse' ? WAREHOUSE.height : 3.2) - 0.05, -0.2)]))
     const sideways = Math.abs(Math.sin(rotY)) > 0.5
     this.body = physics.addStaticBox(new THREE.Vector3(x, floorY + 0.475, z), new THREE.Vector3(sideways ? 0.17 : 0.23, 0.475, sideways ? 0.23 : 0.17))
 

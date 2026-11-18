@@ -247,9 +247,9 @@ export class StationView {
       const beam = new THREE.Mesh(new THREE.BoxGeometry(span, 0.14, 0.16), yellow)
       beam.position.set((minX + end) / 2, y, z)
       this.root.add(beam)
-      // Its power: a cable looping along the rail, and up from the rail's end into the ceiling.
-      this.root.add(festoon(minX + 0.1, end - 0.1, y - 0.1, z + 0.11))
-      this.root.add(cable([new THREE.Vector3(minX + 0.1, y - 0.1, z + 0.11), new THREE.Vector3(minX - 0.05, y + 0.1, z + 0.11), new THREE.Vector3(minX - 0.1, ceiling - 0.02, z + 0.11)]))
+      // Its power (first arm's first rail only, so a station has one): a cable looping along the rail, and up into the ceiling.
+      if (arm === 0 && r === rows[0]) this.root.add(festoon(minX + 0.1, end - 0.1, y - 0.1, z + 0.11))
+      if (arm === 0 && r === rows[0]) this.root.add(cable([new THREE.Vector3(minX + 0.1, y - 0.1, z + 0.11), new THREE.Vector3(minX - 0.05, y + 0.1, z + 0.11), new THREE.Vector3(minX - 0.1, ceiling - 0.02, z + 0.11)]))
       for (let x = minX + 1.4; x < end - 0.4; x += Math.max(3, span / Math.ceil(span / 3))) hang(x, z)
     }
     if (runX !== null) {

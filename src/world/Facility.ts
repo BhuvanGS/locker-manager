@@ -424,7 +424,7 @@ export class Facility {
     }
     for (const [x, z] of [
       [1.35, PARTITION.z + 0.26],
-      [-1.35, PARTITION.z - 0.26],
+      [-3.6, PARTITION.z - 0.26],
     ] as const)
       this.root.add(prop('korean_fire_extinguisher_01', { x, z, height: 0.6 }))
     // An electrical box on the storage side of the partition, its conduit up into the ceiling.
