@@ -192,7 +192,9 @@ Rules:
   Never put a texture on a material from `mat()`'s cache: it is shared by everything of that colour.
 - **3D props** (`world/props.ts`, `public/models/<name>/model.gltf`, `CREDITS.md`): `prop(name, { x, y, z, rotY, height, glow })` returns a group
   that fills with a clone once the glTF loads (stands on `y`, scaled to `height`). Decoration only: add a collider yourself, and keep props out of
-  `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. A new model = download, shrink textures, add it to `PropName`.
+  `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Props are drawn opaque and double-sided.
+- **Cables** (`world/cables.ts`): `festoon` (looped cable along a gantry rail), `cable` (smooth rubber cable through points) and `conduit`
+  (straight pipe ending in a ceiling junction box). Rails, the counter arm, consoles, the kiosk and the electrical boxes (`power_box_01`) use them. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind
   the same functions.
 

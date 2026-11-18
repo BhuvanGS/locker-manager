@@ -10,10 +10,9 @@ export type PropName =
   | 'potted_plant_02'
   | 'cardboard_box_01'
   | 'korean_fire_extinguisher_01'
-  | 'metal_trash_can'
   | 'modern_arm_chair_01'
-  | 'plastic_crate_02'
   | 'industrial_storage_cart'
+  | 'power_box_01'
 
 const loader = new GLTFLoader()
 const models = new Map<PropName, Promise<THREE.Object3D>>()
@@ -26,6 +25,12 @@ function model(name: PropName): Promise<THREE.Object3D> {
         if (o instanceof THREE.Mesh) {
           o.castShadow = true
           o.receiveShadow = true
+          // None of these are glass, but some (the plastic crate) are marked as blended, which hides walls in the
+          // wrong order: draw them opaque, cutting out any alpha, and double-sided for thin one-sided walls.
+          const m = o.material as THREE.Material
+          m.transparent = false
+          m.alphaTest = 0.5
+          m.side = THREE.DoubleSide
         }
       })
       return gltf.scene

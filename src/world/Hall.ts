@@ -1,10 +1,12 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { conduit } from './cables'
+import { prop } from './props'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
-import { concreteFloor, glassMat, lightPanel, metreUVs, wallMat } from './textures'
+import { ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, wallMat } from './textures'
 
 export type HallKind = 'south' | 'floor1' | 'floor2'
 
@@ -51,11 +53,15 @@ export class Hall {
     const { minX, maxX, minZ, maxZ } = SOUTH
     const wall = wallMat(0xd5d9de)
     // The slab's top face is the floor of the hall above; the rest is ceiling (faces: +x, −x, +y, −y, +z, −z).
-    const ceiling = mat(0xbfbab0, 0.95)
-    const slab = [ceiling, ceiling, concreteFloor(0x8f949a), ceiling, ceiling, ceiling]
+    const edge = mat(0xbfbab0, 0.95)
+    const slab = [edge, edge, concreteFloor(0x8f949a), ceilingMat(0xe7e5e0), edge, edge]
     const z0 = minZ - T // far end, outer face
     const z1 = maxZ + T // old back wall's south face plane, outer face
     const widthX = maxX - minX + 2 * T
+
+    // An electrical box on the far wall, west of the windows, with its conduit to the ceiling.
+    this.root.add(prop('power_box_01', { x: minX + 0.9, y: 1.0, z: minZ + 0.2, height: 0.6 }))
+    this.root.add(conduit([new THREE.Vector3(minX + 1.02, 1.56, minZ + 0.2), new THREE.Vector3(minX + 1.02, H - 0.05, minZ + 0.2)]))
 
     // Walls: west, east and the far (south) end. Floors above also need their own north wall (on the ground the old
     // back wall of the storage room is the north wall).

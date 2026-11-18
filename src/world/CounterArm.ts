@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { festoon } from './cables'
 import type { GameManager } from '../sim/GameManager'
 import { ArmRig, HANG, sample, type Key } from './ArmRig'
 import { CONVEYOR, COUNTER, ROOM } from './layout'
@@ -45,6 +46,7 @@ export class CounterArm {
     const beam = new THREE.Mesh(new THREE.BoxGeometry(MAX_X - MIN_X, 0.14, 0.16), yellow)
     beam.position.set((MIN_X + MAX_X) / 2, RAIL_Y + 0.12, RAIL_Z)
     this.root.add(beam)
+    this.root.add(festoon(MIN_X + 0.1, MAX_X - 0.1, RAIL_Y + 0.02, RAIL_Z - 0.11))
     for (const x of [-4.5, -1.5, 1.5, 3.3]) {
       const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.06, ROOM.height - RAIL_Y - 0.05, 0.06), dark)
       hanger.position.set(x, (ROOM.height + RAIL_Y + 0.05) / 2, RAIL_Z)

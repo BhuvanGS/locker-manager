@@ -4,7 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { ANNEX, ANNEX_DOOR, ANNEX_ZONE, ROOM } from './layout'
 import { makeSign, mat } from './models'
-import { concreteFloor, lightPanel, metreUVs, wallMat } from './textures'
+import { ceilingMat, concreteFloor, lightPanel, metreUVs, wallMat } from './textures'
 
 export type AnnexSide = 'west' | 'east'
 
@@ -40,7 +40,7 @@ export class Annex {
 
     // Floor, ceiling and the roof slab seen from outside.
     this.deco(w, 0.02, maxZ - minZ, concreteFloor(0x8f949a), cx, 0.005, (minZ + maxZ) / 2)
-    this.deco(w, 0.1, depth, mat(0xf4f2ee, 1), cx, h + 0.05, cz)
+    this.deco(w, 0.1, depth, ceilingMat(0xf4f2ee), cx, h + 0.05, cz)
     this.deco(w + 0.6, 0.18, depth + 0.5, mat(0x59544e, 0.9), cx, h + 0.19, cz)
 
     // Walls: back (same plane as the main back wall), front (same plane as the partition) and the far side.

@@ -7,7 +7,7 @@ import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
-import { carpetFloor, glassMat, leatherMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, glassMat, leatherMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
 
 const T = 0.2
 const RISE_SECONDS = 1.2
@@ -39,7 +39,7 @@ export class Office {
 
     // Floor (carpet), ceiling and roof.
     this.deco(w, 0.03, d, carpetFloor(0x3b4a5c), cx, 0.016, cz)
-    this.deco(w + 0.4, 0.1, d + 0.4, mat(0xf4f2ee, 1), cx, h + 0.05, cz)
+    this.deco(w + 0.4, 0.1, d + 0.4, ceilingMat(0xf4f2ee), cx, h + 0.05, cz)
     this.deco(w + 0.6, 0.18, d + 0.6, mat(0x59544e, 0.9), cx, h + 0.19, cz)
 
     // Walls: north, south and the far (east) end. The west wall is the lobby's own, with the doorway cut in it.

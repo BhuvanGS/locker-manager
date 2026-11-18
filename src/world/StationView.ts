@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { cable, festoon } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import type { Parcel } from '../sim/ConveyorSystem'
@@ -9,7 +10,7 @@ import { makeBag } from './bags'
 import { beltTexture, TEXTURE_TILE } from './belts'
 import { BAY, CONVEYOR, STATION } from './layout'
 import { makeSign, mat } from './models'
-import { armYellow } from './textures'
+import { armYellow, cylinderMetreUVs, ductSteel } from './textures'
 
 /** How far apart (z) two bags waiting at the same dock sit, one per arm. */
 const SPACING = 0.5
@@ -246,6 +247,9 @@ export class StationView {
       const beam = new THREE.Mesh(new THREE.BoxGeometry(span, 0.14, 0.16), yellow)
       beam.position.set((minX + end) / 2, y, z)
       this.root.add(beam)
+      // Its power: a cable looping along the rail, and up from the rail's end into the ceiling.
+      this.root.add(festoon(minX + 0.1, end - 0.1, y - 0.1, z + 0.11))
+      this.root.add(cable([new THREE.Vector3(minX + 0.1, y - 0.1, z + 0.11), new THREE.Vector3(minX - 0.05, y + 0.1, z + 0.11), new THREE.Vector3(minX - 0.1, ceiling - 0.02, z + 0.11)]))
       for (let x = minX + 1.4; x < end - 0.4; x += Math.max(3, span / Math.ceil(span / 3))) hang(x, z)
     }
     if (runX !== null) {
@@ -278,11 +282,11 @@ export class StationView {
 
   /** A vertical duct from the ceiling down to `mouth`, with a flared end and a coloured band (green in, amber out). */
   private duct(x: number, z: number, ceiling: number, mouth: number, band: number): void {
-    const steel = mat(0x9ca3af, 0.45, 0.5)
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, ceiling - mouth, 14), steel)
+    const steel = ductSteel()
+    const pipe = new THREE.Mesh(cylinderMetreUVs(new THREE.CylinderGeometry(0.15, 0.15, ceiling - mouth, 20)), steel)
     pipe.position.set(x, (ceiling + mouth) / 2, z)
     this.root.add(pipe)
-    const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.12, 14), steel)
+    const flare = new THREE.Mesh(cylinderMetreUVs(new THREE.CylinderGeometry(0.15, 0.24, 0.12, 20)), steel)
     flare.position.set(x, mouth - 0.06, z)
     this.root.add(flare)
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 14), mat(band, 0.5))

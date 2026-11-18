@@ -1,11 +1,12 @@
 import * as THREE from 'three'
+import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
 import { prop } from './props'
-import { carpetFloor, concreteFloor, glassMat, lightPanel, metreUVs, textured, tileFloor, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -357,7 +358,7 @@ export class Facility {
     // Floors: warm tiles in the lobby, grey vinyl behind the counter and in storage.
     this.deco(width, 0.02, maxZ - COUNTER.z, tileFloor(0xcdbfa8), 0, 0.005, (maxZ + COUNTER.z) / 2)
     this.deco(width, 0.02, COUNTER.z - minZ, concreteFloor(0x8f949a), 0, 0.005, (COUNTER.z + minZ) / 2)
-    const ceiling = this.deco(width, 0.1, depth, mat(0xf4f2ee, 1), 0, height + 0.05, cz)
+    const ceiling = this.deco(width, 0.1, depth, ceilingMat(0xf4f2ee), 0, height + 0.05, cz)
     ceiling.receiveShadow = false
 
     // Side walls (each has a panel that can be knocked out for an annex) and the back wall.
@@ -413,7 +414,7 @@ export class Facility {
     const steel = mat(0x4b5563, 0.4, 0.6)
     this.solid(0.5, 0.08, 2.4, wood, ROOM.minX + 0.4, 0.46, 3.8)
     for (const z of [2.8, 4.8]) this.deco(0.06, 0.42, 0.06, steel, ROOM.minX + 0.4, 0.21, z)
-    // Plants in the corners, a bin by the counter's west end, and fire extinguishers either side of the storage doorway.
+    // Plants in the corners and fire extinguishers either side of the storage doorway.
     for (const [x, z] of [
       [ROOM.maxX - 0.5, 5.4],
       [ROOM.minX + 0.5, 5.4],
@@ -421,13 +422,15 @@ export class Facility {
       this.root.add(prop('potted_plant_02', { x, z, height: 1.4 }))
       this.physics.addStaticBox(new THREE.Vector3(x, 0.5, z), new THREE.Vector3(0.25, 0.5, 0.25))
     }
-    this.root.add(prop('metal_trash_can', { x: ROOM.minX + 0.4, z: 2.1, height: 0.75 }))
-    this.physics.addStaticBox(new THREE.Vector3(ROOM.minX + 0.4, 0.37, 2.1), new THREE.Vector3(0.22, 0.37, 0.22))
     for (const [x, z] of [
       [1.35, PARTITION.z + 0.26],
       [-1.35, PARTITION.z - 0.26],
     ] as const)
       this.root.add(prop('korean_fire_extinguisher_01', { x, z, height: 0.6 }))
+    // An electrical box on the storage side of the partition, its conduit up into the ceiling.
+    // (The model's door hangs open beside the box, so the box itself is ~0.12 m to one side of the model's centre.)
+    this.root.add(prop('power_box_01', { x: 5.0, y: 1.0, z: PARTITION.z - 0.34, rotY: Math.PI, height: 0.6 }))
+    this.root.add(conduit([new THREE.Vector3(4.88, 1.56, PARTITION.z - 0.34), new THREE.Vector3(4.88, ROOM.height - 0.05, PARTITION.z - 0.34)]))
     // Rug and queue posts.
     this.deco(2.4, 0.01, 2.6, carpetFloor(0x7c2d12), 0, 0.02, 3.3)
     const price = this.sign('Storage $15 · pay on collection', 2.4, 0.4, '#1e293b', '#e2e8f0')
@@ -514,7 +517,7 @@ export class Facility {
       for (const dz of [-1.25, 1.25]) this.deco(0.04, 1.4, 0.04, shelf, x, 0.7, -6 + dz)
       this.root.add(prop('cardboard_box_01', { x, y: 0.62, z: -6.6, rotY: 0.2, height: 0.3 }))
       this.root.add(prop('cardboard_box_01', { x, y: 0.62, z: -5.9, rotY: -0.15, height: 0.24 }))
-      this.root.add(prop('plastic_crate_02', { x, y: 1.32, z: -5.4, rotY: Math.PI / 2, height: 0.26 }))
+      this.root.add(prop('cardboard_box_01', { x, y: 1.32, z: -5.4, rotY: Math.PI / 2 + 0.1, height: 0.27 }))
     }
   }
 

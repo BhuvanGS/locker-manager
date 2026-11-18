@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, type CargoType, type Section } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
@@ -172,6 +173,8 @@ export class Warehouse {
     this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
     this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(17.6, 0.45, -9.95), new THREE.Vector3(0.6, 0.45, 0.35)))
     this.root.add(prop('korean_fire_extinguisher_01', { x: 6.55, z: -16.9, rotY: Math.PI / 2, height: 0.6, glow: 0.3 }))
+    this.root.add(prop('power_box_01', { x: 9.4, y: 1.0, z: maxZ - 0.2, rotY: Math.PI, height: 0.7, glow: 0.3 }))
+    this.root.add(conduit([new THREE.Vector3(9.28, 1.66, maxZ - 0.2), new THREE.Vector3(9.28, H - 0.05, maxZ - 0.2)]))
 
     // Signs, the notice board and the receiving desk.
     const outside = makeSign('WAREHOUSE', 3.4, 0.56, '#0f172a', '#fbbf24')

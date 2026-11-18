@@ -15,6 +15,8 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `floor-carpet` | Carpet012 | the office carpet and the lobby rug |
 | `chair-leather` | Leather026 (surface detail only) | the VIP's chair |
 | `wood` | Wood049 | the lobby bench and the office desk |
+| `ceiling-tiles` | OfficeCeiling001 | suspended ceilings in the shop, annexes, office and halls |
+| `duct-steel` | CorrugatedSteel009 | the bag ducts (tubes) between floors and into the annexes |
 
 `locker-door`, `arm-paint` and `till-plastic` are also used on the warehouse robots.
 
