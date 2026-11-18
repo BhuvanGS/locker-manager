@@ -29,7 +29,7 @@ export function cable(points: THREE.Vector3[], radius = 0.016, material: THREE.M
  * A bundle of `count` cables lying side by side on the floor along `route` (x, z points), then climbing the wall into a power box
  * whose bottom is at (`riser.x`, `riser.top`, `riser.z`). `y` is the floor height. Each cable wanders a little, like real cable runs.
  */
-export function floorBundle(route: readonly (readonly [number, number])[], riser: { x: number; z: number; top: number }, count = 5, y = 0): THREE.Group {
+export function floorBundle(route: readonly (readonly [number, number])[], riser: { x: number; z: number; top: number }, count = 5, y = 0, messy = 0): THREE.Group {
   const group = new THREE.Group()
   const r = 0.013
   for (let i = 0; i < count; i++) {
@@ -53,7 +53,8 @@ export function floorBundle(route: readonly (readonly [number, number])[], riser
         const steps = Math.floor(seg / 0.9)
         for (let s = 1; s < steps; s++) {
           const t = s / steps
-          const wob = Math.sin(i * 2.3 + k * 1.7 + s * 1.3) * 0.012
+          // Tidy runs wander a few millimetres; messy ones drift across each other.
+          const wob = Math.sin(i * 2.3 + k * 1.7 + s * 1.3) * (0.012 + messy * 0.07) + Math.sin(i * 0.9 + s * 0.6) * messy * 0.04
           const sx = (bx - x) / seg
           const sz = (bz - z) / seg
           pts.push(new THREE.Vector3(x + (bx - x) * t - sz * (off + wob), lift, z + (bz - z) * t + sx * (off + wob)))
@@ -68,6 +69,45 @@ export function floorBundle(route: readonly (readonly [number, number])[], riser
     group.add(cable(pts, r, sheath(BUNDLE[i % BUNDLE.length]!)))
   }
   return group
+}
+
+/** A coil of spare cable lying on the floor at (x, z): a few loose turns, one end trailing off towards `toward`. */
+export function cableCoil(x: number, z: number, toward: readonly [number, number], y = 0, color = 0x16191e): THREE.Mesh {
+  const pts: THREE.Vector3[] = []
+  const turns = 3
+  for (let k = 0; k <= turns * 16; k++) {
+    const a = (k / 16) * Math.PI * 2
+    const r = 0.22 + Math.sin(k * 0.7) * 0.02 + k * 0.0015
+    pts.push(new THREE.Vector3(x + Math.cos(a) * r, y + 0.05 + (k % 16 < 8 ? 0.012 : 0), z + Math.sin(a) * r * 0.8))
+  }
+  pts.push(new THREE.Vector3((x + toward[0]) / 2, y + 0.05, (z + toward[1]) / 2), new THREE.Vector3(toward[0], y + 0.05, toward[1]))
+  return cable(pts, 0.013, sheath(color))
+}
+
+/**
+ * A tidy cable tray along a rail beam from x0 to x1: a steel channel at height `y` (sitting on the beam when `beamY` is `y`, else hung
+ * from brackets up to `beamY`), with three cables lying in it.
+ */
+export function cableTray(x0: number, x1: number, y: number, z: number, beamY: number): THREE.Group {
+  const g = new THREE.Group()
+  const len = Math.abs(x1 - x0)
+  const cx = (x0 + x1) / 2
+  const add = (w: number, h: number, d: number, px: number, py: number, pz: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), PIPE)
+    m.position.set(px, py, pz)
+    m.castShadow = true
+    g.add(m)
+  }
+  add(len, 0.008, 0.11, cx, y, z)
+  for (const s of [-1, 1]) add(len, 0.045, 0.006, cx, y + 0.022, z + s * 0.055)
+  if (beamY - y > 0.02) for (let x = Math.min(x0, x1) + 0.3; x < Math.max(x0, x1); x += 1.5) add(0.025, beamY - y, 0.025, x, (beamY + y) / 2, z)
+  const dir = Math.sign(x1 - x0) || 1
+  for (const [i, dz] of [-0.03, 0, 0.03].entries()) {
+    const pts: THREE.Vector3[] = []
+    for (let t = 0; t <= 1.0001; t += 0.25) pts.push(new THREE.Vector3(x1 - dir * 0.05 - (x1 - x0 - dir * 0.1) * t, y + 0.018 + (i % 2) * 0.006, z + dz))
+    g.add(cable(pts, 0.011, sheath(BUNDLE[i * 2]!)))
+  }
+  return g
 }
 
 /** A cable looping along a rail from (x0, y, z) to (x1, y, z): clipped every `loop` metres, sagging `sag` between clips. */

@@ -1,10 +1,11 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { conduit } from './cables'
+import { doorFrame, levelSign } from './details'
+import { cableCoil, conduit, floorBundle } from './cables'
 import { prop } from './props'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
-import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE } from './layout'
+import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE, POWER_FEEDS } from './layout'
 import { makeSign, mat } from './models'
 import { ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, wallMat } from './textures'
 
@@ -13,7 +14,8 @@ export type HallKind = 'south' | 'floor1' | 'floor2'
 /** Which level each hall is on: the south expansion is on the ground, floors 1 and 2 are stacked above it. */
 export const HALL_LEVEL: Record<HallKind, number> = { south: 0, floor1: 1, floor2: 2 }
 
-const TITLES: Record<HallKind, string> = { south: 'SOUTH EXPANSION', floor1: 'FLOOR 1', floor2: 'FLOOR 2' }
+/** The line under the floor number on the floor signs. */
+const SUBTITLES: Record<HallKind, string> = { south: 'SOUTH EXPANSION · STORAGE HALL', floor1: 'UPPER STORAGE HALL', floor2: 'TOP STORAGE HALL' }
 const T = 0.2 // wall thickness
 const H = ROOM.height
 const RISE_SECONDS = 1.6
@@ -59,6 +61,19 @@ export class Hall {
     const z1 = maxZ + T // old back wall's south face plane, outer face
     const widthX = maxX - minX + 2 * T
 
+    // The wire mess: bundles from the aisles between the locker rows and from the bay's belt drives, all down the corridor beside
+    // the stairs and along the aisle in front of the bay into the electrical box, with a coil of spare cable on the floor.
+    const box = POWER_FEEDS.hall.riser
+    const runs: [number, readonly (readonly [number, number])[]][] = [
+      [5, [[-5.6, -14.1], [3.55, -14.25], [3.6, -19.4], [-4.55, -19.42], [-4.82, -20.5]]],
+      [4, [[-5.5, -17.15], [3.75, -17.2], [3.8, -19.5], [-4.4, -19.52], [-4.75, -20.5]]],
+      [3, [[2.9, -11.4], [3.15, -11.6], [3.2, -19.2], [-4.65, -19.22], [-5.0, -20.5]]],
+      [3, [[-3.3, -19.75], [-4.2, -19.68], [-4.7, -20.5]]],
+    ]
+    for (const [i, [count, route]] of runs.entries()) this.root.add(floorBundle(route, { ...box, x: box.x + (i - 1.5) * 0.05 }, count, 0, 1))
+    this.root.add(cableCoil(-4.1, -20.45, [-4.75, -20.6]))
+    this.root.add(cableCoil(3.95, -18.6, [3.6, -19.3], 0, 0x1e40af))
+
     // An electrical box on the far wall, west of the windows, with its conduit to the ceiling.
     this.root.add(prop('power_box_01', { x: minX + 0.9, y: 1.0, z: minZ + 0.2, height: 0.6 }))
     this.root.add(conduit([new THREE.Vector3(minX + 1.02, 1.56, minZ + 0.2), new THREE.Vector3(minX + 1.02, H - 0.05, minZ + 0.2)]))
@@ -102,9 +117,14 @@ export class Hall {
     }
 
     // Signs: the hall's name on its far wall, and (south hall only) above the new doorway in the storage room.
-    const title = makeSign(TITLES[kind], 2.6, 0.36, '#0f172a', '#fbbf24')
-    title.position.set(0, H - 0.5, minZ + 0.03)
+    // Floor signs: on the far wall, and on the north wall facing into the hall (above the key racks on the ground floor).
+    const title = levelSign(this.level, SUBTITLES[kind], 2.2, 0.5)
+    title.position.set(0, H - 0.36, minZ + 0.03)
     this.root.add(title)
+    const north = levelSign(this.level, SUBTITLES[kind], 2.0, 0.48)
+    north.position.set(1.6, H - 0.45, maxZ - 0.03)
+    north.rotation.y = Math.PI
+    this.root.add(north)
     if (this.level === 0) {
       const doorSign = makeSign('SOUTH EXPANSION', 1.6, 0.26, '#0f172a', '#fbbf24')
       doorSign.position.set(SOUTH.door.x, SOUTH.door.height + 0.4, ROOM.minZ + 0.03)
@@ -133,12 +153,7 @@ export class Hall {
     this.bodies = this.bodies.filter((b) => b !== plug.body)
     this.doorPlug = null
     const { z, halfWidth, height } = WAREHOUSE.door
-    const trim = mat(0x6b7280, 0.5, 0.4)
-    for (const dz of [-1, 1]) {
-      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, height, 0.1), trim)
-      jamb.position.set(SOUTH.maxX + 0.05, height / 2, z + dz * (halfWidth + 0.04))
-      this.root.add(jamb)
-    }
+    this.root.add(doorFrame('z', SOUTH.maxX + T / 2, z, halfWidth, height, T))
     const sign = makeSign('WAREHOUSE', 1.5, 0.24, '#0f172a', '#fbbf24')
     sign.position.set(SOUTH.maxX - 0.04, height + 0.4, z)
     sign.rotation.y = -Math.PI / 2 // faces into the hall (−x)

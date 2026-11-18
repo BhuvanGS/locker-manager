@@ -7,7 +7,7 @@ import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
-import { carpetFloor, ceilingMat, glassMat, leatherMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, glassMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
 
 const T = 0.2
 const RISE_SECONDS = 1.2
@@ -75,10 +75,8 @@ export class Office {
     plate.position.set(x - width / 2 - 0.02, height - 0.12, z)
     plate.rotation.y = -Math.PI / 2
     this.root.add(plate)
-    const leather = leatherMat(0x1f2937)
-    this.deco(0.5, 0.06, 0.5, leather, x + 0.95, 0.5, z)
-    this.deco(0.5, 0.55, 0.08, leather, x + 1.17, 0.8, z)
-    this.deco(0.08, 0.5, 0.08, mat(0x374151, 0.5), x + 0.95, 0.25, z)
+    // The VIP's chair behind the desk, facing it (−x); the models face +z, so a quarter turn back.
+    this.root.add(prop('modern_arm_chair_01', { x: x + 1.05, z, rotY: -Math.PI / 2, height: 0.85 }))
     // A pen and a phone, for atmosphere.
     this.deco(0.2, 0.04, 0.14, mat(0x111827, 0.4), x - 0.1, height + 0.03, z + 0.5)
 

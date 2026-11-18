@@ -183,7 +183,9 @@ export const CONSOLES = {
 export const POWER_FEEDS: Record<'main' | 'east' | 'hall' | 'warehouse', { route: readonly (readonly [number, number])[]; riser: { x: number; z: number; top: number } }> = {
   main: { route: [[-3.05, -6.1], [-3.05, -2.62], [4.6, -2.62]], riser: { x: 4.88, z: -2.74, top: 1.0 } },
   east: { route: [[11.78, -5.8], [15.7, -5.8]], riser: { x: 15.8, z: -5.68, top: 1.0 } },
-  hall: { route: [[-5.72, -10.25], [-5.82, -20.68], [-5.1, -20.68]], riser: { x: -4.98, z: -20.8, top: 1.0 } },
+  // The halls' locker rows are solid from the west wall to x = 2.7, so cables go round them: the north aisle, the corridor beside the
+  // stairs, then the aisle in front of the bay to the box on the far wall.
+  hall: { route: [[-5.15, -10.3], [-4.9, -10.75], [3.3, -10.75], [3.4, -19.3], [-4.7, -19.3], [-4.9, -20.5]], riser: { x: -4.98, z: -20.8, top: 1.0 } },
   warehouse: { route: [[6.72, -11.2], [6.72, -9.72], [9.05, -9.72]], riser: { x: 9.28, z: -9.6, top: 1.0 } },
 }
 

@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { pedestalFace } from './details'
 import { conduit, floorBundle } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
@@ -226,6 +227,9 @@ export class ConveyorBay {
     const body = consoleSteel()
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.95, 0.36), body)
     pedestal.position.set(x, 0.475, z)
+    const panel = pedestalFace(0.5, 0.95, 0.18)
+    panel.position.set(x, 0, z)
+    this.root.add(panel)
     this.root.add(conduit([new THREE.Vector3(x, 0.25, z - 0.21), new THREE.Vector3(x, 3.15, z - 0.21)]))
     pedestal.castShadow = true
     markBlocker(pedestal)

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { doorFrame } from './details'
 import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
@@ -118,19 +119,8 @@ export class Facility {
   }
 
   private makeDoorFrame(side: 'west' | 'east'): THREE.Group {
-    const frame = new THREE.Group()
-    const trim = mat(0x6b7280, 0.5, 0.4)
-    const x = side === 'west' ? ROOM.minX - 0.1 : ROOM.maxX + 0.1
     const { z, halfWidth, height } = ANNEX_DOOR
-    for (const dz of [-1, 1]) {
-      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, height, 0.1), trim)
-      jamb.position.set(x, height / 2, z + dz * (halfWidth + 0.04))
-      frame.add(jamb)
-    }
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, halfWidth * 2), mat(0x4b5563, 0.7))
-    sill.position.set(x, 0.011, z)
-    frame.add(sill)
-    return frame
+    return doorFrame('z', side === 'west' ? ROOM.minX - 0.1 : ROOM.maxX + 0.1, z, halfWidth, height)
   }
 
   /** The storage room's back wall, with a removable panel where the south expansion's doorway is cut. */
@@ -159,18 +149,8 @@ export class Facility {
     if (open) {
       this.root.remove(plug)
       this.physics.removeBody(plug.userData.body as RAPIER.RigidBody)
-      const frame = new THREE.Group()
-      const trim = mat(0x6b7280, 0.5, 0.4)
       const { x, halfWidth, height } = SOUTH.door
-      const z = ROOM.minZ - 0.1
-      for (const dx of [-1, 1]) {
-        const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.34), trim)
-        jamb.position.set(x + dx * (halfWidth + 0.04), height / 2, z)
-        frame.add(jamb)
-      }
-      const sill = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.02, 0.34), mat(0x4b5563, 0.7))
-      sill.position.set(x, 0.011, z)
-      frame.add(sill)
+      const frame = doorFrame('x', x, ROOM.minZ - 0.1, halfWidth, height)
       this.southFrame = frame
       this.root.add(frame)
     } else {
@@ -264,13 +244,7 @@ export class Facility {
       // The block spans x 6.2…16.2; the office takes the west part, leaving x 12.6…16.2.
       block.scale.x = 3.6 / 10
       block.position.x = 14.4
-      const frame = new THREE.Group()
-      const trim = mat(0x6b7280, 0.5, 0.4)
-      for (const dz of [-1, 1]) {
-        const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.34, OFFICE_DOOR.height, 0.1), trim)
-        jamb.position.set(ROOM.maxX + 0.1, OFFICE_DOOR.height / 2, OFFICE_DOOR.z + dz * (OFFICE_DOOR.halfWidth + 0.04))
-        frame.add(jamb)
-      }
+      const frame = doorFrame('z', ROOM.maxX + 0.1, OFFICE_DOOR.z, OFFICE_DOOR.halfWidth, OFFICE_DOOR.height)
       this.officeFrame = frame
       this.root.add(frame)
     } else {
@@ -501,6 +475,8 @@ export class Facility {
     this.hatchPlug = this.solid(hx1 - hx0, hh, t, wall, (hx0 + hx1) / 2, hh / 2, z)
     this.solid(doorHalfWidth * 2, ROOM.height - 2.3, t, wall, 0, 2.3 + (ROOM.height - 2.3) / 2, z)
 
+    // The storage room's doorway gets a frame too (it is always open).
+    this.root.add(doorFrame('x', 0, z, doorHalfWidth, 2.3, t))
     const storage = this.sign('STORAGE', 1.2, 0.26, '#0f172a', '#e2e8f0')
     storage.position.set(0, 2.5, z + 0.11)
     this.root.add(storage)

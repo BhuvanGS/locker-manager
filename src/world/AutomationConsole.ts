@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { pedestalFace } from './details'
 import { conduit, floorBundle } from './cables'
 import { POWER_FEEDS, WAREHOUSE } from './layout'
 import type RAPIER from '@dimforge/rapier3d-compat'
@@ -7,7 +8,7 @@ import { AUTO_ZONES, ZONE_TITLES, type AutoZone } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
 import { makeSign } from './models'
-import { consoleSteel } from './textures'
+import { consoleSteel, textured } from './textures'
 
 const W = 512
 const H = 340
@@ -35,12 +36,14 @@ export class AutomationConsole {
     this.root.userData.zone = zone
     this.root.position.set(x, floorY, z)
     this.root.rotation.y = rotY // 0 faces +z; a quarter turn faces along x
-    const steel = consoleSteel()
+    // Brushed steel; in the warehouse it glows faintly like everything else there (its roof shades the sun).
+    const steel = zone === 'warehouse' ? textured('locker-door', { color: 0x9aa3ae, metalness: 0.15, normalScale: 0.6, repeat: 0.5, glow: 0.55 }) : consoleSteel()
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.95, 0.34), steel)
     pedestal.position.y = 0.475
     pedestal.castShadow = true
     markBlocker(pedestal)
     this.root.add(pedestal)
+    this.root.add(pedestalFace(0.46, 0.95, 0.17))
     // Wired up: arm consoles get a cable bundle along the floor to the room's electrical box (laid out in world coordinates, then
     // moved into this root by undoing its position and turn, so it hides and goes with the console); the hub keeps a ceiling conduit.
     const feed = scope === 'hub' ? null : POWER_FEEDS[zone === 'south' || zone === 'floor1' || zone === 'floor2' ? 'hall' : zone]

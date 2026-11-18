@@ -197,7 +197,10 @@ Rules:
   (looped cable along a gantry rail, first rail of each station only), `cable` and `conduit` (pipe to a ceiling junction box). Every room with
   robotics has an electrical box (`power_box_01`) as its supply: arm consoles run a bundle to it (`POWER_FEEDS` in `layout.ts`; the console
   parents it with its own transform undone), and so do the belt drives (`ConveyorBay`) and the warehouse chargers. Cables use the CC0 Rubber004
-  grain (there is no CC0 cable texture); they lie above the thickest floor (the warehouse's). A new model = download, shrink textures, add it to `PropName`.
+  grain (there is no CC0 cable texture); they lie above the thickest floor (the warehouse's).
+  Halls add a deliberately messy spread (`floorBundle(..., messy)`, `cableCoil`); rails and the counter arm use a tidy `cableTray` along the beam's side.
+- **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
+  number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind
   the same functions.
 

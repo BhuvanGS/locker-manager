@@ -1,6 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { cable, festoon } from './cables'
+import { cable, cableTray } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import type { Parcel } from '../sim/ConveyorSystem'
@@ -248,8 +248,11 @@ export class StationView {
       beam.position.set((minX + end) / 2, y, z)
       this.root.add(beam)
       // Its power (first arm's first rail only, so a station has one): a cable looping along the rail, and up into the ceiling.
-      if (arm === 0 && r === rows[0]) this.root.add(festoon(minX + 0.1, end - 0.1, y - 0.1, z + 0.11))
-      if (arm === 0 && r === rows[0]) this.root.add(cable([new THREE.Vector3(minX + 0.1, y - 0.1, z + 0.11), new THREE.Vector3(minX - 0.05, y + 0.1, z + 0.11), new THREE.Vector3(minX - 0.1, ceiling - 0.02, z + 0.11)]))
+      if (arm === 0 && r === rows[0]) {
+        // A cable tray along the side of the beam, above the carriage, its cables rising into the ceiling at the end.
+        this.root.add(cableTray(minX + 0.05, end - 0.05, y - 0.03, z + 0.15, y - 0.03))
+        this.root.add(cable([new THREE.Vector3(minX + 0.1, y - 0.01, z + 0.15), new THREE.Vector3(minX - 0.02, y + 0.2, z + 0.15), new THREE.Vector3(minX - 0.05, ceiling - 0.02, z + 0.15)], 0.02))
+      }
       for (let x = minX + 1.4; x < end - 0.4; x += Math.max(3, span / Math.ceil(span / 3))) hang(x, z)
     }
     if (runX !== null) {

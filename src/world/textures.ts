@@ -126,8 +126,6 @@ export function cylinderMetreUVs(geometry: THREE.CylinderGeometry): THREE.Cylind
   return geometry
 }
 
-/** Leather keeps its flat colour (the texture is almost black, so only its grain is used). */
-export const leatherMat = (color: number): THREE.MeshStandardMaterial => textured('chair-leather', { color, colorMap: false, repeat: 2, roughness: 0.55 })
 
 /** The automation yellow: flat paint with scratches in the light. */
 export const armYellow = (): THREE.MeshStandardMaterial => textured('arm-paint', { color: 0xe5a50a, metalness: 0.2, normalScale: 0.8, repeat: 0.5, colorMap: false })
