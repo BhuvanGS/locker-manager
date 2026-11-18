@@ -186,7 +186,8 @@ Rules:
   `tag()` / `markBlocker()`). `describe()` gives the prompt and `perform()` calls the sim. Invisible proxy meshes
   (`MeshBasicMaterial({ visible: false })`) make small things like keys and hooks easy to aim at.
 - **Textures** (`world/textures.ts`, files in `public/textures/<name>/` with `CREDITS.md`): `textured(name, surface)` caches image materials
-  like `mat()`; `wallMat(colour)` (plaster), `glassMat(opacity)` (smudged, reflects the room via `setGlassEnvironment`), `lightPanel()`.
+  like `mat()`; `wallMat(colour)` (plaster), `glassMat(opacity)` (smudged, reflects the room via `setGlassEnvironment`), `lightPanel()`, and `tileFloor` / `concreteFloor` / `carpetFloor` / `woodMat` / `leatherMat`, which divide out the texture's measured average colour
+  (`average`) so a surface keeps its old flat colour. Scripts that call `__game.advance` block image loading: wait a moment before a screenshot.
   Box faces stretch a texture, so boxes with tiled textures use `metreUVs(geometry)` (the buildings' `solid()`/`deco()` already do).
   Never put a texture on a material from `mat()`'s cache: it is shared by everything of that colour.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

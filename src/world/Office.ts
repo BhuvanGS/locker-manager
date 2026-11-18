@@ -6,7 +6,7 @@ import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
-import { glassMat, lightPanel, metreUVs, wallMat } from './textures'
+import { carpetFloor, glassMat, leatherMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
 
 const T = 0.2
 const RISE_SECONDS = 1.2
@@ -37,7 +37,7 @@ export class Office {
     const outside = wallMat(0xa9b6bf)
 
     // Floor (carpet), ceiling and roof.
-    this.deco(w, 0.03, d, mat(0x3b4a5c, 0.95), cx, 0.016, cz)
+    this.deco(w, 0.03, d, carpetFloor(0x3b4a5c), cx, 0.016, cz)
     this.deco(w + 0.4, 0.1, d + 0.4, mat(0xf4f2ee, 1), cx, h + 0.05, cz)
     this.deco(w + 0.6, 0.18, d + 0.6, mat(0x59544e, 0.9), cx, h + 0.19, cz)
 
@@ -67,15 +67,16 @@ export class Office {
 
     // The desk, a nameplate and the leather chair behind it.
     const { x, z, width, length, height } = OFFICE.desk
-    const wood = mat(0x5b3a24, 0.55)
-    this.solid(width, height - 0.05, length, mat(0x4a3b2c, 0.8), x, (height - 0.05) / 2, z)
+    const wood = woodMat(0x5b3a24)
+    this.solid(width, height - 0.05, length, woodMat(0x4a3b2c), x, (height - 0.05) / 2, z)
     this.deco(width + 0.1, 0.06, length + 0.1, wood, x, height - 0.02, z)
     const plate = makeSign('DEAL DESK', 0.7, 0.14, '#0f172a', '#fbbf24')
     plate.position.set(x - width / 2 - 0.02, height - 0.12, z)
     plate.rotation.y = -Math.PI / 2
     this.root.add(plate)
-    this.deco(0.5, 0.06, 0.5, mat(0x1f2937, 0.7), x + 0.95, 0.5, z)
-    this.deco(0.5, 0.55, 0.08, mat(0x1f2937, 0.7), x + 1.17, 0.8, z)
+    const leather = leatherMat(0x1f2937)
+    this.deco(0.5, 0.06, 0.5, leather, x + 0.95, 0.5, z)
+    this.deco(0.5, 0.55, 0.08, leather, x + 1.17, 0.8, z)
     this.deco(0.08, 0.5, 0.08, mat(0x374151, 0.5), x + 0.95, 0.25, z)
     // A pen and a phone, for atmosphere.
     this.deco(0.2, 0.04, 0.14, mat(0x111827, 0.4), x - 0.1, height + 0.03, z + 0.5)

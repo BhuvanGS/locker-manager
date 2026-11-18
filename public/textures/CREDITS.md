@@ -10,5 +10,12 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `till-plastic` | Plastic012B (scuffed black plastic) | the till and the arms' dark parts |
 | `wall-plaster` | Plaster004 | every plaster wall (softened, tinted per room) |
 | `glass-smear` | Smear005 (colour map, used as roughness) | window and door glass |
+| `floor-tiles` | Tiles139 | the lobby floor |
+| `floor-concrete` | Concrete047A | staff area, storage, annexes, halls, warehouse and truck yard |
+| `floor-carpet` | Carpet012 | the office carpet and the lobby rug |
+| `chair-leather` | Leather026 (surface detail only) | the VIP's chair |
+| `wood` | Wood049 | the lobby bench and the office desk |
+
+`locker-door`, `arm-paint` and `till-plastic` are also used on the warehouse robots.
 
 The ceiling light panels are drawn in code (`lightPanel` in `src/world/textures.ts`).

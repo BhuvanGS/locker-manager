@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { RobotJob } from '../sim/WarehouseManager'
 import { mat } from './models'
+import { armDark, textured } from './textures'
 import { Leg } from './paths'
 
 type Pt = { x: number; z: number }
@@ -156,9 +157,9 @@ export class WarehouseRobot {
     this.lanes = lanes
     this.home = home
     this.pos = new THREE.Vector3(home.x, 0, home.z)
-    const yellow = mat(0xf59e0b, 0.5, 0.3)
-    const dark = mat(0x1f2937, 0.6, 0.4)
-    const steel = mat(0x9ca3af, 0.4, 0.7)
+    const yellow = textured('arm-paint', { color: 0xf59e0b, metalness: 0.3, normalScale: 0.8, repeat: 0.5, colorMap: false })
+    const dark = armDark()
+    const steel = textured('locker-door', { color: 0xc4ccd6, metalness: 0.5, normalScale: 0.6, repeat: 0.5 })
     const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, into: THREE.Object3D = this.base) => {
       const mesh = new THREE.Mesh(geo, m)
       mesh.position.set(x, y, z)

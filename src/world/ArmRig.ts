@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { armYellow, textured } from './textures'
+import { armDark, armYellow } from './textures'
 
 /** From the wrist to the base of a bag in the gripper. */
 export const HANG = 0.4
@@ -28,7 +28,7 @@ export interface RigSpec {
 }
 
 const YELLOW = armYellow()
-const DARK = textured('till-plastic', { color: 0x8a94a3, metalness: 0.3, repeat: 0.5 })
+const DARK = armDark()
 
 /**
  * One robot arm hanging from an overhead rail: a carriage, a column down from it, a horizontal bar at the wrist and a

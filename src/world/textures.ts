@@ -22,11 +22,17 @@ export type Surface = {
   gain?: number
   /** 0…1: fades the colour map towards its average grey `soften.grey` (lower contrast, same brightness). */
   soften?: { amount: number; grey: string }
+  /** The colour map's average linear colour: `color` is divided by it per channel, so the surface averages out at `color`. */
+  average?: readonly [number, number, number]
+  /** Faint self-glow in the surface's own colours (the warehouse: its roof shades the sun, so it glows instead of using lights). */
+  glow?: number
+  /** A fixed roughness instead of the set's roughness map. */
+  roughness?: number
 }
 
 export function textured(name: string, s: Surface = {}): THREE.MeshStandardMaterial {
-  const { color = 0xffffff, metalness = 0, normalScale = 1, repeat = 1, colorMap = true, gain = 1, soften } = s
-  const key = `${name}-${color}-${metalness}-${normalScale}-${repeat}-${colorMap}-${gain}-${soften?.amount}`
+  const { color = 0xffffff, metalness = 0, normalScale = 1, repeat = 1, colorMap = true, gain = 1, soften, average, glow = 0, roughness } = s
+  const key = `${name}-${color}-${metalness}-${normalScale}-${repeat}-${colorMap}-${gain}-${soften?.amount}-${!!average}-${glow}-${roughness}`
   let m = materials.get(key)
   if (m) return m
   const load = (file: string): THREE.Texture => {
@@ -43,13 +49,19 @@ export function textured(name: string, s: Surface = {}): THREE.MeshStandardMater
     map.wrapT = THREE.RepeatWrapping
     map.repeat.setScalar(repeat)
   }
+  const tint = new THREE.Color(color).multiplyScalar(gain)
+  if (average && map) tint.setRGB(tint.r / average[0], tint.g / average[1], tint.b / average[2])
   m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color).multiplyScalar(gain),
+    color: tint,
     map,
+    // The glow follows the texture: tint × map averages out at `color`, so it is as bright as a flat `lit()` glow.
+    emissive: glow ? tint : 0x000000,
+    emissiveMap: glow ? map : null,
+    emissiveIntensity: glow,
     normalMap: load('normal'),
     normalScale: new THREE.Vector2(normalScale, normalScale),
-    roughnessMap: load('roughness'),
-    roughness: 1,
+    roughnessMap: roughness === undefined ? load('roughness') : null,
+    roughness: roughness ?? 1,
     metalness,
   })
   materials.set(key, m)
@@ -82,6 +94,23 @@ function softened(name: string, amount: number, grey: string): THREE.CanvasTextu
   softenedMaps.set(key, texture)
   return texture
 }
+
+/** Floors and furniture, keeping each one's old flat colour on average (see `average`). Floor boxes need `metreUVs`. */
+const AVG = {
+  tiles: [0.456, 0.347, 0.25],
+  concrete: [0.279, 0.246, 0.171],
+  carpet: [0.034, 0.044, 0.065],
+  wood: [0.198, 0.125, 0.074],
+} as const
+/** Lobby floor tiles (about 40 cm each). */
+export const tileFloor = (color: number): THREE.MeshStandardMaterial => textured('floor-tiles', { color, average: AVG.tiles, repeat: 1 / 2.4, normalScale: 0.8 })
+/** Grey concrete for the staff side, storage, halls and the warehouse (tiled every 2.5 m). */
+export const concreteFloor = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('floor-concrete', { color, average: AVG.concrete, repeat: 0.4, normalScale: 0.6, glow, soften: { amount: 0.4, grey: 'rgb(145,136,115)' } })
+export const carpetFloor = (color: number): THREE.MeshStandardMaterial => textured('floor-carpet', { color, average: AVG.carpet, repeat: 1 })
+export const woodMat = (color: number): THREE.MeshStandardMaterial => textured('wood', { color, average: AVG.wood, repeat: 1, normalScale: 0.6 })
+/** Leather keeps its flat colour (the texture is almost black, so only its grain is used). */
+export const leatherMat = (color: number): THREE.MeshStandardMaterial => textured('chair-leather', { color, colorMap: false, repeat: 2, roughness: 0.55 })
 
 /** The automation yellow: flat paint with scratches in the light. */
 export const armYellow = (): THREE.MeshStandardMaterial => textured('arm-paint', { color: 0xe5a50a, metalness: 0.2, normalScale: 0.8, repeat: 0.5, colorMap: false })
@@ -203,6 +232,9 @@ export function setGlassEnvironment(renderer: THREE.WebGLRenderer): void {
     m.needsUpdate = true
   }
 }
+
+/** The robots' dark parts: scuffed black plastic. */
+export const armDark = (): THREE.MeshStandardMaterial => textured('till-plastic', { color: 0x8a94a3, metalness: 0.3, repeat: 0.5 })
 
 /** Calls `draw` with the colour image of a texture set once it has loaded (straight away if it already has). */
 const images = new Map<string, { img: HTMLImageElement; waiting: ((img: HTMLImageElement) => void)[] }>()

@@ -4,7 +4,7 @@ import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
-import { glassMat, lightPanel, metreUVs, textured, wallMat } from './textures'
+import { carpetFloor, concreteFloor, glassMat, lightPanel, metreUVs, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -351,8 +351,8 @@ export class Facility {
     const cz = (minZ + maxZ) / 2
 
     // Floors: warm tiles in the lobby, grey vinyl behind the counter and in storage.
-    this.deco(width, 0.02, maxZ - COUNTER.z, mat(0xcdbfa8, 0.8), 0, 0.005, (maxZ + COUNTER.z) / 2)
-    this.deco(width, 0.02, COUNTER.z - minZ, mat(0x8f949a, 0.85), 0, 0.005, (COUNTER.z + minZ) / 2)
+    this.deco(width, 0.02, maxZ - COUNTER.z, tileFloor(0xcdbfa8), 0, 0.005, (maxZ + COUNTER.z) / 2)
+    this.deco(width, 0.02, COUNTER.z - minZ, concreteFloor(0x8f949a), 0, 0.005, (COUNTER.z + minZ) / 2)
     const ceiling = this.deco(width, 0.1, depth, mat(0xf4f2ee, 1), 0, height + 0.05, cz)
     ceiling.receiveShadow = false
 
@@ -405,7 +405,7 @@ export class Facility {
 
   private buildLobby(): void {
     // Bench along the left wall.
-    const wood = mat(0x8a5a3b, 0.7)
+    const wood = woodMat(0x8a5a3b)
     const steel = mat(0x4b5563, 0.4, 0.6)
     this.solid(0.5, 0.08, 2.4, wood, ROOM.minX + 0.4, 0.46, 3.8)
     for (const z of [2.8, 4.8]) this.deco(0.06, 0.42, 0.06, steel, ROOM.minX + 0.4, 0.21, z)
@@ -421,7 +421,7 @@ export class Facility {
       this.root.add(leaves)
     }
     // Rug and queue posts.
-    this.deco(2.4, 0.01, 2.6, mat(0x7c2d12, 0.95), 0, 0.02, 3.3)
+    this.deco(2.4, 0.01, 2.6, carpetFloor(0x7c2d12), 0, 0.02, 3.3)
     const price = this.sign('Storage $15 · pay on collection', 2.4, 0.4, '#1e293b', '#e2e8f0')
     price.position.set(3.3, 2.2, ROOM.maxZ - 0.11)
     price.rotation.y = Math.PI

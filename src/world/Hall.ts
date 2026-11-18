@@ -4,7 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
-import { glassMat, lightPanel, metreUVs, wallMat } from './textures'
+import { concreteFloor, glassMat, lightPanel, metreUVs, wallMat } from './textures'
 
 export type HallKind = 'south' | 'floor1' | 'floor2'
 
@@ -50,7 +50,9 @@ export class Hall {
 
     const { minX, maxX, minZ, maxZ } = SOUTH
     const wall = wallMat(0xd5d9de)
-    const slab = mat(0xbfbab0, 0.95)
+    // The slab's top face is the floor of the hall above; the rest is ceiling (faces: +x, −x, +y, −y, +z, −z).
+    const ceiling = mat(0xbfbab0, 0.95)
+    const slab = [ceiling, ceiling, concreteFloor(0x8f949a), ceiling, ceiling, ceiling]
     const z0 = minZ - T // far end, outer face
     const z1 = maxZ + T // old back wall's south face plane, outer face
     const widthX = maxX - minX + 2 * T
@@ -75,7 +77,7 @@ export class Hall {
 
     // Ground floor (upper floors stand on the slab of the hall below).
     if (this.level === 0) {
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.02, maxZ - minZ), mat(0x8f949a, 0.85))
+      const floor = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(maxX - minX, 0.02, maxZ - minZ)), concreteFloor(0x8f949a))
       floor.position.set(0, 0.005, (minZ + maxZ) / 2)
       floor.receiveShadow = true
       this.root.add(floor)
@@ -191,7 +193,7 @@ export class Hall {
    * The ceiling slab (the floor of the next level up). Below the top floor it has a stairwell hole, built as four slab
    * pieces around the hole plus a hatch that fills the hole until the floor above is bought.
    */
-  private buildCeilingSlab(material: THREE.Material, z0: number, z1: number): void {
+  private buildCeilingSlab(material: THREE.Material[], z0: number, z1: number): void {
     const y = H + SLAB / 2
     const x0 = SOUTH.minX - T
     const x1 = SOUTH.maxX + T
@@ -212,7 +214,7 @@ export class Hall {
   }
 
   /** Solid box: rendered, collides with the player, blocks reach. `y` is relative to this hall's floor. */
-  private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number) {
+  private solid(w: number, h: number, d: number, material: THREE.Material | THREE.Material[], x: number, y: number, z: number) {
     const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true

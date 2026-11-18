@@ -7,7 +7,7 @@ import type { RobotJob, Truck } from '../sim/WarehouseManager'
 import { markBlocker, tag } from './interactables'
 import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
-import { lightPanel } from './textures'
+import { concreteFloor, lightPanel, metreUVs } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
@@ -72,7 +72,7 @@ export class Warehouse {
 
     // Inside, the roof shades everything from the sun, so the shed's own surfaces glow a little (no extra lights: see AGENTS.md, zones).
     const steel = lit(0xb9c3cd, 0.6, 0.25)
-    this.deco(w, 0.03, d, lit(0x8f949a, 0.85, 0, 0.3), cx, 0.016, cz)
+    this.deco(w, 0.03, d, concreteFloor(0x8f949a, 0.3), cx, 0.016, cz)
     this.deco(w, 0.02, d, lit(0xe5e7eb, 0.9, 0, 0.45), cx, H - 0.02, cz).receiveShadow = false
     const wall = (width: number, depth: number, x: number, z: number, y0 = 0, y1 = H) => {
       if (width < 0.01 || depth < 0.01) return
@@ -553,7 +553,7 @@ export class Warehouse {
     for (let x = 31; x < 66; x += 4) this.decoYard(2, 0.01, 0.15, lineYellow, x, 0.012, 14.2)
     this.decoYard(36, 0.04, 4, mat(0xbdb8b0, 0.95), 48, 0, 8.2)
     // The truck yard: concrete from the docks to the road, with bay lines, dock bumpers and the drive lane.
-    const concrete = mat(0xb8b4ac, 0.95)
+    const concrete = concreteFloor(0xb8b4ac)
     this.decoYard(yard.maxX - yard.minX, 0.03, yard.maxZ - yard.minZ, concrete, (yard.minX + yard.maxX) / 2, 0.012, (yard.minZ + yard.maxZ) / 2)
     const edges = docks.z.flatMap((z) => [z - (docks.halfWidth + 1.0), z + docks.halfWidth + 1.0])
     for (const z of edges) this.decoYard(9, 0.012, 0.12, paint, maxX + T + 4.5, 0.03, z)
@@ -708,7 +708,7 @@ export class Warehouse {
     const wallMat = lit(wallColour, 0.7, 0.2)
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    this.deco(maxX - minX, 0.02, maxZ - minZ, lit(floorColour, 0.8, 0, 0.25), cx, 0.045, cz)
+    this.deco(maxX - minX, 0.02, maxZ - minZ, concreteFloor(floorColour, 0.25), cx, 0.045, cz)
     const doorW = 1.8
     const doorH = 2.4
     const lo = cx - doorW / 2
@@ -732,7 +732,7 @@ export class Warehouse {
 
   private solid(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
     if (w < 0.01 || d < 0.01) return
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     mesh.castShadow = true
@@ -746,7 +746,7 @@ export class Warehouse {
   }
 
   private deco(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)
@@ -754,7 +754,7 @@ export class Warehouse {
   }
 
   private decoYard(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number): void {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), material)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.yard.add(mesh)
