@@ -103,6 +103,11 @@ const AVG = {
   wood: [0.198, 0.125, 0.074],
   ceiling: [0.905, 0.905, 0.905],
   duct: [0.223, 0.223, 0.22],
+  shed: [0.319, 0.328, 0.337],
+  plate: [0.159, 0.125, 0.093],
+  cardboard: [0.485, 0.275, 0.074],
+  road: [0.053, 0.053, 0.05],
+  yard: [0.188, 0.188, 0.188],
 } as const
 /** Lobby floor tiles (about 40 cm each). */
 export const tileFloor = (color: number): THREE.MeshStandardMaterial => textured('floor-tiles', { color, average: AVG.tiles, repeat: 1 / 2.4, normalScale: 0.8 })
@@ -113,6 +118,19 @@ export const carpetFloor = (color: number): THREE.MeshStandardMaterial => textur
 export const woodMat = (color: number): THREE.MeshStandardMaterial => textured('wood', { color, average: AVG.wood, repeat: 1, normalScale: 0.6 })
 /** Suspended ceiling tiles (about 60 cm each), in the ceiling's own colour. Ceiling boxes need `metreUVs`. */
 export const ceilingMat = (color: number): THREE.MeshStandardMaterial => textured('ceiling-tiles', { color, average: AVG.ceiling, repeat: 1 / 3.6, normalScale: 0.5 })
+/** The warehouse: steel cladding (walls), ribbed roof sheet, diamond plate (vault), cardboard (crates), asphalt (road and yard). */
+export const shedSteel = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('shed-steel', { color, average: AVG.shed, repeat: 0.5, metalness: 0.2, glow })
+export const roofSheet = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('duct-steel', { color, average: AVG.duct, repeat: 0.5, metalness: 0.2, glow })
+export const diamondPlate = (color: number, glow = 0): THREE.MeshStandardMaterial =>
+  textured('diamond-plate', { color, average: AVG.plate, repeat: 1, metalness: 0.35, glow })
+export const cardboardMat = (color: number): THREE.MeshStandardMaterial => textured('cardboard', { color, average: AVG.cardboard, repeat: 1.5 })
+export const roadAsphalt = (color: number): THREE.MeshStandardMaterial => textured('road-asphalt', { color, average: AVG.road, repeat: 0.25 })
+export const yardAsphalt = (color: number): THREE.MeshStandardMaterial => textured('yard-asphalt', { color, average: AVG.yard, repeat: 0.25 })
+/** Painted steel (rack uprights and beams): flat colour with scratches. */
+export const paintedSteel = (color: number): THREE.MeshStandardMaterial => textured('arm-paint', { color, colorMap: false, metalness: 0.3, repeat: 0.5 })
+
 /** Ribbed steel for the ducts (use `cylinderMetreUVs` so the ribs keep their spacing). */
 export const ductSteel = (): THREE.MeshStandardMaterial => textured('duct-steel', { color: 0xa3abb5, average: AVG.duct, repeat: 1, metalness: 0.2, normalScale: 0.9 })
 

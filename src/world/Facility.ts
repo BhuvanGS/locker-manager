@@ -7,7 +7,7 @@ import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
 import { prop } from './props'
-import { carpetFloor, ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, textured, tileFloor, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, roadAsphalt, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -300,7 +300,7 @@ export class Facility {
     // or where a floor stops short of a wall (from the pavement back to the warehouse, the shop's west wall to the yard).
     this.deco(30.6, 0.01, 37.75, concreteFloor(0x9a9ea3), 9.0, -0.006, -12.625)
     this.deco(60, 0.04, 4, mat(0xbdb8b0, 0.95), 0, 0.0, 8.2)
-    this.deco(60, 0.03, 8, mat(0x3a3d43, 0.9), 0, -0.005, 14.2)
+    this.deco(60, 0.03, 8, roadAsphalt(0x3a3d43), 0, -0.005, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
 
     // Buildings across the street.

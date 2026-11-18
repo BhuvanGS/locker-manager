@@ -91,7 +91,8 @@ export class Hall {
       this.solid(T, H - doorH, halfWidth * 2, wall, maxX + T / 2, doorH + (H - doorH) / 2, z)
       this.doorPlug = this.solid(T, doorH, halfWidth * 2, wall, maxX + T / 2, doorH / 2, z)
     } else {
-      this.windowedWall('z', maxX + T / 2, z0, z1, [-20.2], wall)
+      // Floor 1's east wall is against the warehouse up to its roof (a window there would look at the roof edge): no window.
+      this.windowedWall('z', maxX + T / 2, z0, z1, this.floorY + SILL < WAREHOUSE.height + 0.2 ? [] : [-20.2], wall)
     }
     this.windowedWall('x', minZ - T / 2, -widthX / 2, widthX / 2, [-3.5, 3.5], wall)
     if (this.level > 0) this.solid(widthX, H, T, wall, 0, H / 2, maxZ + T / 2)

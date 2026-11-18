@@ -9,7 +9,7 @@ import { markBlocker, tag } from './interactables'
 import { FLOOR_HEIGHT, WAREHOUSE } from './layout'
 import { makeSign, mat } from './models'
 import { prop } from './props'
-import { concreteFloor, lightPanel, metreUVs } from './textures'
+import { cardboardMat, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, roofSheet, shedSteel, yardAsphalt } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
@@ -73,9 +73,11 @@ export class Warehouse {
     this.buildYard()
 
     // Inside, the roof shades everything from the sun, so the shed's own surfaces glow a little (no extra lights: see AGENTS.md, zones).
-    const steel = lit(0xb9c3cd, 0.6, 0.25)
+    // Ribbed steel cladding for the shed's walls and roof (the rooms inside use plainer panels).
+    const steel = roofSheet(0xc3ccd6, 0.3)
+    const roofMat = roofSheet(0x7b8794)
     this.deco(w, 0.03, d, concreteFloor(0x8f949a, 0.3), cx, 0.016, cz)
-    this.deco(w, 0.02, d, lit(0xe5e7eb, 0.9, 0, 0.45), cx, H - 0.02, cz).receiveShadow = false
+    this.deco(w, 0.02, d, roofSheet(0xe5e7eb, 0.45), cx, H - 0.02, cz).receiveShadow = false
     const wall = (width: number, depth: number, x: number, z: number, y0 = 0, y1 = H) => {
       if (width < 0.01 || depth < 0.01) return
       this.solid(width, y1 - y0, depth, steel, x, (y0 + y1) / 2, z)
@@ -95,7 +97,8 @@ export class Warehouse {
     for (let i = 0; i < edges.length; i += 2) wall(T, edges[i]! - edges[i + 1]!, maxX + T / 2, (edges[i]! + edges[i + 1]!) / 2)
     for (const z of docks.z) wall(T, docks.halfWidth * 2, maxX + T / 2, z, docks.height, H)
     // The roof casts a shadow, so the sun does not shine in through it (the shadow box follows the player in here too).
-    this.deco(w + 0.8, 0.12, d + 0.8, mat(0x4b5563, 0.8), cx, H + 0.06, cz).castShadow = true
+    // It overhangs the north, south and east walls but stops at the west one: past that is the halls' wall (it cut into floor 1).
+    this.deco(w + 0.4, 0.12, d + 0.8, roofMat, minX + (w + 0.4) / 2, H + 0.06, cz).castShadow = true
     // The blue stripe round the top of the outside walls.
     const stripe = mat(0x1d4ed8, 0.7)
     this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, maxZ + T + 0.01)
@@ -144,7 +147,7 @@ export class Warehouse {
       const levels = section === 'vault' ? rack.levels.slice(0, 2) : rack.levels
       this.slots[section].push(...this.rowSlots(room.minZ + 0.75, roomX0(room), 4, room.pitch, levels, lanes.room))
     }
-    const cardboard = mat(0xb08a5a, 0.85)
+    const cardboard = cardboardMat(0xb08a5a)
     const gold = mat(0xfbbf24, 0.5, 0.5)
     for (const section of SECTIONS) {
       for (const slot of this.slots[section]) {
@@ -273,7 +276,7 @@ export class Warehouse {
         crate.group.visible = c !== undefined
         if (!c) return
         crate.band.visible = c.kind === 'vip'
-        crate.box.material = mat(c.spoiled ? 0x57534e : CARGO_COLOUR[c.cargo], 0.8)
+        crate.box.material = cardboardMat(c.spoiled ? 0x57534e : CARGO_COLOUR[c.cargo])
       })
     }
   }
@@ -312,9 +315,9 @@ export class Warehouse {
       this.deco(along ? len : 0.1, 0.008, along ? 0.1 : len, paint, (x0 + x1) / 2, 0.036, (z0 + z1) / 2)
     }
     for (const [x, z] of WAREHOUSE.robotHomes) {
-      this.deco(1.3, 0.01, 1.5, mat(0x1f2937, 0.7), x, 0.035, z)
+      this.deco(1.3, 0.01, 1.5, diamondPlate(0x374151, 0.25), x, 0.035, z)
       this.deco(1.1, 0.012, 1.3, paint, x, 0.037, z)
-      this.deco(1.0, 0.014, 1.2, mat(0x1f2937, 0.7), x, 0.039, z)
+      this.deco(1.0, 0.014, 1.2, diamondPlate(0x374151, 0.25), x, 0.039, z)
     }
     // The chargers' own electrical box on the east wall, with a bundle from each pad running to it.
     const box = { x: WAREHOUSE.maxX - 0.22, z: -28.6 }
@@ -470,7 +473,7 @@ export class Warehouse {
       for (const x of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.05, 0.3, 2.1), body, x, 0.8, 0.9)
       add(new THREE.BoxGeometry(1.4, 0.3, 0.05), body, 0, 0.8, 1.95)
       for (const x of [-0.7, 0.7]) for (const z of [-1.2, 1.3]) wheel(x, z, 0.3)
-      const cardboard = mat(CARGO_COLOUR[t.declared], 0.85)
+      const cardboard = cardboardMat(CARGO_COLOUR[t.declared])
       for (const [x, z] of [[-0.33, 0.1], [0.33, 0.1], [-0.33, 0.95], [0.33, 0.95], [-0.33, 1.7], [0.33, 1.7]] as const) {
         const crate = add(new THREE.BoxGeometry(0.58, 0.5, 0.7), cardboard, x, 1.0, z)
         crate.visible = false
@@ -558,7 +561,7 @@ export class Warehouse {
 
   private buildYard(): void {
     const { road, yard, maxX, docks } = WAREHOUSE
-    const asphalt = mat(0x3a3d43, 0.9)
+    const asphalt = roadAsphalt(0x3a3d43)
     const lineYellow = mat(0xf2d16b, 0.6)
     const paint = mat(0xf8fafc, 0.6)
     // The service road, and the main street carried on east to meet it.
@@ -568,7 +571,8 @@ export class Warehouse {
     for (let x = 31; x < 66; x += 4) this.decoYard(2, 0.01, 0.15, lineYellow, x, 0.012, 14.2)
     this.decoYard(36, 0.04, 4, mat(0xbdb8b0, 0.95), 48, 0, 8.2)
     // The truck yard: concrete from the docks to the road, with bay lines, dock bumpers and the drive lane.
-    const concrete = concreteFloor(0xb8b4ac)
+    // The truck yard (the parking lot for the docks) is asphalt, a shade lighter than the road.
+    const concrete = yardAsphalt(0x6e7177)
     this.decoYard(yard.maxX - yard.minX, 0.03, yard.maxZ - yard.minZ, concrete, (yard.minX + yard.maxX) / 2, 0.012, (yard.minZ + yard.maxZ) / 2)
     const edges = docks.z.flatMap((z) => [z - (docks.halfWidth + 1.0), z + docks.halfWidth + 1.0])
     for (const z of edges) this.decoYard(9, 0.012, 0.12, paint, maxX + T + 4.5, 0.03, z)
@@ -698,9 +702,9 @@ export class Warehouse {
    * rack to store a crate on it, or to take one for a collection).
    */
   private rackAlongX(z: number, x0: number, bays: number, pitch: number, levels: readonly number[], section: Section): void {
-    const post = mat(0x1d4ed8, 0.5, 0.3)
-    const beam = mat(0xf59e0b, 0.5, 0.3)
-    const board = mat(0x9ca3af, 0.7, 0.2)
+    const post = paintedSteel(0x1d4ed8)
+    const beam = paintedSteel(0xf59e0b)
+    const board = diamondPlate(0xa3abb5)
     const len = bays * pitch
     const xMid = x0 + len / 2
     const top = levels[levels.length - 1]! + 1.0
@@ -720,10 +724,12 @@ export class Warehouse {
   private room(rect: Rect, wallColour: number, text: string, textColour: string, floorColour: number, section: Section): void {
     const { minX, maxX, minZ, maxZ } = rect
     const h = 3.4
-    const wallMat = lit(wallColour, 0.7, 0.2)
+    // Insulated steel panels for the cold room and the staff room, steel plate for the vault (its floor too).
+    const vault = section === 'vault'
+    const wallMat = vault ? diamondPlate(wallColour, 0.3) : shedSteel(wallColour, 0.3)
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    this.deco(maxX - minX, 0.02, maxZ - minZ, concreteFloor(floorColour, 0.25), cx, 0.045, cz)
+    this.deco(maxX - minX, 0.02, maxZ - minZ, vault ? diamondPlate(floorColour, 0.25) : concreteFloor(floorColour, 0.25), cx, 0.045, cz)
     const doorW = 1.8
     const doorH = 2.4
     const lo = cx - doorW / 2
@@ -800,10 +806,6 @@ function laneSegments(): [number, number, number, number][] {
   return segs
 }
 
-/** A material that glows faintly in its own colour, for surfaces under the roof (a fresh one: `mat()` materials are shared). */
-function lit(color: number, roughness: number, metalness = 0, glow = 0.3): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive: color, emissiveIntensity: glow })
-}
 
 const easeOut = (x: number): number => 1 - (1 - Math.min(1, Math.max(0, x))) ** 2
 const easeIn = (x: number): number => Math.min(1, Math.max(0, x)) ** 2
