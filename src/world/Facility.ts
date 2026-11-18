@@ -4,7 +4,7 @@ import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE } from './layout'
 import { mat } from './models'
 import { prop } from './props'
 import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
@@ -323,6 +323,10 @@ export class Facility {
     cut.lineTo(hole.maxX, -hole.maxZ)
     cut.closePath()
     shape.holes.push(cut)
+    // …and the meteor's crater (the Lake draws the grass over it until the meteor strikes).
+    const crater = new THREE.Path()
+    crater.absarc(LAKE.x, -LAKE.z, LAKE.r, 0, Math.PI * 2, true)
+    shape.holes.push(crater)
     const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape), grassMat(0x5f8a46))
     ground.rotation.x = -Math.PI / 2
     ground.position.y = FLOOR_Y - 0.02
@@ -340,7 +344,7 @@ export class Facility {
     // Trees round the complex: along the west side, behind the halls, and across the service road (none on a path or a drive).
     for (const [i, [x, z, h]] of ([
       [-19, -4, 5.5], [-21, -13, 6.5], [-18.5, -22, 5], [-21, -30, 6], [-10, -34, 5.5], [-1, -35, 4.8],
-      [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-24, 12, 6],
+      [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-20.5, 13, 6],
     ] as const).entries())
       this.root.add(tree(x, z, h, i + 1))
 

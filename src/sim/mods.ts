@@ -19,6 +19,8 @@ export type ModRequest =
   | { type: 'returnAll' }
   | { type: 'skip'; seconds: number }
   | { type: 'patience'; on: boolean }
+  /** The meteor: start the countdown, or (counting down) bring it in 15 s from now. */
+  | { type: 'meteor' }
 
 /** What the menu shows about the game. */
 export interface ModInfo {
@@ -93,6 +95,15 @@ export function applyMod(game: GameManager, request: ModRequest): ActionResult {
       const seconds = Math.max(1, Math.min(600, request.seconds))
       for (let t = 0; t < seconds; t += 0.5) game.update(0.5)
       return ok(`Skipped ${seconds} s.`)
+    }
+    case 'meteor': {
+      const m = game.meteor
+      if (m.phase === 'waiting') {
+        m.start(game.now)
+        return ok('Something big is coming… (the countdown has started)')
+      }
+      if (m.hurry(game.now, 15)) return ok('The meteor strikes in 15 s. Look west!')
+      return fail(m.phase === 'countdown' ? 'It is almost here already.' : 'The meteor has already struck.')
     }
     case 'patience':
       game.mods.noPatienceLoss = request.on

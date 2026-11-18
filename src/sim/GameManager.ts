@@ -10,8 +10,10 @@ import {
   type AutomationUpgradeDef,
   type Section,
   type UpgradeDef,
+  LAKE_UPGRADES,
 } from './config'
 import { DealManager, type Offer } from './DealManager'
+import { MeteorEvent } from './MeteorEvent'
 import { WarehouseManager, type WarehouseEvent } from './WarehouseManager'
 import { CustomerFactory } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
@@ -113,6 +115,9 @@ export class GameManager {
   readonly upgrades = new UpgradeManager(CONFIG.upgrades)
   /** VIP offers and the deals you have signed (the deal office). */
   readonly deals = new DealManager()
+  /** The late-game meteor, its lake, and the lake's road and dock. */
+  readonly meteor = new MeteorEvent()
+  private meteorCheckAt = 0
   /** The warehouse, its trucks and crates (once built). */
   readonly warehouse = new WarehouseManager()
   /** The conveyor belt and robot arm (idle until the upgrade is bought). */
@@ -197,8 +202,85 @@ export class GameManager {
         this.notify({ type: 'message', text: 'The VIP got tired of waiting and left the deal office.' })
       }
     }
+    this.updateMeteor(dt)
     this.updatePatience(dt)
     this.updateIdleGuard(dt)
+  }
+
+  /** Every catalogue, automation and warehouse upgrade is owned (key racks count once the lockers are digital). */
+  allUpgradesOwned(): boolean {
+    if (!this.hasWarehouse) return false
+    for (const def of CONFIG.upgrades) if (!this.upgrades.has(def.id) && !(def.obsoleteBy && this.upgrades.has(def.obsoleteBy))) return false
+    for (const def of AUTOMATION_UPGRADES) if (!this.upgrades.has(def.id)) return false
+    for (const def of WAREHOUSE_UPGRADES) if (!this.warehouse.has(def.id)) return false
+    return true
+  }
+
+  private updateMeteor(dt: number): void {
+    const m = this.meteor
+    if (m.phase === 'waiting') {
+      this.meteorCheckAt -= dt
+      if (this.meteorCheckAt > 0) return
+      this.meteorCheckAt = 1
+      if (!this.allUpgradesOwned()) return
+      m.start(this.now)
+      this.notify({ type: 'alert', text: 'Something big is coming. Astronomers are watching something in the sky…' })
+      return
+    }
+    const event = m.update(this.now)
+    if (event === 'impact') this.notify({ type: 'alert', text: 'A METEOR has struck just west of the shop! The crater is filling with groundwater…' })
+    else if (event === 'filled') this.notify({ type: 'alert', text: 'The crater has become a lake. Build a road to it at the control hub.' })
+  }
+
+  /** The big event, in words for the HUD: the countdown, the filling, or what to do next; null when there is nothing to say. */
+  meteorStatus(): string | null {
+    const m = this.meteor
+    const left = m.timeLeft(this.now)
+    if (left !== null) {
+      const mm = Math.floor(left / 60)
+      const ss = Math.floor(left % 60)
+      return `Something big is coming… ${mm}:${String(ss).padStart(2, '0')}`
+    }
+    if (m.phase === 'filling') return `The crater is filling with water… ${Math.round(m.waterLevel(this.now) * 100)}%`
+    if (m.phase === 'lake' && !m.road) return 'A lake! Build a road to it at the control hub'
+    if (m.phase === 'lake' && !m.dock) return 'Build a small dock on the lake at the control hub'
+    return null
+  }
+
+  private lakeItems(): CatalogueItem[] {
+    if (this.meteor.phase !== 'lake') return []
+    return LAKE_UPGRADES.map((def) => ({ id: def.id, title: def.title, description: def.description, cost: def.cost, level: def.level, ...this.lakeState(def.id) }))
+  }
+
+  private lakeOwned(id: string): boolean {
+    return id === 'lake-road' ? this.meteor.road : id === 'lake-dock' ? this.meteor.dock : false
+  }
+
+  private lakeState(id: string): { state: CatalogueItem['state']; note: string | null } {
+    const def = LAKE_UPGRADES.find((d) => d.id === id)
+    if (!def) return { state: 'locked', note: 'Unknown' }
+    if (this.lakeOwned(id)) return { state: 'owned', note: 'Owned' }
+    if (this.meteor.phase !== 'lake') return { state: 'locked', note: 'There is no lake yet' }
+    if (def.requires && !this.lakeOwned(def.requires)) return { state: 'locked', note: `Buy ${LAKE_UPGRADES.find((d) => d.id === def.requires)?.title} first` }
+    if (this.economy.level.level < def.level) return { state: 'locked', note: `Needs level ${def.level}` }
+    if (this.economy.money < def.cost) return { state: 'tooExpensive', note: `Costs $${def.cost}, you have $${this.economy.money}` }
+    return { state: 'available', note: null }
+  }
+
+  private applyLake(id: string): void {
+    if (id === 'lake-road') this.meteor.road = true
+    if (id === 'lake-dock') this.meteor.dock = true
+    this.notify({ type: 'upgradeBought', id, kind: 'lake', index: 0, title: LAKE_UPGRADES.find((d) => d.id === id)?.title ?? id })
+  }
+
+  private buyLakeUpgrade(id: string): ActionResult {
+    const def = LAKE_UPGRADES.find((d) => d.id === id)
+    if (!def) return fail('Not sold here.')
+    const status = this.lakeState(id)
+    if (status.state !== 'available') return fail(status.note ?? 'Not available.')
+    this.economy.spend(def.cost)
+    this.applyLake(id)
+    return ok(`${def.title}: ${def.description}.`)
   }
 
   /**
@@ -1120,6 +1202,14 @@ export class GameManager {
    * It goes through the same code as a purchase, so banks, racks and annexes appear exactly as if bought.
    */
   grantUpgrade(id: string): ActionResult {
+    const lake = LAKE_UPGRADES.find((d) => d.id === id)
+    if (lake) {
+      if (this.lakeOwned(id)) return fail(`${lake.title} is already owned.`)
+      this.meteor.forceLake(this.now)
+      if (lake.requires && !this.lakeOwned(lake.requires)) this.applyLake(lake.requires)
+      this.applyLake(id)
+      return ok(`Unlocked ${lake.title}.`)
+    }
     const auto = AUTOMATION_UPGRADES.find((d) => d.id === id)
     if (auto) return this.grantAutomation(auto)
     const wh = WAREHOUSE_UPGRADES.find((d) => d.id === id)
@@ -1384,7 +1474,7 @@ export class GameManager {
       level: def.level,
       ...this.automationState(def),
     }))
-    return scope === 'hub' ? upgrades : [...this.maintenanceItems(scope), ...upgrades]
+    return scope === 'hub' ? [...upgrades, ...this.lakeItems()] : [...this.maintenanceItems(scope), ...upgrades]
   }
 
   /** Cost of servicing every arm of `zone` (by how worn they are), and of repairing its jammed ones. */
@@ -1449,6 +1539,7 @@ export class GameManager {
   /** Buy an automation upgrade at its console. */
   buyAutomation(id: string): ActionResult {
     if (id.startsWith('wh-')) return this.buyWarehouseUpgrade(id)
+    if (id.startsWith('lake-')) return this.buyLakeUpgrade(id)
     const maintenance = /^(service|repair)-(main|east|south|floor1|floor2)$/.exec(id)
     if (maintenance) return this.maintain(maintenance[1] === 'service' ? 'service' : 'repair', maintenance[2] as AutoZone)
     const def = AUTOMATION_UPGRADES.find((d) => d.id === id)

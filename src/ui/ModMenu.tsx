@@ -85,6 +85,7 @@ export function ModMenu({ info }: { info: ModInfo }) {
         <div className="mod-row">
           {button('Skip 30 s', { type: 'skip', seconds: 30 })}
           {button('Skip 2 min', { type: 'skip', seconds: 120 })}
+          {button('Meteor', { type: 'meteor' }, 'Start the meteor countdown, or (if it is counting down) make it strike in 15 s')}
         </div>
       </section>
 

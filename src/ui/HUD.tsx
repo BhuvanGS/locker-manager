@@ -27,6 +27,7 @@ export function HUD() {
       reputation: st.reputation,
       mistakes: st.mistakes,
       stageLabel: st.stageLabel,
+      bigEvent: st.bigEvent,
       objective: st.objective,
       prompt: st.prompt,
       promptHint: st.promptHint,
@@ -61,6 +62,7 @@ export function HUD() {
           </div>
         </div>
         <span className="stage-chip">{s.stageLabel}</span>
+        {s.bigEvent && <span className="event-chip">{s.bigEvent}</span>}
       </div>
 
       <div className="objective">

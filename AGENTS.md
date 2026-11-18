@@ -215,6 +215,12 @@ Rules:
 - **Exterior** (`details.ts`: `flatRoof` gravel deck + parapet + coping, `rooftopUnit`, procedural `tree`): every flat roof (shop, annexes, office, the
   tower's top floor, the west neighbour) gets one; the shopfront has a canopy, planters and street lamps (`street_lamp_02`); the ground is textured
   grass (`grassMat`, UVs in metres). The warehouse is 7 m to the eaves.
+- **The meteor and the lake** (`sim/MeteorEvent.ts`, `world/Lake.ts`, `LAKE` in `layout.ts`, `CONFIG.meteor`, `LAKE_UPGRADES`): once `allUpgradesOwned()`,
+  a countdown starts (1800 s of game time; `meteorStatus()` feeds the HUD's `event-chip`), then the meteor strikes at `impactAt`, the crater fills over
+  `fillSeconds`, and `lake-road` / `lake-dock` are sold at the control hub (`consoleItems('hub')`, bought with `buyAutomation`). `Lake` draws it all from
+  `game.meteor` every frame (sky approach, fireball, flash, dust and smoke sprites, crater, rising water, road, pier, harbour office) and owns its colliders
+  (a fence round the water with a gap for the pier), so a new game resets it. The ground has a round hole for the crater, covered by `Lake`'s grass cap
+  until the strike. Mod menu: **Meteor** starts the countdown, or makes it strike in 15 s.
 - **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
   number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

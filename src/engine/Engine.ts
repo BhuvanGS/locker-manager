@@ -9,6 +9,7 @@ import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type
 import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
 import { CounterArm } from '../world/CounterArm'
+import { Lake } from '../world/Lake'
 import { CustomerAgents } from '../world/CustomerAgents'
 import { Annex, type AnnexSide } from '../world/Annex'
 import { Facility } from '../world/Facility'
@@ -86,6 +87,8 @@ export class Engine {
   private office: Office | null = null
   /** The counter arm (late automation), over the counter. */
   private counterArm: CounterArm | null = null
+  /** The meteor's crater and lake (built at start; it draws itself from `game.meteor`). */
+  private lake: Lake | null = null
   /** The VIP's car in the street (turns up with each offer). */
   private vipCar: VipCar | null = null
   /** The warehouse, its road and its trucks, once bought. */
@@ -152,6 +155,8 @@ export class Engine {
     await this.physics.init()
     this.facility = new Facility(this.physics)
     this.scene.add(this.facility.root, this.agents.root, this.held.root)
+    this.lake = new Lake(this.physics)
+    this.scene.add(this.lake.root)
     this.interactionTargets.push(this.facility.root, this.agents.root)
     this.buildStartingFurniture()
     this.interaction = new InteractionManager(this.interactionTargets)
@@ -656,6 +661,7 @@ export class Engine {
     this.counterArm?.update(dt, this.game, (id) => this.agents.position(id)?.x ?? null)
     this.vipCar?.update(dt, this.game)
     this.warehouse?.update(dt, this.game, playerPos)
+    this.lake?.update(dt, this.game)
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)
@@ -1023,6 +1029,7 @@ export class Engine {
       queue: game.queue().length,
       objective: game.objective(),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
+      bigEvent: game.meteorStatus(),
       prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen || game.receivingOpen ? null : (aim?.action ?? null),
       promptHint: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen || game.receivingOpen ? null : (aim?.hint ?? null),
       holding,

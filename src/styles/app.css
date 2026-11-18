@@ -193,6 +193,29 @@ kbd {
   transition: width 0.3s ease;
 }
 
+.event-chip {
+  position: absolute;
+  top: 3.1rem;
+  right: 0;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(127, 29, 29, 0.78);
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  color: #fee2e2;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.35);
+  animation: event-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes event-pulse {
+  50% {
+    box-shadow: 0 0 28px rgba(248, 113, 113, 0.65);
+  }
+}
+
 .stage-chip {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;

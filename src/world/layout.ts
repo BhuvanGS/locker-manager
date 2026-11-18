@@ -312,6 +312,23 @@ export const UNDERGROUND = {
 /** Where the contact stands while he waits: just inside the warehouse door from the south hall, clear of the robot lanes. */
 export const CONTACT_SPOT = { x: 6.95, z: -16.5 }
 
+/**
+ * The meteor's lake, west of the shop: a round crater (centre `x`, `z`, radius `r`, `depth` deep) that fills with water. The road
+ * (`road`) runs from the main street's west end down to a hard-standing (`apron`) on its north shore, and the pier (`pier`) goes out
+ * from there into the water.
+ */
+export const LAKE = {
+  x: -36,
+  z: -24,
+  r: 13,
+  depth: 3.2,
+  /** How far below the ground the water settles once full. */
+  waterDrop: 0.28,
+  road: { minX: -31, maxX: -25, minZ: -6, maxZ: 10.25 },
+  apron: { minX: -42, maxX: -25, minZ: -10.6, maxZ: -4 },
+  pier: { x: -36, halfWidth: 1.5, fromZ: -10.6, toZ: -20 },
+} as const
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 
@@ -412,14 +429,15 @@ export function zoneAt(x: number, z: number, feetY: number): Zone {
 export const ADJACENT_ZONES: Record<Zone, readonly Zone[]> = {
   main: ['west', 'east', 'south', 'office'],
   office: ['main', 'warehouse'],
-  west: ['main'],
+  // West of the shop is open ground (and later the lake): from there you see the tower over the roofs.
+  west: ['main', 'south', 'floor1', 'floor2'],
   east: ['main', 'warehouse'],
   // The three halls are one tower: the floor of floor 1 is the ceiling slab of the south hall, and you look down stairwells
   // to the floors below, so anywhere in the tower you must be able to see all of it.
-  south: ['main', 'floor1', 'floor2', 'warehouse'],
+  south: ['main', 'floor1', 'floor2', 'warehouse', 'west'],
   // From the shed and its yard you can see the halls (through the door) and the east side of the shop.
   warehouse: ['south', 'east', 'office', 'floor1', 'floor2'],
   // Their east windows look out over the warehouse roof.
-  floor1: ['south', 'floor2', 'warehouse'],
-  floor2: ['floor1', 'south', 'warehouse'],
+  floor1: ['south', 'floor2', 'warehouse', 'west'],
+  floor2: ['floor1', 'south', 'warehouse', 'west'],
 }

@@ -737,6 +737,18 @@ export const CONFIG = {
    * and tinkering does not mean grinding. Set `enabled: false` to remove it from a release build.
    */
   modMenu: { enabled: true },
+  /**
+   * The late game: once every upgrade is bought, a `countdownSeconds` countdown (30 game minutes) to a meteor strike west of the shop;
+   * its crater fills with water over `fillSeconds`. Then the lake's road and dock are sold at the control hub (`LAKE_UPGRADES`).
+   */
+  meteor: { countdownSeconds: 1800, fillSeconds: 150 },
 } as const
 
 export const AUTOMATION_UPGRADES: readonly AutomationUpgradeDef[] = buildAutomationUpgrades()
+
+/** The lake's upgrades, sold at the control hub once the crater has filled. */
+export const LAKE_UPGRADES: readonly WarehouseUpgradeDef[] = [
+  { id: 'lake-road', title: 'Road to the lake', description: 'Pave a road from the main street down to the new lake, with a hard-standing on its shore', cost: 8000, level: 12 },
+  { id: 'lake-dock', title: 'Small dock', description: 'A timber pier out into the lake, with bollards, lamps and a harbour office: ready for boats', cost: 15000, level: 13, requires: 'lake-road' },
+]
+

@@ -280,6 +280,65 @@ export function glassMat(opacity: number, color = 0xbcd7e6): THREE.MeshStandardM
   return m
 }
 
+/**
+ * Lake water: deep blue-green, glossy, reflecting the sky (registered with the glass so `setGlassEnvironment` reaches it), with a
+ * ripple normal map drawn here. Scroll `waterRipples().offset` to make it move.
+ */
+let ripples: THREE.CanvasTexture | null = null
+export function waterRipples(): THREE.CanvasTexture {
+  if (ripples) return ripples
+  const N = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = N
+  canvas.height = N
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    const img = ctx.createImageData(N, N)
+    const h = (x: number, y: number) => {
+      const u = (x / N) * Math.PI * 2
+      const v = (y / N) * Math.PI * 2
+      return Math.sin(u * 3 + Math.sin(v * 2) * 1.5) * 0.5 + Math.sin(v * 5 + u * 2) * 0.3 + Math.sin((u - v) * 7) * 0.15
+    }
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const dx = h(x + 1, y) - h(x - 1, y)
+        const dy = h(x, y + 1) - h(x, y - 1)
+        const len = Math.hypot(dx * 2, dy * 2, 1)
+        const i = (y * N + x) * 4
+        img.data[i] = ((-dx * 2) / len) * 127 + 128
+        img.data[i + 1] = ((-dy * 2) / len) * 127 + 128
+        img.data[i + 2] = (1 / len) * 127 + 128
+        img.data[i + 3] = 255
+      }
+    }
+    ctx.putImageData(img, 0, 0)
+  }
+  ripples = new THREE.CanvasTexture(canvas)
+  ripples.wrapS = THREE.RepeatWrapping
+  ripples.wrapT = THREE.RepeatWrapping
+  ripples.repeat.set(6, 6)
+  return ripples
+}
+
+export function waterMat(): THREE.MeshStandardMaterial {
+  let m = glasses.get('water')
+  if (m) return m
+  m = new THREE.MeshStandardMaterial({
+    color: 0x1a5a70,
+    roughness: 0.2,
+    metalness: 0.15,
+    transparent: true,
+    opacity: 0.9,
+    normalMap: waterRipples(),
+    normalScale: new THREE.Vector2(0.35, 0.35),
+    envMap: environment,
+    envMapIntensity: 0.65,
+    depthWrite: false,
+  })
+  glasses.set('water', m)
+  return m
+}
+
 export function setGlassEnvironment(renderer: THREE.WebGLRenderer): void {
   if (environment) return
   const pmrem = new THREE.PMREMGenerator(renderer)

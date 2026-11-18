@@ -156,3 +156,35 @@ describe('Mod menu actions', () => {
     expect(info.upgrades.find((u) => u.id === 'register')?.owned).toBe(false)
   })
 })
+
+describe('The meteor and the lake', () => {
+  it('starts counting down once everything is bought, strikes, fills, and then sells the road and the dock at the hub', () => {
+    const g = new GameManager(7)
+    applyMod(g, { type: 'unlockAll' })
+    applyMod(g, { type: 'money', amount: 100_000 })
+    applyMod(g, { type: 'level', level: 15 })
+    g.update(1.5)
+    expect(g.meteor.phase).toBe('countdown')
+    expect(g.meteorStatus()).toMatch(/^Something big is coming… (30:00|29:5\d)$/)
+    expect(g.consoleItems('hub').some((i) => i.id.startsWith('lake-'))).toBe(false)
+    expect(applyMod(g, { type: 'meteor' }).ok).toBe(true) // strikes in 15 s
+    for (let t = 0; t < 16; t += 0.5) g.update(0.5)
+    expect(g.meteor.phase).toBe('filling')
+    expect(g.meteor.waterLevel(g.now)).toBeGreaterThan(0)
+    for (let t = 0; t < CONFIG.meteor.fillSeconds + 1; t += 1) g.update(1)
+    expect(g.meteor.phase).toBe('lake')
+    expect(g.buyAutomation('lake-dock').ok).toBe(false) // the road first
+    expect(g.buyAutomation('lake-road').ok).toBe(true)
+    expect(g.buyAutomation('lake-dock').ok).toBe(true)
+    expect(g.meteor.road && g.meteor.dock).toBe(true)
+    expect(g.meteorStatus()).toBeNull()
+  })
+
+  it('does not start while something is left to buy', () => {
+    const g = new GameManager(7)
+    g.grantUpgrade('warehouse')
+    g.update(2)
+    expect(g.meteor.phase).toBe('waiting')
+  })
+})
+

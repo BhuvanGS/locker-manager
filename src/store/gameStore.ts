@@ -71,6 +71,8 @@ export type GameStoreState = {
   activeDeposits: number
   queue: number
   stageLabel: string
+  /** The late-game event in words (the meteor countdown, the filling lake), or null. */
+  bigEvent: string | null
   objective: string
   /** Big announcement (e.g. a new traffic stage); the HUD hides it after a few seconds. */
   banner: Banner | null
@@ -147,6 +149,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   activeDeposits: 0,
   queue: 0,
   stageLabel: 'Basic facility · Opening day',
+  bigEvent: null,
   objective: '',
   banner: null,
   prompt: null,
