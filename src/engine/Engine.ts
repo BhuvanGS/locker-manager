@@ -964,6 +964,7 @@ export class Engine {
         title: o.title,
         cargo: o.cargo,
         crates: o.crates,
+        pitch: o.pitch ?? null,
         retainer: o.retainer,
         waitLeft: Math.max(0, Math.ceil(o.expiresAt - game.now)),
         haggled: o.haggled,

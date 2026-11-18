@@ -25,6 +25,8 @@ export type ConsoleView = { title: string; money: number; level: number; items: 
 
 /** A VIP's offer at the deal desk, as the HUD shows it. */
 export type DealView = {
+  /** A special VIP's pitch (shown instead of the crates). */
+  pitch: string | null
   name: string
   title: string
   cargo: string

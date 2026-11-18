@@ -2,8 +2,7 @@ import { CONFIG } from './config'
 
 /**
  * The late-game event. Once every upgrade is bought a countdown starts ("something big is coming"); when it runs out a meteor strikes
- * west of the shop, its crater fills with water over `fillSeconds`, and the lake can then be reached by a road and given a small dock
- * (both bought at the control hub). Pure state on game time: the 3D view draws it from `phase`, `impactAt` and `waterLevel`.
+ * west of the shop and its crater fills with water over `fillSeconds`; then the harbour (`HarbourManager`) can be built on it. Pure state on game time: the 3D view draws it from `phase`, `impactAt` and `waterLevel`.
  */
 export type MeteorPhase = 'waiting' | 'countdown' | 'filling' | 'lake'
 
@@ -12,8 +11,6 @@ export class MeteorEvent {
   startedAt: number | null = null
   impactAt: number | null = null
   filledAt: number | null = null
-  road = false
-  dock = false
 
   /** Start the countdown (all upgrades bought, or the mod menu). */
   start(now: number, seconds = CONFIG.meteor.countdownSeconds): void {

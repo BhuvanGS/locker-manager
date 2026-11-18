@@ -18,10 +18,16 @@ export function DealPanel({ deal }: { deal: DealView }) {
           <span>Waits</span> <strong>{deal.waitLeft}s</strong>
         </p>
       </div>
-      <p className="deal-offer">
-        Wants to store <strong>{deal.crates} crates</strong> of {deal.cargo} with you. Retainer: <strong>${deal.retainer}</strong>, paid on signing. The crates
-        arrive when you open a warehouse.
-      </p>
+      {deal.pitch ? (
+        <p className="deal-offer">
+          {deal.pitch} Retainer: <strong>${deal.retainer}</strong>, paid on signing.
+        </p>
+      ) : (
+        <p className="deal-offer">
+          Wants to store <strong>{deal.crates} crates</strong> of {deal.cargo} with you. Retainer: <strong>${deal.retainer}</strong>, paid on signing. The crates
+          arrive when you open a warehouse.
+        </p>
+      )}
       <ol className="catalogue-items" role="listbox" aria-label="Your answer">
         {deal.options.map((option, i) => (
           <li key={option.id}>

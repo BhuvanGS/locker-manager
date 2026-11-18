@@ -173,11 +173,11 @@ describe('The meteor and the lake', () => {
     expect(g.meteor.waterLevel(g.now)).toBeGreaterThan(0)
     for (let t = 0; t < CONFIG.meteor.fillSeconds + 1; t += 1) g.update(1)
     expect(g.meteor.phase).toBe('lake')
-    expect(g.buyAutomation('lake-dock').ok).toBe(false) // the road first
+    expect(g.buyAutomation('lake-marina').ok).toBe(false) // the road first
     expect(g.buyAutomation('lake-road').ok).toBe(true)
-    expect(g.buyAutomation('lake-dock').ok).toBe(true)
-    expect(g.meteor.road && g.meteor.dock).toBe(true)
-    expect(g.meteorStatus()).toBeNull()
+    expect(g.buyAutomation('lake-marina').ok).toBe(true)
+    expect(g.harbour.has('lake-road') && g.harbour.has('lake-marina')).toBe(true)
+    expect(g.meteorStatus()).toMatch(/shipping line|deal office/)
   })
 
   it('does not start while something is left to buy', () => {

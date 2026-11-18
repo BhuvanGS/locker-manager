@@ -156,7 +156,7 @@ export class Office {
     }
     if (!this.vip || this.vip.id !== offer.id) {
       if (this.vip) this.root.remove(this.vip.group)
-      const look = CONFIG.deals.vips[offer.vip]?.look
+      const look = offer.special ? CONFIG.harbour.vip.look : CONFIG.deals.vips[offer.vip]?.look
       const rig = makePerson({ ...(look ?? CONFIG.deals.vips[0]!.look), hairStyle: (look?.hairStyle ?? 'bald') as 'bald' })
       const group = new THREE.Group()
       group.add(rig.root)

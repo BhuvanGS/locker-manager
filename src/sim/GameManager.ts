@@ -13,6 +13,7 @@ import {
   LAKE_UPGRADES,
 } from './config'
 import { DealManager, type Offer } from './DealManager'
+import { HarbourManager, type HarbourEvent } from './HarbourManager'
 import { MeteorEvent } from './MeteorEvent'
 import { WarehouseManager, type WarehouseEvent } from './WarehouseManager'
 import { CustomerFactory } from './CustomerFactory'
@@ -118,6 +119,10 @@ export class GameManager {
   /** The late-game meteor, its lake, and the lake's road and dock. */
   readonly meteor = new MeteorEvent()
   private meteorCheckAt = 0
+  /** The harbour on the lake: what is built, the shipping contract, boats and ships. */
+  readonly harbour = new HarbourManager()
+  /** The shipping line's VIP wants to come to the desk (as soon as it is free). */
+  private harbourVipWaiting = false
   /** The warehouse, its trucks and crates (once built). */
   readonly warehouse = new WarehouseManager()
   /** The conveyor belt and robot arm (idle until the upgrade is bought). */
@@ -194,15 +199,25 @@ export class GameManager {
     this.updateCounterArm(dt)
     if (this.hasWarehouse) this.handleWarehouseEvents(this.warehouse.update(dt, this.now, this.deals, this.rand))
     if (this.hasOffice) {
+      const before = this.deals.offer
       const event = this.deals.update(this.now, this.economy.reputation, this.rand)
       const offer = this.deals.offer
       if (event === 'offered' && offer) this.notify({ type: 'message', text: `A VIP car is pulling up outside: ${offer.name} (${offer.title}).` })
       else if (event === 'expired') {
         this.dealOpen = false
+        if (before?.special) this.harbour.vipAsked(this.now)
         this.notify({ type: 'message', text: 'The VIP got tired of waiting and left the deal office.' })
+      }
+      if (this.harbourVipWaiting && !this.deals.offer) {
+        const o = this.deals.offerHarbour(this.now)
+        if (o) {
+          this.harbourVipWaiting = false
+          this.notify({ type: 'message', text: `A VIP car is pulling up outside: ${o.name} (${o.title}) wants to talk about your lake.` })
+        }
       }
     }
     this.updateMeteor(dt)
+    if (this.meteor.phase === 'lake') this.handleHarbourEvents(this.harbour.update(this.now, this.rand))
     this.updatePatience(dt)
     this.updateIdleGuard(dt)
   }
@@ -242,9 +257,32 @@ export class GameManager {
       return `Something big is coming… ${mm}:${String(ss).padStart(2, '0')}`
     }
     if (m.phase === 'filling') return `The crater is filling with water… ${Math.round(m.waterLevel(this.now) * 100)}%`
-    if (m.phase === 'lake' && !m.road) return 'A lake! Build a road to it at the control hub'
-    if (m.phase === 'lake' && !m.dock) return 'Build a small dock on the lake at the control hub'
+    if (m.phase !== 'lake') return null
+    const h = this.harbour
+    if (!h.has('lake-road')) return 'A lake! Build a road and a jetty at the control hub'
+    if (!h.has('lake-marina')) return 'Boats are calling. Build a motorboat marina at the control hub'
+    if (!h.contract) return this.deals.offer?.special ? `${this.deals.offer.name} wants to talk: go to the deal office` : 'Word is getting round: a shipping line may come to the deal office'
+    if (!h.has('lake-dock')) return 'Contract signed! Build the cargo dock at the control hub'
+    const ship = h.ship
+    if (ship && this.now < ship.mooredAt) return `${ship.name} is sailing in…`
+    if (ship && ship.unloaded < ship.containers) return `Unloading ${ship.name}: ${ship.unloaded}/${ship.containers} containers`
     return null
+  }
+
+  private handleHarbourEvents(events: HarbourEvent[]): void {
+    let boats = 0
+    for (const e of events) {
+      if (e.type === 'boatPaid') {
+        this.economy.earn(e.amount)
+        boats += e.amount
+      } else if (e.type === 'container') this.economy.earn(e.amount)
+      else if (e.type === 'shipArrived') this.notify({ type: 'message', text: `${e.ship.name} is sailing in with ${e.ship.containers} containers.` })
+      else if (e.type === 'shipDone') {
+        this.gainXp(CONFIG.harbour.shipXp)
+        this.notify({ type: 'message', text: `${e.ship.name} is unloaded: ${e.ship.containers} containers, $${e.earned}.` })
+      } else if (e.type === 'wantsVip') this.harbourVipWaiting = true
+    }
+    if (boats > 0) this.notify({ type: 'payment', amount: boats })
   }
 
   private lakeItems(): CatalogueItem[] {
@@ -253,7 +291,7 @@ export class GameManager {
   }
 
   private lakeOwned(id: string): boolean {
-    return id === 'lake-road' ? this.meteor.road : id === 'lake-dock' ? this.meteor.dock : false
+    return this.harbour.has(id)
   }
 
   private lakeState(id: string): { state: CatalogueItem['state']; note: string | null } {
@@ -262,14 +300,14 @@ export class GameManager {
     if (this.lakeOwned(id)) return { state: 'owned', note: 'Owned' }
     if (this.meteor.phase !== 'lake') return { state: 'locked', note: 'There is no lake yet' }
     if (def.requires && !this.lakeOwned(def.requires)) return { state: 'locked', note: `Buy ${LAKE_UPGRADES.find((d) => d.id === def.requires)?.title} first` }
+    if (def.needs === 'contract' && !this.harbour.contract) return { state: 'locked', note: 'Sign a shipping line first (deal office)' }
     if (this.economy.level.level < def.level) return { state: 'locked', note: `Needs level ${def.level}` }
     if (this.economy.money < def.cost) return { state: 'tooExpensive', note: `Costs $${def.cost}, you have $${this.economy.money}` }
     return { state: 'available', note: null }
   }
 
   private applyLake(id: string): void {
-    if (id === 'lake-road') this.meteor.road = true
-    if (id === 'lake-dock') this.meteor.dock = true
+    this.harbour.buy(id, this.now)
     this.notify({ type: 'upgradeBought', id, kind: 'lake', index: 0, title: LAKE_UPGRADES.find((d) => d.id === id)?.title ?? id })
   }
 
@@ -1099,6 +1137,15 @@ export class GameManager {
       this.dealOpen = false
       return fail('They have gone.')
     }
+    if (id === 'accept' && o.special) {
+      this.deals.acceptSpecial(this.now, this.rand)
+      this.harbour.sign()
+      this.economy.earn(o.retainer)
+      this.gainXp(CONFIG.deals.signingXp)
+      this.economy.adjustReputation(CONFIG.deals.signingReputation)
+      this.dealOpen = false
+      return ok(`Signed with ${o.name}: $${o.retainer} retainer. Build the cargo dock at the control hub and the ships will come.`)
+    }
     if (id === 'accept') {
       const deal = this.deals.accept(this.now, this.rand)
       if (!deal) return fail('They have gone.')
@@ -1112,6 +1159,7 @@ export class GameManager {
       const result = this.deals.haggle(this.now, this.rand)
       if (result === null) return fail('Already pushed once.')
       if (result === 'walked') {
+        if (o.special) this.harbour.vipAsked(this.now)
         this.economy.adjustReputation(CONFIG.deals.haggleWalkReputation)
         this.dealOpen = false
         return fail(`${o.name} did not like being pushed, and walked out.`)
@@ -1119,6 +1167,7 @@ export class GameManager {
       return ok(`${o.name} raises the retainer to $${this.deals.offer?.retainer}.`)
     }
     this.deals.decline(this.now, this.rand)
+    if (o.special) this.harbour.vipAsked(this.now)
     this.dealOpen = false
     return ok(`You turned ${o.name} down politely.`)
   }
@@ -1206,8 +1255,13 @@ export class GameManager {
     if (lake) {
       if (this.lakeOwned(id)) return fail(`${lake.title} is already owned.`)
       this.meteor.forceLake(this.now)
-      if (lake.requires && !this.lakeOwned(lake.requires)) this.applyLake(lake.requires)
-      this.applyLake(id)
+      // Everything before it in the chain, and the contract if the chain passes the cargo dock.
+      const chain: string[] = []
+      for (let d: typeof lake | undefined = lake; d; d = LAKE_UPGRADES.find((x) => x.id === d?.requires)) chain.unshift(d.id)
+      for (const step of chain) {
+        if (step === 'lake-dock' && !this.harbour.contract) this.harbour.sign()
+        if (!this.lakeOwned(step)) this.applyLake(step)
+      }
       return ok(`Unlocked ${lake.title}.`)
     }
     const auto = AUTOMATION_UPGRADES.find((d) => d.id === id)

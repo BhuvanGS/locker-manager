@@ -19,6 +19,10 @@ export interface Offer {
   /** Game time at which they give up waiting. */
   expiresAt: number
   haggled: boolean
+  /** A special VIP (not one of `CONFIG.deals.vips`, `vip` is -1): the shipping line's harbour contract. */
+  special?: 'harbour'
+  /** What they say, for a special offer (instead of the crates). */
+  pitch?: string
 }
 
 /** A deal you signed. The crates arrive once there is a warehouse to put them in. */
@@ -95,6 +99,38 @@ export class DealManager {
     const [rLo, rHi] = d.retainerPerCrate
     const retainer = Math.round((crates * (rLo + (rHi - rLo) * rand())) / 10) * 10
     return { id: ++this.seq, vip, name: def.name, title: def.title, cargo: def.cargo, cargoType: def.type, crates, retainer, readyAt: now + d.arrivalSeconds, expiresAt: now + d.arrivalSeconds + d.expiresAfter, haggled: false }
+  }
+
+  /** The shipping line's VIP comes to the desk (only when nobody else is there). */
+  offerHarbour(now: number): Offer | null {
+    if (this.offer) return null
+    const d = CONFIG.deals
+    const v = CONFIG.harbour.vip
+    this.offer = {
+      id: ++this.seq,
+      vip: -1,
+      name: v.name,
+      title: v.title,
+      cargo: 'container ships',
+      cargoType: 'general',
+      crates: 0,
+      retainer: CONFIG.harbour.vipRetainer,
+      readyAt: now + d.arrivalSeconds,
+      expiresAt: now + d.arrivalSeconds + d.expiresAfter,
+      haggled: false,
+      special: 'harbour',
+      pitch: v.pitch,
+    }
+    return this.offer
+  }
+
+  /** Sign a special offer: it is not a storage deal, so nothing is added to `signed`. */
+  acceptSpecial(now: number, rand: () => number): Offer | null {
+    const o = this.offer
+    if (!o?.special) return null
+    this.offer = null
+    this.scheduleNext(now, rand)
+    return o
   }
 
   /** Sign the offer. Returns the signed deal, or null if nobody is waiting. */

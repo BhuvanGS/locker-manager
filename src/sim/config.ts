@@ -742,13 +742,59 @@ export const CONFIG = {
    * its crater fills with water over `fillSeconds`. Then the lake's road and dock are sold at the control hub (`LAKE_UPGRADES`).
    */
   meteor: { countdownSeconds: 1800, fillSeconds: 150 },
+  /**
+   * The harbour on the lake (`HarbourManager`). Boats pay `fee` when they leave after a stay in `stay`; a new one comes every `boatGap`
+   * seconds (faster with the marina). Ships: `ships[size]` has its containers and the pay per container; the crane takes `unloadSeconds`
+   * per container (two cranes work in parallel in the great harbour). The port warehouse's yard holds `yardCapacity` containers and a
+   * lorry takes one away every `collectSeconds`. The contract VIP comes `vipDelay` after the marina opens (and again `vipRetry` after a no).
+   */
+  harbour: {
+    firstBoatDelay: 8,
+    boatTravel: 26,
+    boatGap: [22, 40] as [number, number],
+    boatGapMarina: [12, 26] as [number, number],
+    jettySlots: 2,
+    marinaSlots: 2,
+    boats: {
+      row: { fee: 40, stay: [50, 90] as [number, number] },
+      sail: { fee: 70, stay: [60, 110] as [number, number] },
+      motor: { fee: 140, stay: [45, 90] as [number, number] },
+    },
+    vipDelay: 30,
+    vipRetry: 120,
+    vipRetainer: 12000,
+    firstShipDelay: 10,
+    shipTravel: 50,
+    shipGap: 30,
+    shipLinger: 12,
+    unloadSeconds: 11,
+    ships: [
+      { containers: 6, perContainer: 450, length: 18, beam: 5 },
+      { containers: 10, perContainer: 520, length: 24, beam: 6 },
+      { containers: 24, perContainer: 600, length: 34, beam: 8 },
+    ],
+    shipNames: ['Maersky Minnow', 'Ever Given Up', 'MSC Mostly Afloat', 'Cosco Coaster', 'Hapag Happy', 'CMA Seaworthy'],
+    yardCapacity: 12,
+    shipXp: 120,
+    collectSeconds: 18,
+    vip: {
+      name: 'Merrick Maersky',
+      title: 'Chair, Maersky Line',
+      pitch:
+        'Your lake reaches the sea now. Maersky Line would like to call there with container ships. Sign, and you get a retainer today; build a cargo dock with a crane and our ships start coming, and you are paid for every container you land.',
+      look: { skin: 0xf1c9a5, hair: 0xd6d3d1, hairStyle: 'short', shirt: 0x1e3a8a, trousers: 0x0f172a, height: 1.03 },
+    },
+  },
 } as const
 
 export const AUTOMATION_UPGRADES: readonly AutomationUpgradeDef[] = buildAutomationUpgrades()
 
 /** The lake's upgrades, sold at the control hub once the crater has filled. */
 export const LAKE_UPGRADES: readonly WarehouseUpgradeDef[] = [
-  { id: 'lake-road', title: 'Road to the lake', description: 'Pave a road from the main street down to the new lake, with a hard-standing on its shore', cost: 8000, level: 12 },
-  { id: 'lake-dock', title: 'Small dock', description: 'A timber pier out into the lake, with bollards, lamps and a harbour office: ready for boats', cost: 15000, level: 13, requires: 'lake-road' },
+  { id: 'lake-road', title: 'Road and jetty', description: 'A road down to the lake, a hard-standing, a harbour office and a timber jetty: rowing and sailing boats call and pay to moor', cost: 8000, level: 12 },
+  { id: 'lake-marina', title: 'Motorboat marina', description: 'A floating pontoon with a fuel pump: motorboats call too (bigger fees, more often). A shipping line will hear about it', cost: 14000, level: 13, requires: 'lake-road' },
+  { id: 'lake-dock', title: 'Cargo dock', description: 'A concrete quay, a ship-to-shore crane and a port warehouse: the shipping line\'s container feeder calls, and every container landed pays', cost: 22000, level: 14, requires: 'lake-marina', needs: 'contract' },
+  { id: 'lake-ships', title: 'Deeper berth', description: 'Dredge the berth: bigger ships with more containers', cost: 35000, level: 15, requires: 'lake-dock' },
+  { id: 'lake-harbour', title: 'Great harbour', description: 'Dig the lake out into a big rectangular basin with long quays and a second crane: the biggest container ships come', cost: 70000, level: 16, requires: 'lake-ships' },
 ]
 

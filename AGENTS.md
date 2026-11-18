@@ -215,17 +215,24 @@ Rules:
 - **Exterior** (`details.ts`: `flatRoof` gravel deck + parapet + coping, `rooftopUnit`, procedural `tree`): every flat roof (shop, annexes, office, the
   tower's top floor, the west neighbour) gets one; the shopfront has a canopy, planters and street lamps (`street_lamp_02`); the ground is textured
   grass (`grassMat`, UVs in metres). The warehouse is 7 m to the eaves.
-- **The meteor and the lake** (`sim/MeteorEvent.ts`, `world/Lake.ts`, `LAKE` in `layout.ts`, `CONFIG.meteor`, `LAKE_UPGRADES`): once `allUpgradesOwned()`,
-  a countdown starts (1800 s of game time; `meteorStatus()` feeds the HUD's `event-chip`), then the meteor strikes at `impactAt`, the crater fills over
-  `fillSeconds`, and `lake-road` / `lake-dock` are sold at the control hub (`consoleItems('hub')`, bought with `buyAutomation`). `Lake` draws it all from
-  `game.meteor` every frame (sky approach, fireball, flash, dust and smoke sprites, crater, rising water, road, pier, harbour office) and owns its colliders
-  (a fence round the water with a gap for the pier), so a new game resets it. The ground has a round hole for the crater, covered by `Lake`'s grass cap
-  until the strike. Mod menu: **Meteor** starts the countdown, or makes it strike in 15 s.
-- **The coast and the ships** (`LAKE.coast`, `LAKE.berth` in `layout.ts`; `Lake.buildBeach`, `buildChannel`, `makeShip`, `updateShip`): west of the lake the grass
-  ends at `coast.grassX`, a beach (umbrellas, loungers, a BEACH sign at the end of the main street) runs to `shoreX`, then sand shelves into the sea
-  (`seaY`); a fence at `wadeX` stops you wading out. Before the strike the channel (`coast.channel`, z ±`halfWidth`) is beach; after it the channel is dug
-  and joins the crater to the sea. The ground's outline follows `craterNotch()`. Once the dock is built a container ship loops (sail in, moor at the
-  pier head's south face with lines to `BOLLARDS`, sail out, away). Visual only for now: container gameplay is still to come.
+- **The meteor and the lake** (`sim/MeteorEvent.ts`, `world/Lake.ts`, `LAKE` in `layout.ts`, `CONFIG.meteor`): once `allUpgradesOwned()`, a countdown
+  starts (1800 s of game time; `meteorStatus()` feeds the HUD's `event-chip` and later says what to build next), then the meteor strikes at `impactAt` and
+  the crater fills over `fillSeconds`. `Lake` draws it from `game.meteor` every frame (sky approach, fireball, flash, dust and smoke sprites, crater, rising
+  water) and owns the fence round the water. The ground has the whole harbour site (`HARBOUR.basin`) cut out; `Lake` covers it with grass (`cap` before the
+  strike, `capRing` round the crater after it, none once the basin is dug). Mod menu: **Meteor** starts the countdown, or makes it strike in 15 s.
+- **The coast** (`LAKE.coast`; `Lake.buildBeach`, `buildChannel`): west of the lake the grass ends at `coast.grassX`, a beach runs to `shoreX`, then sand
+  shelves into the sea (`seaY`); a fence at `wadeX` stops you wading out. Before the strike the channel (`coast.channel`) is beach; after it the channel is
+  dug and joins the crater to the sea (`craterNotch()`). Boats and ships come in from the sea along it.
+- **The harbour** (`sim/HarbourManager.ts`, `world/Harbour.ts`, `HARBOUR` in `layout.ts`, `CONFIG.harbour`, `LAKE_UPGRADES` sold at the hub, bought with
+  `buyAutomation`): `lake-road` (road, harbour office, timber jetty: rowing and sailing boats) → `lake-marina` (pontoon, fuel, motorboats) → the shipping
+  line's VIP comes to the deal desk (`DealManager.offerHarbour`, an `Offer` with `special: 'harbour'` and a `pitch`; signing sets `harbour.contract`,
+  declining or letting it expire brings them back after `vipRetry`) → `lake-dock` (needs the contract: cargo quay, ship-to-shore crane, port warehouse and
+  yard) → `lake-ships` (bigger ships) → `lake-harbour` (the round lake is dug into a rectangular basin with a long north quay and two cranes; the biggest
+  ships). Visits are records on game time: `BoatVisit` (paid on leaving) and one `ShipVisit` at a time (each container is paid as the crane lands it,
+  `stock` fills the yard and lorries empty it). `Harbour` rebuilds its static parts and colliders when what is built changes, and draws boats, ships
+  and the crane(s) from the visit times: `unloadOrder` and `craneJob` must match the sim's `unloadSeconds` per container per crane. Boats moor on the
+  jetty's north side (`jettyBerths`, `marinaBerths`) and come in along `boatLane`, south of the ship. `grantUpgrade('lake-…')` grants the whole chain,
+  the contract included.
 - **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
   number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

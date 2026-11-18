@@ -326,9 +326,6 @@ export const LAKE = {
   waterDrop: 0.28,
   road: { minX: -31, maxX: -25, minZ: -6, maxZ: 10.25 },
   apron: { minX: -42, maxX: -25, minZ: -10.6, maxZ: -4 },
-  pier: { x: -36, halfWidth: 1.5, fromZ: -10.6, toZ: -20, head: { minX: -42, maxX: -30, minZ: -21.7, maxZ: -20 } },
-  /** Where a visiting ship lies alongside the pier head (its centre, facing east), and its size. */
-  berth: { x: -36, z: -24.4, length: 18, beam: 5 },
   /**
    * The coast west of town: grass to `grassX`, a flat beach to `shoreX`, then sand shelving into the sea (at `seaY`). The meteor's
    * crater breaks through to it: a channel `channel.halfWidth` either side of `channel.z` runs from the lake to the sea.
@@ -354,6 +351,44 @@ export function craterNotch(): [number, number][] {
   pts.push([grassX, channel.z - hw])
   return pts
 }
+
+/**
+ * The harbour on the lake (`HarbourManager`, `world/Harbour.ts`). On the round lake: a timber jetty from the south-east shore along
+ * `jetty.z` (rowing and sailing boats moor on its north side; the marina carries it on west with motorboat berths), the cargo quay on the
+ * north shore (`quay`; the container ship lies along its south face and the crane runs on rails across it), and the port warehouse with
+ * its container yard north-west. The great harbour digs the lake out into `basin`: the ship then lies along its north quay with two
+ * cranes, and the jetty moves to the basin's east wall (`jetty.basinRootX`). Everything else stays where it is.
+ */
+export const HARBOUR = {
+  basin: { minX: -56, maxX: -14, minZ: -42, maxZ: -10.6, floorY: -4.3 },
+  quay: { minX: -43, maxX: -29, minZ: -19.3, maxZ: -10.6 },
+  /** The jetty's root (on the shore) and how far it runs west; the marina adds `marinaLength` more. Berths are on its north side. */
+  jetty: { z: -31.5, halfWidth: 1.1, lakeRootX: -25.0, basinRootX: -14, length: 11.5, marinaLength: 9.5 },
+  /** Where along the jetty (metres west of its root) each berth is: row and sail boats, then motorboats on the marina. */
+  jettyBerths: [3.4, 8.9],
+  marinaBerths: [14.2, 19.2],
+  /** Boats come in along this line (south of any ship), then turn into their berth. */
+  boatLane: -27.2,
+  /** The harbour office (north of the hard-standing), the port warehouse and its yard (2 rows × 2 stacks × 3 high). */
+  office: { minX: -41, maxX: -37.8, minZ: -2, maxZ: 0.8 },
+  warehouse: { minX: -55, maxX: -46.5, minZ: -6, maxZ: 2 },
+  yard: { x: [-52.4, -47.8], z: [-9.4, -7.25] },
+  /** Concrete in front of the warehouse, joining the hard-standing. */
+  portApron: { minX: -56, maxX: -42, minZ: -10.6, maxZ: -6 },
+  /** The crane's rails (x range it can travel) and its geometry on the round lake and in the basin. */
+  crane: {
+    lake: { minX: -41.5, maxX: -30.5, waterZ: -18.4, landZ: -13.6, outZ: -27.2, backZ: -11.2, dropZ: -12.2, topY: 0.05 },
+    basin: { minX: -43, maxX: -17.5, waterZ: -9.7, landZ: -5.3, outZ: -21, backZ: -2.6, dropZ: -3.9, topY: 0.05 },
+  },
+  /** The ship's berth centre on each (z from its beam: along the quay's face). */
+  berthX: { lake: -36, basin: -31 },
+  /** The basin's north quay: concrete from its edge back to here (it takes in the hard-standing). */
+  basinQuayMaxZ: -2.5,
+  /** The footpath from the hard-standing round to the jetty (on the round lake, and beside the basin). */
+  path: { lake: { x: -20.5 }, basin: { x: -12.8 } },
+  /** The marina hut by the jetty's root (north of it). */
+  hut: { dz: 3, dx: 3 },
+} as const
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }

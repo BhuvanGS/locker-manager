@@ -4,7 +4,7 @@ import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, craterNotch } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, HARBOUR } from './layout'
 import { mat } from './models'
 import { prop } from './props'
 import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
@@ -309,8 +309,11 @@ export class Facility {
   private buildOutside(): void {
     // The ground, with the underground vault's shaft cut out of it (closed by a plug until the vault is built).
     const hole = UNDERGROUND.hatch
-    // Grass from the beach (west) to the far side, with the crater and its channel cut out of its west edge.
-    const outline: [number, number][] = [[100, -100], [100, 100], [LAKE.coast.grassX, 100], ...craterNotch(), [LAKE.coast.grassX, -100]]
+    // Grass from the beach (west) to the far side, with the harbour's basin cut out of its west edge (the Lake covers it with grass
+    // where nothing has been dug yet).
+    const B = HARBOUR.basin
+    const notch: [number, number][] = [[LAKE.coast.grassX, B.maxZ], [B.maxX, B.maxZ], [B.maxX, B.minZ], [LAKE.coast.grassX, B.minZ]]
+    const outline: [number, number][] = [[100, -100], [100, 100], [LAKE.coast.grassX, 100], ...notch, [LAKE.coast.grassX, -100]]
     const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, -z)))
     // Shape y becomes −z once the plane is laid flat.
     const cut = new THREE.Path()
@@ -336,7 +339,7 @@ export class Facility {
 
     // Trees round the complex: along the west side, behind the halls, and across the service road (none on a path or a drive).
     for (const [i, [x, z, h]] of ([
-      [-19, -4, 5.5], [-21, -13, 6.5], [-18.5, -22, 5], [-21, -30, 6], [-10, -34, 5.5], [-1, -35, 4.8],
+      [-11, -19.5, 5.5], [-10.5, -13.5, 6.5], [-8.8, -23, 5], [-8.5, -31.5, 6], [-10, -34, 5.5], [-1, -35, 4.8],
       [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-21, 3, 6],
     ] as const).entries())
       this.root.add(tree(x, z, h, i + 1))
