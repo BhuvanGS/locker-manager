@@ -263,8 +263,8 @@ export class WarehouseManager {
     } else if (id === 'wh-hidden-2') {
       this.hiddenLevel = 2
       this.hiddenCapacity = 12
-    } else if (id === 'wh-auto-1' || id === 'wh-auto-2') {
-      this.autoLevel = id === 'wh-auto-1' ? Math.max(this.autoLevel, 1) : 2
+    } else if (/^wh-auto-[1-4]$/.test(id)) {
+      this.autoLevel = Math.max(this.autoLevel, Number(id.slice(-1)))
       const count = CONFIG.warehouse.robots.count[this.autoLevel] ?? 0
       while (this.robots.length < count) this.robots.push(null)
     }

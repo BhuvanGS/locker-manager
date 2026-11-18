@@ -96,6 +96,25 @@ describe('The counter arm', () => {
     expect(g.customers.has(id) ? g.customers.get(id).state : 'gone').toMatch(/leftWithoutService|gone|stored/)
     run(g, 40)
     expect(g.counterJobView()?.customerId).not.toBe(id) // (other customers arrive and are served)
-    for (const l of g.lockers.all()) expect(l.state === 'reserved' && !g.conveyor.isBusy(l.id) && !l.itemId && g.counterJob?.lockerId !== l.id).toBe(false)
+    for (const l of g.lockers.all()) expect(l.state === 'reserved' && !g.conveyor.isBusy(l.id) && !l.itemId && !g.counterJobs.some((j) => j.lockerId === l.id)).toBe(false)
   })
 })
+
+describe('Counter arm upgrades', () => {
+  it('the speed upgrades shorten each bag, and the second arm serves a second customer at the same time', () => {
+    const g = withCounterArm()
+    expect(g.counterSeconds).toBe(CONFIG.automation.counterSpeedSeconds[0])
+    g.grantUpgrade('counter-speed-2')
+    expect(g.counterSeconds).toBe(CONFIG.automation.counterSpeedSeconds[2])
+    expect(g.counterArms).toBe(1)
+    g.grantUpgrade('counter-arm-2')
+    expect(g.counterArms).toBe(2)
+    const a = g.spawnExtraCustomer()
+    const b = g.spawnExtraCustomer()
+    run(g, 0.5)
+    const jobs = g.counterJobViews()
+    expect(jobs.map((j) => j.customerId).sort()).toEqual([a, b].sort())
+    expect(new Set(jobs.map((j) => j.arm)).size).toBe(2)
+  })
+})
+

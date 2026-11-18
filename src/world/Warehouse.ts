@@ -330,6 +330,12 @@ export class Warehouse {
     }
     while (this.robots.length < wh.robots.length) {
       const [x, z] = WAREHOUSE.robotHomes[this.robots.length] ?? WAREHOUSE.robotHomes[0]!
+      // Robots 3 and 4 charge in the level 3 hall: their pads are painted when they arrive.
+      if (this.robots.length >= 2) {
+        this.deco(1.3, 0.01, 1.5, diamondPlate(0x374151, 0.25), x, 0.035, z)
+        this.deco(1.1, 0.012, 1.3, mat(0xfacc15, 0.6), x, 0.037, z)
+        this.deco(1.0, 0.014, 1.2, diamondPlate(0x374151, 0.25), x, 0.039, z)
+      }
       this.robots.push(new WarehouseRobot(this.root, this.lanes, { x, z }))
     }
   }
@@ -380,7 +386,7 @@ export class Warehouse {
   private paintLanes(): void {
     this.paintLaneLines()
     const paint = mat(0xfacc15, 0.6)
-    for (const [x, z] of WAREHOUSE.robotHomes) {
+    for (const [x, z] of WAREHOUSE.robotHomes.slice(0, 2)) {
       this.deco(1.3, 0.01, 1.5, diamondPlate(0x374151, 0.25), x, 0.035, z)
       this.deco(1.1, 0.012, 1.3, paint, x, 0.037, z)
       this.deco(1.0, 0.014, 1.2, diamondPlate(0x374151, 0.25), x, 0.039, z)
@@ -1438,7 +1444,7 @@ function laneSegments(): [number, number, number, number][] {
     [lanes.west, lanes.south, lanes.dock, lanes.south],
     [lanes.dock, lanes.north, lanes.dock, robotHomes[0]![1]],
     [lanes.west, lanes.cross, lanes.west, lanes.south],
-    [robotHomes[0]![0], robotHomes[0]![1], robotHomes[robotHomes.length - 1]![0], robotHomes[0]![1]],
+    [robotHomes[0]![0], robotHomes[0]![1], robotHomes[1]![0], robotHomes[0]![1]],
   ]
   for (const section of ['cold', 'vault'] as const) {
     const r = WAREHOUSE[section]
@@ -1449,7 +1455,8 @@ function laneSegments(): [number, number, number, number][] {
   // Down through the doorways into the new halls, and along each one.
   let fromZ: number = lanes.south
   for (const hall of WAREHOUSE.halls) {
-    segs.push([lanes.west, fromZ, lanes.west, hall.lane], [lanes.west, hall.lane, 20.0, hall.lane])
+    // The level 3 hall's lane runs on past its racks to the chargers of robots 3 and 4.
+    segs.push([lanes.west, fromZ, lanes.west, hall.lane], [lanes.west, hall.lane, hall === WAREHOUSE.halls[0] ? 23.4 : 20.0, hall.lane])
     fromZ = hall.lane
   }
   return segs

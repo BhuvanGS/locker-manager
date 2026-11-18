@@ -138,6 +138,44 @@ function buildAutomationUpgrades(): AutomationUpgradeDef[] {
     level: 8,
     requires: 'arms-main',
   })
+  out.push(
+    {
+      id: 'counter-speed-1',
+      scope: 'hub',
+      kind: 'counter',
+      zone: 'main',
+      tier: 1,
+      title: 'Faster counter arm',
+      description: 'The counter arm moves faster: a bag in or out in 4.5 s instead of 6 s',
+      cost: 1400,
+      level: 9,
+      requires: 'counter-arm',
+    },
+    {
+      id: 'counter-arm-2',
+      scope: 'hub',
+      kind: 'counter',
+      zone: 'main',
+      tier: 0,
+      title: 'Second counter arm',
+      description: 'A second arm on its own rail behind the first: two customers are served at once',
+      cost: 3200,
+      level: 10,
+      requires: 'counter-arm',
+    },
+    {
+      id: 'counter-speed-2',
+      scope: 'hub',
+      kind: 'counter',
+      zone: 'main',
+      tier: 2,
+      title: 'Fastest counter arms',
+      description: 'Both counter arms move faster still: 3 s a bag',
+      cost: 2600,
+      level: 11,
+      requires: 'counter-speed-1',
+    },
+  )
   for (const zone of AUTO_ZONES) {
     const rows = ZONE_ROWS[zone]
     for (let tier = 1; tier <= 3; tier++) {
@@ -187,6 +225,8 @@ export interface WarehouseUpgradeDef {
   /** Player level needed. */
   level: number
   requires?: string
+  /** A second upgrade it needs (where it has to go). */
+  needs?: string
 }
 
 export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
@@ -202,6 +242,8 @@ export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
   { id: 'wh-hidden-2', title: 'Deeper vault', description: '+4 slots in the underground vault (12 in all), and the police find what is down there only 20 % of the time', cost: 3000, level: 11, requires: 'wh-hidden-1' },
   { id: 'wh-auto-1', title: 'Receiving robots', description: 'A warehouse robot with a big clamp carries crates for you: off parked trucks to where they look like they belong, and out to collection trucks (20 s a crate)', cost: 2500, level: 10, requires: 'wh-cap-1' },
   { id: 'wh-auto-2', title: 'Second robot', description: 'A second robot, and both work faster (14 s a crate). They never touch contraband', cost: 3500, level: 11, requires: 'wh-auto-1' },
+  { id: 'wh-auto-3', title: 'Third robot', description: 'A third warehouse robot (charging in the level 3 hall), and all of them faster: 12 s a crate', cost: 5000, level: 12, requires: 'wh-auto-2', needs: 'wh-expand-1' },
+  { id: 'wh-auto-4', title: 'Fourth robot', description: 'A fourth warehouse robot, and all of them faster again: 10 s a crate', cost: 7000, level: 13, requires: 'wh-auto-3' },
 ]
 
 export const CONFIG = {
@@ -502,6 +544,8 @@ export const CONFIG = {
     rowTravel: 0.1,
     /** Seconds the counter arm takes to serve one customer (fetch the bag, carry it, hand it over or put it on the belt). */
     counterSeconds: 6,
+    /** The counter arm's seconds per bag with each speed upgrade (counter-speed-1, -2). */
+    counterSpeedSeconds: [6, 4.5, 3] as number[],
     /**
      * Routine maintenance. Every arm wears a little with each job (faster motors wear it faster). A worn arm is slower, and a failing
      * one can jam when it starts a job: it then stops until it is repaired at its zone's arm console. A service puts every arm back
@@ -636,7 +680,7 @@ export const CONFIG = {
       names: ['Vex', 'Moss', 'Rook', 'Sly', 'Dace', 'Nico'],
     },
     /** Parking spots beside the shed: trucks park there while their crates are carried in or out; with all spots taken, the next truck waits in the road. */
-    parkingSpots: 3,
+    parkingSpots: 4,
     /** Food spoils this long after it arrives; cold-chain goods spoil this soon anywhere but in the cold room (the dock counts). */
     foodShelfLife: 240,
     coldSpoilSeconds: 90,
@@ -651,7 +695,7 @@ export const CONFIG = {
      * The warehouse robots (bought with wh-auto-1 / wh-auto-2): how many there are and the seconds each takes per crate. A robot job carries
      * ONE crate: it drives to the truck (or rack), picks the crate up at `grabAt` of the job, and puts it down at the end.
      */
-    robots: { count: [0, 1, 2] as number[], seconds: [0, 20, 14] as number[], grabAt: 0.45, stagger: 0.4 },
+    robots: { count: [0, 1, 2, 3, 4] as number[], seconds: [0, 20, 14, 12, 10] as number[], grabAt: 0.45, stagger: 0.4 },
     /**
      * The police. They only start to check once the warehouse holds `minCrates` crates (you have grown big), and then rarely.
      * Contraband in the open is always found; hidden contraband is found with the `hiddenFind` chance by hidden level (0, 1, 2).

@@ -152,9 +152,10 @@ Rules:
 - **Sun shadow** (`Facility.followSun`, called by the Engine every frame): the directional light's shadow box (±`SHADOW_HALF` m) is centred on the player, snapped to texel steps, so far rooms get proper shadows without
   shimmering. Anything with a roof must cast shadows (`castShadow`) or the sun shines through it.
 - **VIP cars** (`world/VipCar.ts`): follows `game.deals.offer`. When the car parks, the VIP walks `WALK` (pavement → front door → lobby → office door → chair), timed to arrive at `readyAt` (`CONFIG.deals.arrivalSeconds`); the office draws them seated from then on; when the offer ends they walk back and the car leaves. `nearDoor()` opens the front door for them. **Names:** `CustomerAgents` keeps a name sprite per agent.
-- **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): one `CounterJob` at a time (take or give); an item is `withArm` from the grab (progress 0.4 / 0.35) until the job ends; the take job
+- **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): `counterJobs`, one per arm (`counter-arm-2` adds a second arm on its own rail; `counterArms`), each a take or give;
+  `counter-speed-1/2` shorten each job (`counterSeconds`, `CONFIG.automation.counterSpeedSeconds`). Per job: an item is `withArm` from the grab (progress 0.4 / 0.35) until the job ends; the take job
   reserves its locker up front and loads the belt at the end, the give job removes the ready bag from the tray at the grab and pays through `finishReturn`. A job is dropped (before the grab) if you start talking
-  to the customer or they leave. The view (`CounterArm`) is keyframes over `counterJobView().progress`.
+  to the customer or they leave. The view (`CounterArm`) draws one rig per arm, keyframes over `counterJobViews()`.
 - **Deal office and VIP deals** (`kind: 'office'`, `sim/DealManager.ts`, `world/Office.ts`, `ui/DealPanel.tsx`): after the office is bought `deals.update` (called from `GameManager.update`) makes one
   `Offer` at a time once reputation allows; the player sits at the desk (`openDeal`, `dealOpen`, tag `dealDesk`) and `chooseDeal`s accept / haggle / decline. `deals.signed` is the list of contracts
   the future warehouse will use. The Engine builds the room in `addOffice` (the doorway is a second removable panel in the east wall, `Facility.setOfficeOpen`, which also shrinks the neighbour block);

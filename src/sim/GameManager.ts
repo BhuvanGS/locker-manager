@@ -45,8 +45,10 @@ const RETURN_VISIT = new Set(['waitingForCollection', 'collecting'])
 /** Customers physically inside (or walking in): the shop is "empty" when none of these exist. */
 const IN_BUILDING = new Set(['arriving', 'waiting', 'depositing', 'returning', 'waitingForCollection', 'collecting'])
 
-/** The counter arm's current customer: taking their bag onto the belt, or handing their bag back. */
+/** A counter arm's current customer: taking their bag onto the belt, or handing their bag back. */
 export interface CounterJob {
+  /** Which counter arm (0, or 1 with the second arm). */
+  arm: number
   kind: 'take' | 'give'
   customerId: CustomerId
   /** Seconds into the job. */
@@ -131,7 +133,7 @@ export class GameManager {
   /** The deal desk is open (the player is talking business with a VIP). */
   dealOpen = false
   /** What the counter arm is doing right now (it serves one customer at a time), if you have bought it. */
-  counterJob: CounterJob | null = null
+  counterJobs: CounterJob[] = []
   private counterCheckAt = 0
   /** An automation console is open (`hub`, or the zone whose arms it controls). */
   consoleScope: 'hub' | 'warehouse' | AutoZone | null = null
@@ -621,10 +623,24 @@ export class GameManager {
     return this.upgrades.has('counter-arm')
   }
 
-  /** The counter arm's job for the 3D view: what it is doing, for whom, and how far through (0…1). */
+  /** How many counter arms there are (0, 1 or 2) and how long each takes per bag (the speed upgrades). */
+  get counterArms(): number {
+    return !this.hasCounterArm ? 0 : this.upgrades.has('counter-arm-2') ? 2 : 1
+  }
+
+  get counterSeconds(): number {
+    const s = CONFIG.automation.counterSpeedSeconds
+    return this.upgrades.has('counter-speed-2') ? s[2]! : this.upgrades.has('counter-speed-1') ? s[1]! : s[0]!
+  }
+
+  /** The counter arms' jobs for the 3D view: which arm, what it is doing, for whom, and how far through (0…1). */
+  counterJobViews(): { arm: number; kind: 'take' | 'give'; customerId: CustomerId; progress: number }[] {
+    return this.counterJobs.map((j) => ({ arm: j.arm, kind: j.kind, customerId: j.customerId, progress: Math.min(1, j.t / this.counterSeconds) }))
+  }
+
+  /** The first counter arm's job (or the only one there is). */
   counterJobView(): { kind: 'take' | 'give'; customerId: CustomerId; progress: number } | null {
-    const j = this.counterJob
-    return j ? { kind: j.kind, customerId: j.customerId, progress: Math.min(1, j.t / CONFIG.automation.counterSeconds) } : null
+    return this.counterJobViews()[0] ?? null
   }
 
   /**
@@ -644,14 +660,18 @@ export class GameManager {
         if (item?.status === 'inLocker' && item.lockerId && this.isRobotLocker(item.lockerId) && !this.conveyor.isBusy(item.lockerId)) this.requestBag(item.lockerId)
       }
     }
-    const job = this.counterJob
-    if (job) {
-      this.advanceCounterJob(job, dt)
-      return
+    for (const job of [...this.counterJobs]) this.advanceCounterJob(job, dt)
+    // Each free arm takes the next customer nobody is serving yet.
+    for (let arm = 0; arm < this.counterArms; arm++) {
+      if (this.counterJobs.some((j) => j.arm === arm)) continue
+      if (!this.startCounterJob(arm)) break
     }
+  }
+
+  private startCounterJob(arm: number): boolean {
     const cfg = CONFIG.automation
     for (const c of this.queue()) {
-      if (this.dialogue?.customerId === c.id) continue
+      if (this.dialogue?.customerId === c.id || this.counterJobs.some((j) => j.customerId === c.id)) continue
       const item = this.customers.itemOf(c)
       if (!item) continue
       if (c.state === 'waiting' && item.status === 'withCustomer') {
@@ -660,27 +680,32 @@ export class GameManager {
         const locker = this.lockers.all().find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId && !this.conveyor.isBusy(l.id))
         if (!locker) continue
         locker.state = 'reserved'
-        this.counterJob = { kind: 'take', customerId: c.id, t: 0, moved: false, lockerId: locker.id }
-        return
+        this.counterJobs.push({ arm, kind: 'take', customerId: c.id, t: 0, moved: false, lockerId: locker.id })
+        return true
       }
       if (c.state === 'waitingForCollection' && item.status === 'onConveyor' && this.conveyor.isReady(item.id)) {
-        this.counterJob = { kind: 'give', customerId: c.id, t: 0, moved: false, lockerId: null }
-        return
+        this.counterJobs.push({ arm, kind: 'give', customerId: c.id, t: 0, moved: false, lockerId: null })
+        return true
       }
     }
+    return false
+  }
+
+  private endCounterJob(job: CounterJob): void {
+    this.counterJobs = this.counterJobs.filter((j) => j !== job)
   }
 
   private advanceCounterJob(job: CounterJob, dt: number): void {
     const c = this.customers.has(job.customerId) ? this.customers.get(job.customerId) : null
     const item = c ? this.customers.itemOf(c) : null
-    const duration = CONFIG.automation.counterSeconds
+    const duration = this.counterSeconds
     const abort = (): void => {
       // Only before the arm has the bag: you started talking to them, or they walked out.
       if (job.lockerId) {
         const locker = this.lockers.get(job.lockerId)
         if (locker.state === 'reserved' && !locker.itemId) locker.state = 'available'
       }
-      this.counterJob = null
+      this.endCounterJob(job)
     }
     if (!c || !item) return abort()
     if (!job.moved) {
@@ -697,7 +722,7 @@ export class GameManager {
       if (progress >= 1 && job.lockerId) {
         this.conveyor.load(item.id, job.lockerId)
         item.status = 'onConveyor'
-        this.counterJob = null
+        this.endCounterJob(job)
         this.finishDeposit(c)
       }
       return
@@ -708,7 +733,7 @@ export class GameManager {
       job.moved = true
     }
     if (progress >= 1) {
-      this.counterJob = null
+      this.endCounterJob(job)
       if (c.state === 'waitingForCollection') this.customers.transition(c.id, 'collecting')
       c.visit.greeted = true
       this.finishReturn(c, item, null)
@@ -926,7 +951,7 @@ export class GameManager {
     if (this.warehouse.has(id)) return { state: 'owned', note: 'Owned' }
     const locked = (note: string) => ({ state: 'locked' as const, note })
     if (!this.hasWarehouse) return locked('Needs the warehouse')
-    if (def.requires && !this.warehouse.has(def.requires)) return locked(`Buy ${WAREHOUSE_UPGRADES.find((d) => d.id === def.requires)?.title ?? def.requires} first`)
+    for (const need of [def.requires, def.needs]) if (need && !this.warehouse.has(need)) return locked(`Buy ${WAREHOUSE_UPGRADES.find((d) => d.id === need)?.title ?? need} first`)
     if (this.economy.level.level < def.level) return locked(`Needs level ${def.level}`)
     if (this.economy.money < def.cost) return { state: 'tooExpensive', note: `Costs $${def.cost}, you have $${this.economy.money}` }
     return { state: 'available', note: null }
@@ -949,7 +974,7 @@ export class GameManager {
     if (!def) return fail('Not sold here.')
     if (this.warehouse.has(id)) return fail(`${def.title} is already owned.`)
     if (!this.hasWarehouse) this.grantUpgrade('warehouse')
-    if (def.requires && !this.warehouse.has(def.requires)) this.grantUpgrade(def.requires)
+    for (const need of [def.requires, def.needs]) if (need && !this.warehouse.has(need)) this.grantUpgrade(need)
     this.warehouse.applyUpgrade(id)
     this.notify({ type: 'upgradeBought', id, kind: 'warehouseUpgrade', index: 0, title: def.title })
     return ok(`Unlocked ${def.title}.`)

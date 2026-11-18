@@ -230,7 +230,7 @@ export const WAREHOUSE = {
   maxZ: -9.4,
   height: 7.0,
   /** Loading docks in the east wall: a roller door each, which opens for a docked truck or when you walk up. */
-  docks: { z: [-12.8, -18.2, -23.6], halfWidth: 1.7, height: 3.6 },
+  docks: { z: [-12.0, -16.8, -21.6, -26.4], halfWidth: 1.6, height: 3.6 },
   /**
    * The truck yard east of the docks. Trucks come down the road, turn in at `inZ`, drive south down `aisleX`, back into their dock in an arc
    * of radius `turn`, and leave by driving out and down to `outZ`, back onto the road.
@@ -277,9 +277,12 @@ export const WAREHOUSE = {
   /** Robot lanes (painted on the floor): the cross aisle, the south aisle, the dock lane, a west link, and the lane inside each room. */
   lanes: { cross: -18.2, south: -25.0, dock: 22.0, west: 7.4, room: -28.4, north: -11.0 },
   /** Where the robots wait and charge. */
+  /** Where the robots wait and charge: two by the south wall, robots 3 and 4 at the east end of the level 3 hall. */
   robotHomes: [
     [21.2, -29.8],
-    [23.0, -29.8],
+    [23, -29.8],
+    [21.4, -36.2],
+    [22.9, -36.2],
   ] as [number, number][],
   /** The receiving desk, by the docks. */
   desk: { x: 19.8, z: -11.4 },

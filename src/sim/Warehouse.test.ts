@@ -647,3 +647,20 @@ describe('Warehouse levels 3 and 4', () => {
     expect(g.warehouse.capacity).toBe(w.startShelves + 12 + 12 + 48 + 48)
   })
 })
+
+describe('More robots', () => {
+  it('robots 3 and 4 need the level 3 hall, and each makes all of them faster', () => {
+    const g = new GameManager(7)
+    g.grantUpgrade('warehouse')
+    g.grantUpgrade('wh-auto-2')
+    g.economy.money = 1_000_000
+    g.economy.xp = 1_000_000
+    expect(g.buyAutomation('wh-auto-3').message).toBe('Buy Warehouse level 3 first')
+    g.grantUpgrade('wh-expand-1')
+    expect(g.buyAutomation('wh-auto-3').ok).toBe(true)
+    expect(g.buyAutomation('wh-auto-4').ok).toBe(true)
+    expect(g.warehouse.robots.length).toBe(4)
+    expect(w.robots.seconds[4]).toBeLessThan(w.robots.seconds[2]!)
+  })
+})
+

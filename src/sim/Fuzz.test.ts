@@ -67,8 +67,7 @@ function check(g: GameManager): void {
       expect(hands, where).toEqual({ kind: 'item', itemId: item.id })
       expect(item.lockerId, where).toBeNull()
     } else if (item.status === 'withArm') {
-      expect(g.counterJob?.customerId, where).toBe(c.id)
-      expect(g.counterJob?.moved, where).toBe(true)
+      expect(g.counterJobs.some((j) => j.customerId === c.id && j.moved), where).toBe(true)
     } else if (item.status === 'onConveyor') {
       expect(
         g.conveyor.parcels.some((p) => p.itemId === item.id),
