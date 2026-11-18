@@ -32,6 +32,14 @@ export function cable(points: THREE.Vector3[], radius = 0.016, material: THREE.M
 export function floorBundle(route: readonly (readonly [number, number])[], riser: { x: number; z: number; top: number }, count = 5, y = 0, messy = 0): THREE.Group {
   const group = new THREE.Group()
   const r = 0.013
+  // The cables start in a floor junction box (under a console it is hidden inside the pedestal), so no end is left loose.
+  const [sx, sz] = route[0]!
+  const [tx, tz] = route[1] ?? route[0]!
+  const start = new THREE.Mesh(new THREE.BoxGeometry(count * (2 * r + 0.006) + 0.08, 0.1, 0.16), BOX)
+  start.position.set(sx, y + 0.05, sz)
+  start.rotation.y = Math.atan2(tx - sx, tz - sz) + Math.PI / 2
+  start.castShadow = true
+  group.add(start)
   for (let i = 0; i < count; i++) {
     const off = (i - (count - 1) / 2) * (2 * r + 0.006)
     const lift = y + r + 0.034 + (i % 2) * 0.006 // above the thickest floor (the warehouse's)

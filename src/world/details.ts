@@ -26,14 +26,17 @@ export function doorFrame(along: 'x' | 'z', x: number, z: number, halfWidth: num
   const frame = frameMat()
   const casing = casingMat()
   const depth = wall + 0.04
-  for (const s of [-1, 1]) box(0.06, height, depth, frame, s * (halfWidth + 0.03), height / 2, 0, g)
-  box(halfWidth * 2 + 0.12, 0.08, depth, frame, 0, height + 0.04, 0, g)
+  // No face may lie in the plane of a wall face (they would flicker): the jambs and head stand 4 cm proud of the opening's cut edges,
+  // and the casings sit just off the wall.
+  for (const s of [-1, 1]) box(0.08, height, depth, frame, s * halfWidth, height / 2, 0, g)
+  box(halfWidth * 2 + 0.08, 0.1, depth, frame, 0, height - 0.01, 0, g)
   for (const face of [-1, 1]) {
-    const fz = face * (wall / 2 + 0.03)
-    for (const s of [-1, 1]) box(0.09, height + 0.08, 0.025, casing, s * (halfWidth + 0.105), (height + 0.08) / 2, fz, g)
-    box(halfWidth * 2 + 0.3, 0.09, 0.025, casing, 0, height + 0.125, fz, g)
+    const fz = face * (wall / 2 + 0.014)
+    for (const s of [-1, 1]) box(0.09, height + 0.125, 0.025, casing, s * (halfWidth + 0.08), (height + 0.125) / 2, fz, g)
+    box(halfWidth * 2 + 0.25, 0.09, 0.025, casing, 0, height + 0.08, fz, g)
   }
-  box(halfWidth * 2, 0.012, wall + 0.08, plateMat(), 0, 0.006, 0, g)
+  // The threshold plate sits on top of the floors (which are up to 3 cm thick).
+  box(halfWidth * 2 - 0.08, 0.012, wall + 0.08, plateMat(), 0, 0.037, 0, g)
   g.position.set(x, y, z)
   if (along === 'z') g.rotation.y = Math.PI / 2
   return g

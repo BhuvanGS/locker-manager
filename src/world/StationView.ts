@@ -314,8 +314,9 @@ export class StationView {
       base.position.set(midX, top - 0.08, z)
       this.root.add(base)
       for (const side of [-1, 1]) {
-        const edge = new THREE.Mesh(new THREE.BoxGeometry(len, 0.1, 0.04), lip)
-        edge.position.set(midX, top + 0.01, z + side * (CONVEYOR.width / 2 + 0.03))
+        // 1 cm proud of the frame's side, so the two faces never share a plane (they flickered).
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(len, 0.1, 0.05), lip)
+        edge.position.set(midX, top + 0.01, z + side * (CONVEYOR.width / 2 + 0.035))
         this.root.add(edge)
       }
       for (let x = BAY.minX + 0.4; x < BAY.maxX; x += 1.4) {

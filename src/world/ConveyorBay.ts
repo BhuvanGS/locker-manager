@@ -145,8 +145,9 @@ export class ConveyorBay {
       frame.castShadow = true
       this.root.add(frame)
       for (const side of [-1, 1]) {
-        const lip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, len), railMat)
-        lip.position.set(x + side * (width / 2 + 0.03), topY + 0.01, midZ)
+        // 1 cm proud of the frame's side, so the two faces never share a plane (they flickered).
+        const lip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, len), railMat)
+        lip.position.set(x + side * (width / 2 + 0.035), topY + 0.01, midZ)
         this.root.add(lip)
       }
       for (let z = startZ - 0.3; z > endZ; z -= 1.4) {

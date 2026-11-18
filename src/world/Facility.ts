@@ -181,9 +181,10 @@ export class Facility {
       const z = PARTITION.z
       const w = maxX - minX
       for (const [x, y, bw, bh] of [
-        [(minX + maxX) / 2, height + 0.04, w + 0.16, 0.08],
-        [minX - 0.04, height / 2, 0.08, height],
-        [maxX + 0.04, height / 2, 0.08, height],
+        // Standing proud of the opening's cut edges, so no face is in a wall face's plane (they would flicker).
+        [(minX + maxX) / 2, height - 0.01, w + 0.08, 0.1],
+        [minX + 0.01, height / 2, 0.08, height],
+        [maxX - 0.01, height / 2, 0.08, height],
       ] as const) {
         const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.34), trim)
         bar.position.set(x, y, z)
