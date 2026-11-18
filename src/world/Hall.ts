@@ -1,13 +1,13 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
-import { doorFrame, levelSign } from './details'
+import { doorFrame, flatRoof, levelSign, rooftopUnit } from './details'
 import { cableCoil, conduit, floorBundle } from './cables'
 import { prop } from './props'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker } from './interactables'
 import { FLOOR_HEIGHT, ROOM, SLAB, SOUTH, stairHole, WAREHOUSE, POWER_FEEDS } from './layout'
 import { makeSign, mat } from './models'
-import { ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, wallMat } from './textures'
+import { ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, roofGravel, wallMat } from './textures'
 
 export type HallKind = 'south' | 'floor1' | 'floor2'
 
@@ -56,7 +56,7 @@ export class Hall {
     const wall = wallMat(0xd5d9de)
     // The slab's top face is the floor of the hall above; the rest is ceiling (faces: +x, −x, +y, −y, +z, −z).
     const edge = mat(0xbfbab0, 0.95)
-    const slab = [edge, edge, concreteFloor(0x8f949a), ceilingMat(0xe7e5e0), edge, edge]
+    const slab = [edge, edge, kind === 'floor2' ? roofGravel(0x9a9a95) : concreteFloor(0x8f949a), ceilingMat(0xe7e5e0), edge, edge]
     const z0 = minZ - T // far end, outer face
     const z1 = maxZ + T // old back wall's south face plane, outer face
     const widthX = maxX - minX + 2 * T
@@ -73,6 +73,19 @@ export class Hall {
     for (const [i, [count, route]] of runs.entries()) this.root.add(floorBundle(route, { ...box, x: box.x + (i - 1.5) * 0.05 }, count, 0, 1))
     this.root.add(cableCoil(-4.1, -20.45, [-4.75, -20.6]))
     this.root.add(cableCoil(3.95, -18.6, [3.6, -19.3], 0, 0x1e40af))
+
+    // The top floor carries the tower's roof: a parapet round the gravel, air-handling units and the stair head's housing.
+    if (kind === 'floor2') {
+      const top = H + SLAB
+      this.root.add(flatRoof(minX - T, maxX + T, minZ - T, maxZ + T, top, wall, roofGravel(0x9a9a95)))
+      this.root.add(rooftopUnit(-3.0, top, -13.0, 0.1))
+      this.root.add(rooftopUnit(-3.2, top, -17.5, -0.2))
+      this.root.add(rooftopUnit(1.0, top, -15.2, 1.5))
+      const hut = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.2, 2.6), wall)
+      hut.position.set(4.6, top + 1.1, -19.4)
+      hut.castShadow = true
+      this.root.add(hut)
+    }
 
     // An electrical box on the far wall, west of the windows, with its conduit to the ceiling.
     this.root.add(prop('power_box_01', { x: minX + 0.9, y: 1.0, z: minZ + 0.2, height: 0.6 }))

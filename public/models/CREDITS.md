@@ -14,5 +14,6 @@ All from [Poly Haven](https://polyhaven.com/models), CC0 (public domain). Downlo
 | `metal_office_desk` | the warehouse supervisor's desk |
 | `desk_lamp_arm_01` | the lamp on that desk |
 | `plastic_monobloc_chair_01` | the chair at that desk |
+| `street_lamp_02` | street lamps along the pavement |
 
 Placed with `prop()` in `src/world/props.ts`.

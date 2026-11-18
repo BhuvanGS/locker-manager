@@ -226,10 +226,10 @@ export class Warehouse {
     this.stockRack(-13.0, 14.4, WAREHOUSE.rack.bays, WAREHOUSE.rack.pitch, WAREHOUSE.rack.levels, 2)
     this.buildDeskCorner(12.5, -9.95)
     for (const vz of [-15.5, -20.9, -27.4]) {
-      this.wallVent(maxX - 0.03, 4.3, vz, -Math.PI / 2)
-      this.wallVent(maxX + T + 0.03, 4.3, vz, Math.PI / 2)
+      this.wallVent(maxX - 0.03, WAREHOUSE.height - 0.8, vz, -Math.PI / 2)
+      this.wallVent(maxX + T + 0.03, WAREHOUSE.height - 0.8, vz, Math.PI / 2)
     }
-    for (const vx of [8.6, 18.0, 22.6]) this.wallVent(vx, 4.3, minZ + 0.03, 0)
+    for (const vx of [8.6, 18.0, 22.6]) this.wallVent(vx, WAREHOUSE.height - 0.8, minZ + 0.03, 0)
 
     // A parts cart along the north wall (clear of the robots' north lane) and an extinguisher by the hall door.
     this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
@@ -1085,7 +1085,7 @@ export class Warehouse {
       sign.rotation.y = ry
       this.root.add(sign)
     }
-    for (const vz of [hall.maxZ - 3, hall.minZ + 3]) this.wallVent(maxX - 0.03, 4.3, vz, -Math.PI / 2)
+    for (const vz of [hall.maxZ - 3, hall.minZ + 3]) this.wallVent(maxX - 0.03, WAREHOUSE.height - 0.8, vz, -Math.PI / 2)
     this.root.add(prop('korean_fire_extinguisher_01', { x: maxX - 0.4, z: hall.maxZ - 0.5, height: 0.6, glow: 0.3 }))
     this.hallsBuilt = i + 1
     if (this.built.has('lanes')) this.paintLaneLines()

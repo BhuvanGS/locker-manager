@@ -42,6 +42,93 @@ export function doorFrame(along: 'x' | 'z', x: number, z: number, halfWidth: num
   return g
 }
 
+/**
+ * A flat roof's finish over minX…maxX × minZ…maxZ at height `y` (the top of the building): a gravel deck, a low parapet round the edge
+ * in the wall's material, and a light coping on it. `skip` leaves out edges that butt against a taller neighbour ('n', 's', 'e', 'w').
+ */
+export function flatRoof(minX: number, maxX: number, minZ: number, maxZ: number, y: number, wall: THREE.Material, gravel: THREE.Material, skip = ''): THREE.Group {
+  const g = new THREE.Group()
+  const w = maxX - minX
+  const d = maxZ - minZ
+  const cx = (minX + maxX) / 2
+  const cz = (minZ + maxZ) / 2
+  // The deck stops 1 cm inside the parapet's outer faces (a shared face would flicker); the parapet reaches down over the seam.
+  const deck = box(w - 0.02, 0.06, d - 0.02, gravel, cx, y + 0.03, cz, g)
+  deck.castShadow = false
+  const coping = new THREE.MeshStandardMaterial({ color: 0xd6d3cd, roughness: 0.6 })
+  const t = 0.18
+  const ph = 0.55
+  for (const [side, pw, pd, px, pz] of [
+    ['n', w, t, cx, maxZ - t / 2],
+    ['s', w, t, cx, minZ + t / 2],
+    ['e', t, d, maxX - t / 2, cz],
+    ['w', t, d, minX + t / 2, cz],
+  ] as const) {
+    if (skip.includes(side)) continue
+    box(pw, ph + 0.1, pd, wall, px, y + (ph - 0.1) / 2, pz, g)
+    box(pw + (pw > pd ? 0.04 : 0.08), 0.05, pd + (pd > pw ? 0.04 : 0.08), coping, px, y + ph + 0.025, pz, g)
+  }
+  return g
+}
+
+/** A rooftop air-handling unit at (x, y, z): a grey casing with a fan grille on top and a duct down into the roof. */
+export function rooftopUnit(x: number, y: number, z: number, rotY = 0): THREE.Group {
+  const g = new THREE.Group()
+  const casing = textured('arm-paint', { color: 0xc7ccd2, colorMap: false, metalness: 0.3, repeat: 0.5 })
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 })
+  box(1.6, 0.9, 1.0, casing, 0, 0.45 + 0.1, 0, g)
+  box(1.7, 0.1, 1.1, dark, 0, 0.05, 0, g)
+  for (const dx of [-0.4, 0.4]) {
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 20), dark)
+    ring.position.set(dx, 1.03, 0)
+    g.add(ring)
+    for (let i = 0; i < 4; i++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.02, 0.03), casing)
+      bar.rotation.y = (i * Math.PI) / 4
+      bar.position.set(dx, 1.07, 0)
+      g.add(bar)
+    }
+  }
+  for (let k = 0; k < 6; k++) box(0.02, 0.5, 0.9, dark, -0.79, 0.55, 0, g).position.z = -0.38 + k * 0.15
+  const duct = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.6, 12), casing)
+  duct.position.set(0.95, 0.3, 0)
+  g.add(duct)
+  g.position.set(x, y, z)
+  g.rotation.y = rotY
+  return g
+}
+
+const leafMats = [0x3f6b2a, 0x4a7a30, 0x355c24].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true }))
+const barkMat = new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.9 })
+/** A tree: a trunk and a crown of a few leafy clumps (`seed` varies its shape), `h` tall, standing at (x, z). */
+export function tree(x: number, z: number, h = 5, seed = 1): THREE.Group {
+  const g = new THREE.Group()
+  const r = (k: number) => {
+    const v = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453
+    return v - Math.floor(v)
+  }
+  const trunkH = h * 0.42
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * (h / 5), 0.17 * (h / 5), trunkH, 8), barkMat)
+  trunk.position.y = trunkH / 2
+  trunk.castShadow = true
+  g.add(trunk)
+  const n = 4 + Math.floor(r(1) * 3)
+  for (let i = 0; i < n; i++) {
+    const s = (0.9 + r(i + 2) * 0.7) * (h / 5)
+    const clump = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), leafMats[i % leafMats.length]!)
+    const a = r(i + 10) * Math.PI * 2
+    const rad = i === 0 ? 0 : 0.5 + r(i + 20) * 0.7
+    clump.position.set(Math.cos(a) * rad * (h / 5), trunkH + 0.6 * (h / 5) + r(i + 30) * 1.2 * (h / 5), Math.sin(a) * rad * (h / 5))
+    clump.scale.y = 0.85
+    clump.castShadow = true
+    clump.receiveShadow = true
+    g.add(clump)
+  }
+  g.position.set(x, 0, z)
+  g.rotation.y = r(99) * Math.PI * 2
+  return g
+}
+
 /** A floor sign: a big yellow disc with the floor's number (G for the ground) and its name beside it. */
 export function levelSign(level: number, name: string, w = 2.6, h = 0.62): THREE.Mesh {
   const canvas = document.createElement('canvas')

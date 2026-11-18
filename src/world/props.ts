@@ -13,6 +13,7 @@ export type PropName =
   | 'modern_arm_chair_01'
   | 'industrial_storage_cart'
   | 'power_box_01'
+  | 'street_lamp_02'
   | 'metal_office_desk'
   | 'desk_lamp_arm_01'
   | 'plastic_monobloc_chair_01'

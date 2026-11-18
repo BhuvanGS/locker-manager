@@ -228,7 +228,7 @@ export const WAREHOUSE = {
   maxX: 24.0,
   minZ: -31,
   maxZ: -9.4,
-  height: 5.0,
+  height: 7.0,
   /** Loading docks in the east wall: a roller door each, which opens for a docked truck or when you walk up. */
   docks: { z: [-12.8, -18.2, -23.6], halfWidth: 1.7, height: 3.6 },
   /**

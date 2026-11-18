@@ -104,6 +104,8 @@ const AVG = {
   ceiling: [0.905, 0.905, 0.905],
   duct: [0.223, 0.223, 0.22],
   cladding: [0.209, 0.402, 0.468],
+  grass: [0.13, 0.231, 0.025],
+  gravel: [0.147, 0.15, 0.136],
   roof: [0.376, 0.089, 0.093],
   plate: [0.159, 0.125, 0.093],
   cardboard: [0.485, 0.275, 0.074],
@@ -148,6 +150,11 @@ export const roadAsphalt = (color: number): THREE.MeshStandardMaterial => textur
 export const yardAsphalt = (color: number): THREE.MeshStandardMaterial => textured('yard-asphalt', { color, average: AVG.yard, repeat: 0.25 })
 /** Painted steel (rack uprights and beams): flat colour with scratches. */
 export const paintedSteel = (color: number): THREE.MeshStandardMaterial => textured('arm-paint', { color, colorMap: false, metalness: 0.3, repeat: 0.5 })
+
+/** The lawn round the buildings (the ground's UVs are in metres: tiled every 4 m). */
+export const grassMat = (color: number): THREE.MeshStandardMaterial => textured('grass', { color, average: AVG.grass, repeat: 0.25, normalScale: 0.6 })
+/** Gravel ballast on the flat roofs. */
+export const roofGravel = (color: number): THREE.MeshStandardMaterial => textured('roof-gravel', { color, average: AVG.gravel, repeat: 1.2, normalScale: 0.6, soften: { amount: 0.45, grey: 'rgb(108,110,103)' } })
 
 /** Ribbed steel for the ducts (use `cylinderMetreUVs` so the ribs keep their spacing). */
 export const ductSteel = (): THREE.MeshStandardMaterial => textured('duct-steel', { color: 0xa3abb5, average: AVG.duct, repeat: 1, metalness: 0.2, normalScale: 0.9 })

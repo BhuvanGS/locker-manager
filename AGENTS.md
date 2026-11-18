@@ -211,6 +211,9 @@ Rules:
   parents it with its own transform undone), and so do the belt drives (`ConveyorBay`) and the warehouse chargers. Cables use the CC0 Rubber004
   grain (there is no CC0 cable texture); they lie above the thickest floor (the warehouse's).
   Halls add a deliberately messy spread (`floorBundle(..., messy)`, `cableCoil`); rails and the counter arm use a tidy `cableTray` along the beam's side.
+- **Exterior** (`details.ts`: `flatRoof` gravel deck + parapet + coping, `rooftopUnit`, procedural `tree`): every flat roof (shop, annexes, office, the
+  tower's top floor, the west neighbour) gets one; the shopfront has a canopy, planters and street lamps (`street_lamp_02`); the ground is textured
+  grass (`grassMat`, UVs in metres). The warehouse is 7 m to the eaves.
 - **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
   number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

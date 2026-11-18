@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { doorFrame } from './details'
+import { doorFrame, flatRoof, rooftopUnit, tree } from './details'
 import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
@@ -7,7 +7,7 @@ import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND } from './layout'
 import { mat } from './models'
 import { prop } from './props'
-import { carpetFloor, ceilingMat, concreteFloor, glassMat, lightPanel, metreUVs, roadAsphalt, textured, tileFloor, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -323,7 +323,7 @@ export class Facility {
     cut.lineTo(hole.maxX, -hole.maxZ)
     cut.closePath()
     shape.holes.push(cut)
-    const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat(0x5d7a4e, 1))
+    const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape), grassMat(0x5f8a46))
     ground.rotation.x = -Math.PI / 2
     ground.position.y = FLOOR_Y - 0.02
     ground.receiveShadow = true
@@ -336,6 +336,13 @@ export class Facility {
     plug.userData.half = new THREE.Vector3((hole.maxX - hole.minX) / 2, 0.48, (hole.maxZ - hole.minZ) / 2)
     plug.userData.body = this.physics.addStaticBox(plug.position.clone(), plug.userData.half as THREE.Vector3)
     this.vaultPlug = plug
+
+    // Trees round the complex: along the west side, behind the halls, and across the service road (none on a path or a drive).
+    for (const [i, [x, z, h]] of ([
+      [-19, -4, 5.5], [-21, -13, 6.5], [-18.5, -22, 5], [-21, -30, 6], [-10, -34, 5.5], [-1, -35, 4.8],
+      [2.5, -40, 6], [-12, -40, 5.2], [52, -6, 6], [53, -22, 5.4], [51, -38, 6.4], [54, -55, 5.6], [-24, 12, 6],
+    ] as const).entries())
+      this.root.add(tree(x, z, h, i + 1))
 
     // A concrete foundation under the whole building, just below every floor: no grass shows through at door thresholds
     // or where a floor stops short of a wall (from the pavement back to the warehouse, the shop's west wall to the yard).
@@ -364,6 +371,13 @@ export class Facility {
     this.neighbourFront = this.deco(10, 3.8, 8.5, east, 11.2, 1.9, 1.75)
     this.neighbourBack.set('west', this.deco(10, 4.4, 6.5, west, -11.2, 2.2, -5.75))
     this.neighbourBack.set('east', this.deco(10, 3.8, 6.5, east, 11.2, 1.9, -5.75))
+    // The west neighbour: a shopfront (dark glass under a striped awning), a cornice and a gravel roof with a parapet.
+    const glassDark = mat(0x22313f, 0.15, 0.6)
+    this.deco(7.6, 2.0, 0.06, glassDark, -11.2, 1.45, 6.03)
+    this.deco(7.8, 0.12, 0.08, mat(0x1f2937, 0.5, 0.4), -11.2, 2.5, 6.04)
+    for (let k = 0; k < 8; k++) this.deco(1.0, 0.32, 0.9, mat(k % 2 ? 0xf5f1e6 : 0x15803d, 0.7), -14.7 + k * 1.0, 2.8, 6.5)
+    this.deco(10.1, 0.18, 0.2, mat(0xe7e2d6, 0.6), -11.2, 4.25, 6.05)
+    this.root.add(flatRoof(-16.2, -6.2, -9.0, 6.0, 4.4, west, roofGravel(0x9a9a95), 'e'))
   }
 
   private buildShell(): void {
@@ -378,6 +392,11 @@ export class Facility {
     this.deco(width, 0.02, COUNTER.z - minZ, concreteFloor(0x8f949a), 0, 0.005, (COUNTER.z + minZ) / 2)
     const ceiling = this.deco(width, 0.1, depth, ceilingMat(0xf4f2ee), 0, height + 0.05, cz)
     ceiling.receiveShadow = false
+
+    // The flat roof: gravel inside a parapet (no parapet at the back, where the halls rise), two air-handling units.
+    this.root.add(flatRoof(minX - t, maxX + t, minZ - t, maxZ + t, height + 0.1, mat(0x2f3e4f, 0.6, 0.2), roofGravel(0x9a9a95), 's'))
+    this.root.add(rooftopUnit(-3.2, height + 0.16, 1.5, 0.2))
+    this.root.add(rooftopUnit(3.4, height + 0.16, -3.5, -0.1))
 
     // Side walls (each has a panel that can be knocked out for an annex) and the back wall.
     this.buildSideWall('west')
@@ -403,6 +422,44 @@ export class Facility {
       this.physics.addStaticBox(glass.position.clone(), new THREE.Vector3((sideW - 0.4) / 2, 0.8, 0.05))
     }
     this.solid(ENTRANCE.halfWidth * 2, height - ENTRANCE.height, t, front, 0, ENTRANCE.height + (height - ENTRANCE.height) / 2, maxZ + t / 2)
+
+    // A steel canopy over the shopfront, hung on tie rods, with a soffit light strip under it.
+    const canopy = new THREE.Group()
+    const steelDark = mat(0x1f2937, 0.5, 0.4)
+    const cz0 = maxZ + t
+    const cDepth = 1.3
+    const cy = 2.47 // just above the doors, below the shop sign
+    const cw = (maxX - minX) + 0.4
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.12, cDepth), steelDark)
+    slab.position.set(0, cy, cz0 + cDepth / 2)
+    slab.castShadow = true
+    canopy.add(slab)
+    const fascia = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.14, 0.05), mat(0xfbbf24, 0.5, 0.2))
+    fascia.position.set(0, cy, cz0 + cDepth)
+    canopy.add(fascia)
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(cw - 0.6, 0.02, 0.08), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d6, emissiveIntensity: 1.4 }))
+    strip.position.set(0, cy - 0.07, cz0 + cDepth - 0.25)
+    canopy.add(strip)
+    for (const x of [-5.2, -1.6, 1.6, 5.2]) {
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.5, 6), mat(0x9ca3af, 0.4, 0.6))
+      rod.position.set(x, cy + 0.55, cz0 + cDepth / 2 + 0.05)
+      rod.rotation.x = -Math.atan2(1.1, cDepth - 0.1)
+      canopy.add(rod)
+    }
+    this.root.add(canopy)
+
+    // Street lamps along the pavement, and planters either side of the door.
+    for (const [x, ry] of [
+      [-7.5, 0],
+      [14.5, 0],
+      [-20, 0],
+    ] as const)
+      this.root.add(prop('street_lamp_02', { x, z: 9.85, rotY: ry, height: 4.6 }))
+    for (const sx of [-1, 1]) {
+      const px = sx * 2.1
+      this.deco(0.9, 0.5, 0.5, mat(0x374151, 0.6), px, 0.25, maxZ + t + 0.45)
+      this.root.add(prop('potted_plant_02', { x: px, y: 0.4, z: maxZ + t + 0.45, height: 0.9 }))
+    }
 
     // Sliding glass doors (visual only; customers and the player pass when open).
     const doorMat = glassMat(0.32, 0xcfe6f2)

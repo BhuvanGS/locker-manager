@@ -23,6 +23,8 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `cardboard` | Cardboard004 | warehouse crates (tinted by cargo) |
 | `road-asphalt` | Road012A | the main street and the service road |
 | `yard-asphalt` | Asphalt031 | the truck yard (dock parking) |
+| `grass` | Grass005 | the lawn round the complex |
+| `roof-gravel` | Gravel043 | the flat roofs |
 
 `locker-door`, `arm-paint` and `till-plastic` are also used on the warehouse robots.
 

@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { flatRoof, rooftopUnit } from './details'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
@@ -7,7 +8,7 @@ import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
 import { makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
-import { carpetFloor, ceilingMat, glassMat, lightPanel, metreUVs, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, glassMat, lightPanel, metreUVs, roofGravel, wallMat, woodMat } from './textures'
 
 const T = 0.2
 const RISE_SECONDS = 1.2
@@ -41,6 +42,8 @@ export class Office {
     this.deco(w, 0.03, d, carpetFloor(0x3b4a5c), cx, 0.016, cz)
     this.deco(w + 0.4, 0.1, d + 0.4, ceilingMat(0xf4f2ee), cx, h + 0.05, cz)
     this.deco(w + 0.6, 0.18, d + 0.6, mat(0x59544e, 0.9), cx, h + 0.19, cz)
+    this.root.add(flatRoof(minX - 0.3, maxX + 0.3, minZ - 0.3, maxZ + 0.3, h + 0.28, outside, roofGravel(0x9a9a95), 'w'))
+    this.root.add(rooftopUnit(cx + 1, h + 0.34, cz - 1, -0.4))
 
     // Walls: north, south and the far (east) end. The west wall is the lobby's own, with the doorway cut in it.
     this.solid(w + T * 2, h, T, outside, cx, h / 2, minZ - T / 2)
