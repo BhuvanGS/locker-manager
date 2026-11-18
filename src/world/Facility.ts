@@ -4,6 +4,7 @@ import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH } from './layout'
 import { mat } from './models'
+import { textured } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -438,8 +439,39 @@ export class Facility {
     const bell = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xd4af37, 0.3, 0.9))
     bell.position.set(1.6, height, z + 0.1)
     this.root.add(bell)
-    // Monitor-less till for now (the computer terminal is a Stage 3 upgrade).
-    this.deco(0.36, 0.14, 0.26, mat(0x1f2937, 0.5), -1.8, height + 0.07, z - 0.05)
+    this.buildTill(-1.8, height, z - 0.05)
+  }
+
+  /** A cash till on the counter, keys and display facing the staff side (−z). Monitor-less: the computer terminal is a Stage 3 upgrade. */
+  private buildTill(x: number, y: number, z: number): void {
+    const plastic = textured('till-plastic', { color: 0x9aa3b0, metalness: 0.1 })
+    const keyMat = mat(0xd1d5db, 0.5)
+    const till = new THREE.Group()
+    till.position.set(x, y, z)
+    const part = (w: number, h: number, d: number, m: THREE.Material, px: number, py: number, pz: number, parent: THREE.Object3D = till): THREE.Mesh => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
+      mesh.position.set(px, py, pz)
+      mesh.castShadow = true
+      parent.add(mesh)
+      return mesh
+    }
+    part(0.38, 0.09, 0.34, plastic, 0, 0.045, 0)
+    // Cash drawer: its seam and a little handle on the staff side.
+    part(0.32, 0.006, 0.004, mat(0x0b0f14, 0.6), 0, 0.03, -0.171)
+    part(0.08, 0.012, 0.012, keyMat, 0, 0.055, -0.176)
+    // Sloping keypad with a grid of keys.
+    const pad = part(0.3, 0.035, 0.17, plastic, 0, 0.11, -0.06)
+    pad.rotation.x = -0.32
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 5; c++) part(0.036, 0.012, 0.032, c === 4 ? mat(0xf59e0b, 0.5) : keyMat, -0.1 + c * 0.05, 0.022, -0.045 + r * 0.045, pad)
+    // Display on a short post at the back.
+    part(0.03, 0.1, 0.03, plastic, 0, 0.14, 0.12)
+    const screen = part(0.17, 0.08, 0.025, plastic, 0, 0.22, 0.12)
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.145, 0.055), new THREE.MeshBasicMaterial({ color: 0x4ade80, toneMapped: false }))
+    face.position.set(0, 0, -0.0135)
+    face.rotation.y = Math.PI
+    screen.add(face)
+    this.root.add(till)
   }
 
   private buildStaffArea(): void {

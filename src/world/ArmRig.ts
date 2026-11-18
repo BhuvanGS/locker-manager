@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { mat } from './models'
+import { armYellow, textured } from './textures'
 
 /** From the wrist to the base of a bag in the gripper. */
 export const HANG = 0.4
@@ -27,8 +27,8 @@ export interface RigSpec {
   drop: Dock
 }
 
-const YELLOW = mat(0xe5a50a, 0.55, 0.2)
-const DARK = mat(0x1f2937, 0.5, 0.4)
+const YELLOW = armYellow()
+const DARK = textured('till-plastic', { color: 0x8a94a3, metalness: 0.3, repeat: 0.5 })
 
 /**
  * One robot arm hanging from an overhead rail: a carriage, a column down from it, a horizontal bar at the wrist and a

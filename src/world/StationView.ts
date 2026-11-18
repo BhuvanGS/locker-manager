@@ -9,6 +9,7 @@ import { makeBag } from './bags'
 import { beltTexture, TEXTURE_TILE } from './belts'
 import { BAY, CONVEYOR, STATION } from './layout'
 import { makeSign, mat } from './models'
+import { armYellow } from './textures'
 
 /** How far apart (z) two bags waiting at the same dock sit, one per arm. */
 const SPACING = 0.5
@@ -231,7 +232,7 @@ export class StationView {
     const { floorY, minX, maxX, rows } = this.opts
     const y = this.railY(arm) + 0.12
     const ceiling = floorY + 3.2
-    const yellow = mat(0xe5a50a, 0.55, 0.2)
+    const yellow = armYellow()
     const dark = mat(0x1f2937, 0.5, 0.4)
     const hang = (x: number, z: number) => {
       const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.06, ceiling - y - 0.05, 0.06), dark)

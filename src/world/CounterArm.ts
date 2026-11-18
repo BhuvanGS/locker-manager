@@ -3,6 +3,7 @@ import type { GameManager } from '../sim/GameManager'
 import { ArmRig, HANG, sample, type Key } from './ArmRig'
 import { CONVEYOR, COUNTER, ROOM } from './layout'
 import { fitInto, makeItemMesh, mat } from './models'
+import { armYellow } from './textures'
 
 const RAIL_Y = 2.85
 /** The rail runs along the counter on the staff side, just behind it. */
@@ -39,7 +40,7 @@ export class CounterArm {
       drop: { x: HOME_X, z: RAIL_Z, reach: 0, wrist: HOME_WRIST },
     })
     this.root.add(this.rig.root)
-    const yellow = mat(0xe5a50a, 0.55, 0.2)
+    const yellow = armYellow()
     const dark = mat(0x1f2937, 0.5, 0.4)
     const beam = new THREE.Mesh(new THREE.BoxGeometry(MAX_X - MIN_X, 0.14, 0.16), yellow)
     beam.position.set((MIN_X + MAX_X) / 2, RAIL_Y + 0.12, RAIL_Z)
