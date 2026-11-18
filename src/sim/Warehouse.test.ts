@@ -635,3 +635,15 @@ describe('The contact (contraband by hand)', () => {
     expect(b.wh.consignments.find((o) => o.loadId === c.loadId)?.section).toBe('hidden')
   })
 })
+
+describe('Warehouse levels 3 and 4', () => {
+  it('each new hall adds four racks of shelf slots, after the two extra racks', () => {
+    const g = new GameManager(7)
+    g.grantUpgrade('warehouse')
+    expect(g.warehouse.capacity).toBe(w.startShelves)
+    expect(g.buyAutomation('wh-expand-1').ok).toBe(false) // needs the racks (and the level and the money) first
+    g.grantUpgrade('wh-expand-2')
+    expect(g.warehouse.has('wh-cap-2') && g.warehouse.has('wh-expand-1')).toBe(true)
+    expect(g.warehouse.capacity).toBe(w.startShelves + 12 + 12 + 48 + 48)
+  })
+})

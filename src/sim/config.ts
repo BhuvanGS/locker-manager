@@ -190,8 +190,10 @@ export interface WarehouseUpgradeDef {
 }
 
 export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
-  { id: 'wh-cap-1', title: 'Extra rack', description: '+12 shelf slots on a fourth rack', cost: 900, level: 8 },
-  { id: 'wh-cap-2', title: 'Fifth rack', description: '+12 more shelf slots on a rack by the south aisle', cost: 1400, level: 8, requires: 'wh-cap-1' },
+  { id: 'wh-cap-1', title: 'Extra rack', description: '+12 shelf slots on a fifth rack, by the south aisle', cost: 900, level: 8 },
+  { id: 'wh-cap-2', title: 'Sixth rack', description: '+12 more shelf slots on a sixth rack by the south aisle', cost: 1400, level: 8, requires: 'wh-cap-1' },
+  { id: 'wh-expand-1', title: 'Warehouse level 3', description: 'A new hall built onto the south of the warehouse: four racks, +48 shelf slots, and the robots drive through to it', cost: 6000, level: 11, requires: 'wh-cap-2' },
+  { id: 'wh-expand-2', title: 'Warehouse level 4', description: 'A second new hall further south: four more racks, +48 shelf slots', cost: 9000, level: 12, requires: 'wh-expand-1' },
   { id: 'wh-cold', title: 'Cold racks', description: 'Racks under cooling units with 12 slots: cold-chain loads keep fresh there, and spoil in 90 s anywhere else', cost: 1800, level: 8 },
   { id: 'wh-vault', title: 'Vault cage', description: 'A locked wire cage with 8 slots for special metals, which get stolen from the open shelves', cost: 2200, level: 9 },
   { id: 'wh-permit', title: 'Special goods licence', description: 'Special metals become fully legal: no fine when the police check', cost: 1500, level: 9 },
@@ -643,7 +645,7 @@ export const CONFIG = {
     /** Opening a load to see what is in it takes this long. */
     inspectSeconds: 6,
     /** Shelf slots at the start; the other sections start with none and come with upgrades. */
-    startShelves: 36,
+    startShelves: 48,
     /** Seconds between loads for the receiving robots, by level (0 = none). */
     /**
      * The warehouse robots (bought with wh-auto-1 / wh-auto-2): how many there are and the seconds each takes per crate. A robot job carries

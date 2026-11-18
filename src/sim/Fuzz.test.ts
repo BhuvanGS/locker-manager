@@ -20,6 +20,7 @@ const SETUPS: string[][] = [
   ['counter-arm', 'office', 'warehouse'],
   ['warehouse', 'wh-cap-1', 'wh-cold', 'wh-vault', 'wh-hidden-1', 'wh-scanner', 'office'],
   ['warehouse', 'wh-auto-2', 'wh-hidden-2', 'wh-permit', 'office'],
+  ['warehouse', 'wh-expand-2', 'wh-auto-2', 'wh-cold', 'wh-hidden-1'],
 ]
 
 function check(g: GameManager): void {

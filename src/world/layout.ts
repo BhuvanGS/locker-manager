@@ -249,7 +249,28 @@ export const WAREHOUSE = {
     { z: -20.4, x0: 14.4, lane: -18.2 },
     { z: -16.0, x0: 14.4, lane: -18.2 },
     { z: -22.8, x0: 9.0, lane: -25.0 },
+    { z: -22.8, x0: 14.4, lane: -25.0 },
+    // Warehouse level 3 (the first new hall), then level 4.
+    { z: -34.0, x0: 9.0, lane: -36.2 },
+    { z: -38.4, x0: 9.0, lane: -36.2 },
+    { z: -34.0, x0: 14.4, lane: -36.2 },
+    { z: -38.4, x0: 14.4, lane: -36.2 },
+    { z: -46.0, x0: 9.0, lane: -48.2 },
+    { z: -50.4, x0: 9.0, lane: -48.2 },
+    { z: -46.0, x0: 14.4, lane: -48.2 },
+    { z: -50.4, x0: 14.4, lane: -48.2 },
   ],
+  /** How many of `shelves` there are at the start, and after each upgrade that adds racks. */
+  startRacks: 4,
+  /**
+   * The new halls (warehouse levels 3 and 4) built onto the south, one after the other: their interiors (same width as the shed), the robot
+   * lane down the middle, and the doorway into each (in the wall to its north), which the west lane runs through.
+   */
+  halls: [
+    { minZ: -42.8, maxZ: -31.2, lane: -36.2 },
+    { minZ: -54.6, maxZ: -43.0, lane: -48.2 },
+  ],
+  hallDoor: { minX: 6.6, maxX: 8.2, height: 2.8 },
   /** The rooms along the south wall (interiors); each has a door in its north wall and a rack along its south wall. */
   cold: { minX: 10.8, maxX: 15.6, minZ: -31, maxZ: -26.6, pitch: 1.0 },
   vault: { minX: 16.2, maxX: 20.4, minZ: -31, maxZ: -26.6, pitch: 0.9 },

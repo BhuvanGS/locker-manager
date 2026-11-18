@@ -252,6 +252,7 @@ export class WarehouseManager {
     if (!WAREHOUSE_UPGRADES.some((u) => u.id === id)) return
     this.owned.add(id)
     if (id === 'wh-cap-1' || id === 'wh-cap-2') this.capacity += 12
+    else if (id === 'wh-expand-1' || id === 'wh-expand-2') this.capacity += 48
     else if (id === 'wh-cold') this.coldCapacity = 12
     else if (id === 'wh-vault') this.vaultCapacity = 8
     else if (id === 'wh-permit') this.permit = true

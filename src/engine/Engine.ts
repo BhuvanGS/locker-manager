@@ -695,6 +695,7 @@ export class Engine {
   }
 
   private startClimb(to: 'down' | 'up'): void {
+    if (to === 'up' && !this.game.vaultHatchOpen) this.game.toggleVaultHatch()
     const U = UNDERGROUND
     const top = new THREE.Vector3(U.top.x, 0.04, U.top.z)
     const bottom = new THREE.Vector3(U.bottom.x, U.floorY, U.bottom.z)

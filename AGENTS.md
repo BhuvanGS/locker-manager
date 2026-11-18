@@ -136,7 +136,11 @@ Rules:
   `hidden`, the **underground vault** (`UNDERGROUND` in `layout.ts`), which only takes contraband. It is built under the shed's south-west corner when
   `wh-hidden-1` is bought: a sliding hatch with a floor-coloured mat (opens when you are near or below), a ladder (tag `ladder`, the Engine's `startClimb`
   / `updateClimb` moves you along it), a rack, a work table with a lamp, a storage room and caged bulbs. The ground has a shaft cut out
-  (`Facility.setVaultOpen` removes its plug; `aroundHole` splits floors round it).
+  (`Facility.setVaultOpen` removes its plug; `aroundHole` splits floors round it). The hatch opens only with E (`game.vaultHatchOpen`, tag `hatch`); climbing up opens it.
+- **Warehouse levels 3 and 4** (`wh-expand-1/2`, +48 slots each): halls south of the shed (`WAREHOUSE.halls`, `hallDoor`), each through a doorway in
+  the wall to its north (`southWall` keeps a removable plug), built by `buildHall` with its own pitched roof. `WAREHOUSE.shelves` lists every rack in
+  buying order (`startRacks` at the start); the west robot lane runs down through the doorways and along each hall (`laneSegments`), and the painted
+  lanes are clipped to the halls built (`paintLaneLines`).
 - **Warehouse view** (`kind: 'warehouse'`, `world/Warehouse.ts`, `WAREHOUSE` in `layout.ts`): the shed stands against the south hall's east wall (x = 6.2; the hall's wall closes that side up to its roof, the shed's
   own wall above it) and reaches north to the back of the east annex, so there is no gap. Two roots, `root` (the shed, zone `warehouse`) and `yard` (road, truck yard, trucks, police car); BOTH are interaction targets.
   Racks run along x (`rackAlongX`; `WAREHOUSE.shelves` in buying order, the rooms' racks along the south wall), each with an invisible proxy tagged `{ kind: 'section', section }`; every section has crate `slots` that fill in

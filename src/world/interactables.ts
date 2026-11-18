@@ -26,6 +26,8 @@ export type Interactable =
   | { kind: 'section'; section: Section }
   /** The ladder down to the underground vault (its top) or up out of it (its foot). */
   | { kind: 'ladder'; to: 'down' | 'up' }
+  /** The sliding hatch over the underground vault: open or close it. */
+  | { kind: 'hatch' }
   /** The contact waiting by the warehouse door. */
   | { kind: 'contact' }
 

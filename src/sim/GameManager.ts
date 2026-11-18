@@ -873,6 +873,15 @@ export class GameManager {
     return r.ok ? ok(r.message) : fail(r.message)
   }
 
+  /** The sliding hatch over the underground vault is open (you open and close it yourself). */
+  vaultHatchOpen = false
+
+  toggleVaultHatch(): ActionResult {
+    if (!this.hasWarehouse || this.warehouse.sectionCapacity('hidden') <= 0) return fail('There is no hatch here.')
+    this.vaultHatchOpen = !this.vaultHatchOpen
+    return ok(this.vaultHatchOpen ? 'You slide the hatch open.' : 'You slide the hatch shut. The mat hides it.')
+  }
+
   /** Say yes to the contact by the warehouse door. */
   agreeContact(): ActionResult {
     if (!this.hasWarehouse) return fail('There is no warehouse yet.')

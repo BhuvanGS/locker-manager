@@ -67,6 +67,12 @@ export class Warehouse {
   private readonly doors: Door[] = []
   /** The floor over the vault's shaft until the vault is built; then the sliding hatch door (and its collider while shut). */
   private floorCap: THREE.Mesh | null = null
+  private grabBars: THREE.Group | null = null
+  /** Halls built so far (warehouse levels 3 and 4), the doorway plugs between them, and the painted lanes (redrawn as halls are added). */
+  private hallsBuilt = 0
+  private readonly southStripes: THREE.Mesh[] = []
+  private readonly hallPlugs: { mesh: THREE.Mesh; body: RAPIER.RigidBody }[] = []
+  private lanePaint: THREE.Group | null = null
   private hatchDoor: { mesh: THREE.Group; body: RAPIER.RigidBody | null; open: number } | null = null
   /** The contact: a person by the door (shown while he is here), his name over his head, and an invisible target to aim at. */
   private contactView: { group: THREE.Group; rig: PersonRig; label: THREE.Mesh | null; name: string } | null = null
@@ -110,7 +116,8 @@ export class Warehouse {
     const south = minZ - T
     const north = maxZ + T
     wall(w + T * 2, T, cx, maxZ + T / 2)
-    wall(w + T * 2, T, cx, minZ - T / 2)
+    // The south wall, with a panel where the doorway into warehouse level 3 is cut.
+    this.southWall(minZ - T / 2, steel, 0)
     // West: the south hall's east wall closes the shed beside the hall; only the part south of the hall is the shed's own.
     const hallSouth = -21.2
     wall(T, hallSouth - south, minX - T / 2, (south + hallSouth) / 2)
@@ -121,16 +128,24 @@ export class Warehouse {
     const edges = [north, ...docks.z.flatMap((z) => [z + docks.halfWidth, z - docks.halfWidth]), south]
     for (let i = 0; i < edges.length; i += 2) wall(T, edges[i]! - edges[i + 1]!, maxX + T / 2, (edges[i]! + edges[i + 1]!) / 2)
     for (const z of docks.z) wall(T, docks.halfWidth * 2, maxX + T / 2, z, docks.height, H)
-    this.buildRoof(roofMat, steel)
+    this.buildRoof(roofMat, steel, minZ, maxZ, true)
     // The blue stripe round the top of the outside walls.
     const stripe = mat(0x1d4ed8, 0.7)
     this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, maxZ + T + 0.01)
-    this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, minZ - T - 0.01)
+    this.southStripes[0] = this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, minZ - T - 0.01)
     this.deco(0.01, 0.5, d + 0.42, stripe, maxX + T + 0.01, H - 0.6, cz)
 
     // The dock doors: rollers that go up into the lintel.
     docks.z.forEach((z, i) => {
-      const roller = new THREE.Mesh(new THREE.BoxGeometry(0.08, docks.height, docks.halfWidth * 2), mat(0x94a3b8, 0.5, 0.5))
+      const roller = new THREE.Mesh(new THREE.BoxGeometry(0.08, docks.height, docks.halfWidth * 2), shutterMat())
+      // Guide rails either side of the shutter (inside), and a steel frame with yellow buffers round the opening (outside).
+      const rail = paintedSteel(0x374151)
+      for (const dz of [-1, 1]) {
+        this.deco(0.1, docks.height, 0.08, rail, maxX - 0.06, docks.height / 2, z + dz * (docks.halfWidth + 0.02))
+        this.deco(0.06, docks.height + 0.12, 0.14, rail, maxX + T + 0.03, (docks.height + 0.12) / 2, z + dz * (docks.halfWidth + 0.07))
+        this.deco(0.16, 0.9, 0.14, paintedSteel(0xfacc15), maxX + T + 0.08, 0.5, z + dz * (docks.halfWidth + 0.07))
+      }
+      this.deco(0.06, 0.12, docks.halfWidth * 2 + 0.28, rail, maxX + T + 0.03, docks.height + 0.06, z)
       roller.position.set(maxX - 0.02, docks.height / 2, z)
       this.root.add(roller)
       this.doors.push({ roller, body: this.doorBody(z), open: 0, z })
@@ -172,7 +187,7 @@ export class Warehouse {
     // Slots for every rack, bought or not; the racks themselves appear when bought (the first two now).
     const { rack, shelves, lanes } = WAREHOUSE
     for (const r of shelves) this.slots.shelves.push(...this.rowSlots(r.z, r.x0, rack.bays, rack.pitch, rack.levels, r.lane))
-    for (const r of shelves.slice(0, 3)) this.rackAlongX(r.z, r.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
+    for (const r of shelves.slice(0, WAREHOUSE.startRacks)) this.rackAlongX(r.z, r.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
     const u = UNDERGROUND.rack
     this.slots.hidden.push(...this.rowSlots(u.z, u.x0, u.bays, u.pitch, u.levels, u.z, UNDERGROUND.floorY))
     for (const section of ['cold', 'vault'] as const) {
@@ -268,7 +283,8 @@ export class Warehouse {
     this.syncRobots(dt, game)
     this.syncPolice(game)
     this.syncDoors(dt, game, player)
-    this.syncHatch(dt, player)
+    this.syncHatch(dt, game)
+    this.syncHalls(game)
     this.syncContact(game, player)
     for (const sp of this.spinners) sp.obj.rotation[sp.axis] += sp.speed * dt
     if (this.fanHead) this.fanHead.rotation.y = Math.sin(performance.now() / 2600) * 0.7
@@ -281,13 +297,17 @@ export class Warehouse {
   private syncUpgrades(game: GameManager): void {
     const wh = game.warehouse
     const { rack, shelves } = WAREHOUSE
-    for (const [i, id] of [
-      [3, 'wh-cap-1'],
-      [4, 'wh-cap-2'],
+    this.syncHalls(game)
+    const n = WAREHOUSE.startRacks
+    for (const [first, count, id] of [
+      [n, 1, 'wh-cap-1'],
+      [n + 1, 1, 'wh-cap-2'],
+      [n + 2, 4, 'wh-expand-1'],
+      [n + 6, 4, 'wh-expand-2'],
     ] as const) {
       if (!wh.has(id) || this.built.has(id)) continue
       this.built.add(id)
-      this.rackAlongX(shelves[i]!.z, shelves[i]!.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
+      for (const r of shelves.slice(first, first + count)) this.rackAlongX(r.z, r.x0, rack.bays, rack.pitch, rack.levels, 'shelves')
     }
     const rooms: [Section, number, string, string, number][] = [
       ['cold', 0xe0f2fe, 'COLD ROOM', '#38bdf8', 0xbae6fd],
@@ -358,13 +378,8 @@ export class Warehouse {
   }
 
   private paintLanes(): void {
+    this.paintLaneLines()
     const paint = mat(0xfacc15, 0.6)
-    for (const [x0, z0, x1, z1] of this.lanes.segments) {
-      const len = Math.hypot(x1 - x0, z1 - z0)
-      if (len < 0.05) continue
-      const along = Math.abs(x1 - x0) > 0.01
-      this.deco(along ? len : 0.1, 0.008, along ? 0.1 : len, paint, (x0 + x1) / 2, 0.036, (z0 + z1) / 2)
-    }
     for (const [x, z] of WAREHOUSE.robotHomes) {
       this.deco(1.3, 0.01, 1.5, diamondPlate(0x374151, 0.25), x, 0.035, z)
       this.deco(1.1, 0.012, 1.3, paint, x, 0.037, z)
@@ -824,18 +839,32 @@ export class Warehouse {
       [0.08, hatch.maxZ - hatch.minZ, hatch.minX - 0.04, hz],
       [0.08, hatch.maxZ - hatch.minZ, hatch.maxX + 0.04, hz],
     ] as const)
-      this.deco(w, 0.02, d, frame, x, 0.04, z)
+      this.deco(w, 0.02, d, frame, x, 0.042, z)
 
     // The ladder: two rails from the vault floor to a little above the warehouse floor, rungs every 30 cm.
     const steel = mat(0x9ca3af, 0.4, 0.6)
     const { x: lx, z: lz } = U.ladder
-    const top = 0.95
+    // The rails stop just under the floor; the grab bars above it slide up only while the hatch is open.
+    const top = -0.02
     for (const dx of [-0.22, 0.22]) {
       const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, top - y0, 8), steel)
       rail.position.set(lx + dx, (top + y0) / 2, lz)
       rail.castShadow = true
       this.root.add(rail)
     }
+    const bars = new THREE.Group()
+    for (const dx of [-0.22, 0.22]) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.2, 8), steel)
+      bar.position.set(lx + dx, -0.3, lz)
+      bar.castShadow = true
+      bars.add(bar)
+    }
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.44, 8), steel)
+    grip.rotation.z = Math.PI / 2
+    grip.position.set(lx, 0.28, lz)
+    bars.add(grip)
+    this.root.add(bars)
+    this.grabBars = bars
     for (let y = y0 + 0.3; y < 0; y += 0.3) {
       const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.44, 6), steel)
       rung.rotation.z = Math.PI / 2
@@ -843,12 +872,12 @@ export class Warehouse {
       this.root.add(rung)
     }
     // Two targets: the top of the ladder (on the warehouse floor) and its foot (in the vault).
-    for (const [to, y, dy] of [
-      ['down', 0.5, 1.0],
-      ['up', y0 + 1.0, 1.6],
+    for (const [to, y, dy, dz] of [
+      ['down', 0.75, 1.5, 1.0],
+      ['up', y0 + 1.0, 1.6, 0.4],
     ] as const) {
-      const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.7, dy, 0.6), new THREE.MeshBasicMaterial({ visible: false }))
-      proxy.position.set(lx, y, lz - 0.15)
+      const proxy = new THREE.Mesh(new THREE.BoxGeometry(1.0, dy, dz), new THREE.MeshBasicMaterial({ visible: false }))
+      proxy.position.set(lx, y, lz - dz / 2 + 0.1)
       tag(proxy, { kind: 'ladder', to })
       this.root.add(proxy)
     }
@@ -861,9 +890,16 @@ export class Warehouse {
     const mat0 = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(hatch.maxX - hatch.minX + 0.04, 0.012, hatch.maxZ - hatch.minZ + 0.04)), carpetFloor(0x7f8894))
     mat0.position.y = 0.021
     door.add(plate, mat0)
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.3), mat(0x9ca3af, 0.4, 0.6))
+    handle.position.set(-(hatch.maxX - hatch.minX) / 2 + 0.1, 0.075, 0)
+    door.add(handle)
+    const hatchProxy = new THREE.Mesh(new THREE.BoxGeometry(hatch.maxX - hatch.minX + 0.2, 0.3, hatch.maxZ - hatch.minZ + 0.2), new THREE.MeshBasicMaterial({ visible: false }))
+    hatchProxy.position.y = 0.12
+    tag(hatchProxy, { kind: 'hatch' })
+    door.add(hatchProxy)
     this.root.add(door)
     // Its rails on the floor to the east.
-    for (const z of [hatch.minZ - 0.02, hatch.maxZ + 0.02]) this.deco(1.5, 0.012, 0.03, frame, hatch.maxX + 0.7, 0.036, z)
+    for (const z of [hatch.minZ - 0.02, hatch.maxZ + 0.02]) this.deco(1.5, 0.012, 0.03, frame, hatch.maxX + 0.7, 0.04, z)
     this.hatchDoor = { mesh: door, body: this.hatchBody(), open: 0 }
 
     // The rack for the vault's slots, along the south wall.
@@ -926,23 +962,133 @@ export class Warehouse {
     )
   }
 
-  /** The hatch slides open when you walk up to it, and stays open while you are down in the vault. */
-  private syncHatch(dt: number, player: THREE.Vector3): void {
+  /** The hatch slides open and shut when you press E on it (`game.vaultHatchOpen`); the grab bars rise out of the shaft once it is open. */
+  private syncHatch(dt: number, game: GameManager): void {
     const d = this.hatchDoor
     if (!d) return
     const { hatch } = UNDERGROUND
     const hx = (hatch.minX + hatch.maxX) / 2
-    const hz = (hatch.minZ + hatch.maxZ) / 2
-    const below = player.y < -0.3
-    const near = Math.hypot(player.x - hx, player.z - hz) < 2.4
-    d.open += ((below || near ? 1 : 0) - d.open) * Math.min(1, dt * 3)
+    d.open += ((game.vaultHatchOpen ? 1 : 0) - d.open) * Math.min(1, dt * 4)
     d.mesh.position.x = hx + d.open * (hatch.maxX - hatch.minX + 0.12)
+    if (this.grabBars) {
+      this.grabBars.position.y = Math.max(0, d.open - 0.5) * 2 * 0.9 - 0.9
+      this.grabBars.visible = d.open > 0.5
+    }
     const shut = d.open < 0.5
     if (shut && !d.body) d.body = this.hatchBody()
     else if (!shut && d.body) {
       this.physics.removeBody(d.body)
       d.body = null
     }
+  }
+
+  /** The painted robot lanes, clipped to the halls built so far (repainted when a hall is added). */
+  private paintLaneLines(): void {
+    if (this.lanePaint) this.root.remove(this.lanePaint)
+    const g = new THREE.Group()
+    const paint = mat(0xfacc15, 0.6)
+    const { halls } = WAREHOUSE
+    const minZ = this.hallsBuilt > 0 ? halls[this.hallsBuilt - 1]!.minZ : WAREHOUSE.minZ
+    for (const [x0, z0a, x1, z1a] of this.lanes.segments) {
+      const z0 = Math.max(z0a, minZ + 0.5)
+      const z1 = Math.max(z1a, minZ + 0.5)
+      if (Math.min(z0a, z1a) < minZ && Math.abs(z0a - z1a) < 0.01) continue // a lane along a hall not built yet
+      const len = Math.hypot(x1 - x0, z1 - z0)
+      if (len < 0.05) continue
+      const along = Math.abs(x1 - x0) > 0.01
+      const m = new THREE.Mesh(new THREE.BoxGeometry(along ? len : 0.1, 0.008, along ? 0.1 : len), paint)
+      m.position.set((x0 + x1) / 2, 0.036, (z0 + z1) / 2)
+      m.receiveShadow = true
+      g.add(m)
+    }
+    this.root.add(g)
+    this.lanePaint = g
+  }
+
+  /** A south wall at `z` (the shed's, or a hall's) with a removable panel in its doorway, for the next hall. */
+  private southWall(z: number, material: THREE.Material, index: number): void {
+    const { minX, maxX, height: H, hallDoor: door } = WAREHOUSE
+    this.solid(door.minX - (minX - T), H, T, material, (minX - T + door.minX) / 2, H / 2, z)
+    this.solid(maxX + T - door.maxX, H, T, material, (door.maxX + maxX + T) / 2, H / 2, z)
+    this.solid(door.maxX - door.minX, H - door.height, T, material, (door.minX + door.maxX) / 2, door.height + (H - door.height) / 2, z)
+    if (index >= WAREHOUSE.halls.length) {
+      this.solid(door.maxX - door.minX, door.height, T, material, (door.minX + door.maxX) / 2, door.height / 2, z)
+      return
+    }
+    const plug = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(door.maxX - door.minX, door.height, T)), material)
+    plug.position.set((door.minX + door.maxX) / 2, door.height / 2, z)
+    plug.castShadow = true
+    markBlocker(plug)
+    this.root.add(plug)
+    const body = this.physics.addStaticBox(plug.position.clone(), new THREE.Vector3((door.maxX - door.minX) / 2, door.height / 2, T / 2))
+    this.hallPlugs[index] = { mesh: plug, body }
+  }
+
+  /** Build the halls the upgrades have paid for (levels 3 and 4), in order. */
+  private syncHalls(game: GameManager): void {
+    const wanted = (game.warehouse.has('wh-expand-1') ? 1 : 0) + (game.warehouse.has('wh-expand-2') ? 1 : 0)
+    while (this.hallsBuilt < wanted) this.buildHall(this.hallsBuilt)
+  }
+
+  /**
+   * A new hall south of the shed (or of the last hall): walls, a pitched roof, floor, lights, its racks (built by the rack upgrades loop),
+   * a doorway from the north that the west robot lane runs through, and the doorway plug to the next hall.
+   */
+  private buildHall(i: number): void {
+    const { minX, maxX, height: H, halls, hallDoor: door } = WAREHOUSE
+    const hall = halls[i]!
+    const w = maxX - minX
+    const cx = (minX + maxX) / 2
+    const d = hall.maxZ - hall.minZ
+    const cz = (hall.minZ + hall.maxZ) / 2
+    const steel = shedCladding(0x86a7b8, 0.3)
+    // Knock through the doorway from the north; the stripe outside that wall is now indoors, so it goes.
+    const old = this.southStripes[i]
+    if (old) this.root.remove(old)
+    const plug = this.hallPlugs[i]
+    if (plug) {
+      this.root.remove(plug.mesh)
+      this.physics.removeBody(plug.body)
+    }
+    this.deco(w, 0.03, d + T, concreteFloor(0x8f949a, 0.3), cx, 0.016, cz + T / 2)
+    this.solid(T, H, d + T, steel, minX - T / 2, H / 2, cz + T / 2)
+    this.solid(T, H, d + T, steel, maxX + T / 2, H / 2, cz + T / 2)
+    this.southWall(hall.minZ - T / 2, steel, i + 1)
+    this.buildRoof(shedRoof(0x9c3a33, 0.25), steel, hall.minZ, hall.maxZ, false)
+    // The blue stripe outside, round the new walls.
+    const stripe = mat(0x1d4ed8, 0.7)
+    this.southStripes[i + 1] = this.deco(w + 0.42, 0.5, 0.01, stripe, cx, H - 0.6, hall.minZ - T - 0.01)
+    this.deco(0.01, 0.5, d + T, stripe, maxX + T + 0.01, H - 0.6, cz + T / 2)
+    // Lights hung from the roof.
+    const panel = lightPanel(0xfff8e7, 1.3)
+    const rodMat = mat(0x6b7280, 0.5, 0.5)
+    for (let x = minX + 2.4; x < maxX - 1; x += 3.8) {
+      for (const z of [hall.maxZ - 2.6, hall.minZ + 3.0]) {
+        const f = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.5), panel)
+        f.position.set(x, H - 0.4, z)
+        this.root.add(f)
+        for (const dx of [-0.7, 0.7]) {
+          const len = roofUnderside(x + dx) - (H - 0.4)
+          const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, len, 6), rodMat)
+          rod.position.set(x + dx, H - 0.4 + len / 2, z)
+          this.root.add(rod)
+        }
+      }
+    }
+    // A level sign over the doorway, on both sides, and vents high on the east wall.
+    for (const [z, ry] of [
+      [hall.maxZ + T + 0.03, 0],
+      [hall.maxZ - 0.03, Math.PI],
+    ] as const) {
+      const sign = makeSign(`WAREHOUSE LEVEL ${i + 3}`, 1.9, 0.26, '#0f172a', '#fbbf24')
+      sign.position.set((door.minX + door.maxX) / 2 + 0.6, door.height + 0.4, z)
+      sign.rotation.y = ry
+      this.root.add(sign)
+    }
+    for (const vz of [hall.maxZ - 3, hall.minZ + 3]) this.wallVent(maxX - 0.03, 4.3, vz, -Math.PI / 2)
+    this.root.add(prop('korean_fire_extinguisher_01', { x: maxX - 0.4, z: hall.maxZ - 0.5, height: 0.6, glow: 0.3 }))
+    this.hallsBuilt = i + 1
+    if (this.built.has('lanes')) this.paintLaneLines()
   }
 
   /** The contact by the door: shown while he is here, walking in and out along `CONTACT_WALK`. */
@@ -1095,8 +1241,8 @@ export class Warehouse {
   }
 
   /** The pitched roof: two sloping sheets meeting at a ridge along z, gable ends on the north and south walls, ridge vents. */
-  private buildRoof(roofMat: THREE.Material, wallMat: THREE.Material): void {
-    const { minX, maxX, minZ, maxZ, height: H } = WAREHOUSE
+  private buildRoof(roofMat: THREE.Material, wallMat: THREE.Material, minZ: number, maxZ: number, north: boolean): void {
+    const { minX, maxX, height: H } = WAREHOUSE
     const half = (maxX - minX) / 2
     const cx = minX + half
     const angle = Math.atan2(ROOF_RISE, half)
@@ -1131,7 +1277,7 @@ export class Warehouse {
     shape.lineTo(cx, H + ROOF_RISE)
     shape.closePath()
     const gable = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false })
-    for (const z of [maxZ, minZ - T]) {
+    for (const z of north ? [maxZ, minZ - T] : [minZ - T]) {
       const m = new THREE.Mesh(gable, wallMat)
       m.position.z = z
       m.castShadow = true
@@ -1300,6 +1446,12 @@ function laneSegments(): [number, number, number, number][] {
     segs.push([cx, lanes.south, cx, lanes.room], [r.minX + 0.5, lanes.room, r.maxX - 0.5, lanes.room])
   }
   for (const z of docks.z) segs.push([lanes.dock, z, lanes.dock + 1.2, z])
+  // Down through the doorways into the new halls, and along each one.
+  let fromZ: number = lanes.south
+  for (const hall of WAREHOUSE.halls) {
+    segs.push([lanes.west, fromZ, lanes.west, hall.lane], [lanes.west, hall.lane, 20.0, hall.lane])
+    fromZ = hall.lane
+  }
   return segs
 }
 
@@ -1335,4 +1487,34 @@ function makeNameSprite(text: string): THREE.Sprite {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }))
   sprite.scale.set(3.2, 0.4, 1)
   return sprite
+}
+
+let shutter: THREE.MeshStandardMaterial | null = null
+/** A roller shutter: horizontal steel slats with dark seams and a little wear, drawn once and shared by every dock door. */
+function shutterMat(): THREE.MeshStandardMaterial {
+  if (shutter) return shutter
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 256
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    for (let y = 0; y < 256; y += 16) {
+      const g = ctx.createLinearGradient(0, y, 0, y + 16)
+      g.addColorStop(0, '#a8b3bf')
+      g.addColorStop(0.45, '#cbd3dc')
+      g.addColorStop(0.85, '#8a96a3')
+      g.addColorStop(1, '#3f4954')
+      ctx.fillStyle = g
+      ctx.fillRect(0, y, 64, 16)
+    }
+    ctx.fillStyle = 'rgba(60, 50, 40, 0.12)'
+    for (let i = 0; i < 40; i++) ctx.fillRect((i * 37) % 64, (i * 53) % 256, 2 + (i % 3), 1)
+  }
+  const map = new THREE.CanvasTexture(canvas)
+  map.colorSpace = THREE.SRGBColorSpace
+  map.wrapS = THREE.RepeatWrapping
+  map.wrapT = THREE.RepeatWrapping
+  map.repeat.set(1, 1.6)
+  shutter = new THREE.MeshStandardMaterial({ map, roughness: 0.45, metalness: 0.35, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.12 })
+  return shutter
 }

@@ -71,6 +71,8 @@ export class InteractionManager {
         return game.hands?.kind === 'crate' ? game.storeCrate(t.section) : game.takeCrateFrom(t.section)
       case 'ladder':
         return { ok: true, message: '' } // the Engine does the climbing
+      case 'hatch':
+        return game.toggleVaultHatch()
       case 'contact': {
         const c = game.warehouse.contact
         if (c?.job === 'drop' && c.phase === 'asking') return game.agreeContact()
@@ -133,7 +135,11 @@ export class InteractionManager {
         if (hands) return none(hands.kind === 'crate' ? 'Store the crate you carry first' : 'Hands full')
         return truck.onBoard > 0 ? { action: `Take a crate off ${name}'s truck (${truck.onBoard} left)`, hint: null } : none('Empty')
       }
+      case 'hatch':
+        return { action: game.vaultHatchOpen ? 'Slide the hatch shut' : 'Slide the hatch open', hint: null }
       case 'ladder':
+        if (t.to === 'down' && !game.vaultHatchOpen) return none('The hatch is shut')
+        if (t.to === 'up' && !game.vaultHatchOpen) return { action: 'Push the hatch open and climb up', hint: null }
         if (hands?.kind === 'crate' || hands?.kind === 'item') return { action: t.to === 'down' ? 'Climb down the ladder (with the crate)' : 'Climb up the ladder (with the crate)', hint: null }
         return { action: t.to === 'down' ? 'Climb down the ladder' : 'Climb up the ladder', hint: null }
       case 'contact': {
