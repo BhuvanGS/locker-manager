@@ -4,7 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { Appearance, Special } from '../sim/types'
 import { kenney, loadKenney } from './kenney'
 import { BOX_COLOURS, CAR_COLOURS, KEI_COLOURS, makeCar, makeDeliveryTruck, makeKeiTruck, setBraking, type VehicleModel } from './vehicles'
-import { HARBOUR, LAKE, sandHeight, STREET } from './layout'
+import { HARBOUR, LAKE, PARK, sandHeight, STREET } from './layout'
 import { animatePerson, makePerson, mat, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
 import { prop } from './props'
@@ -13,6 +13,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { blockBeachHut, blockDeckChair, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
 import { blockBush } from './facade'
 import { tunnelPortal } from './Gates'
+import { Park } from './Park'
 
 /**
  * The town round the shop, which lives on its own (no sim state): buildings across the street, street lamps and furniture, traffic
@@ -82,6 +83,7 @@ export class Town {
     this.buildLot()
     this.buildLotEast()
     this.buildEastGate()
+    this.buildPark()
     this.buildDunes()
     this.buildFurniture()
     this.buildBeachLife()
@@ -524,6 +526,28 @@ export class Town {
     }
   }
 
+  private park: Park | null = null
+
+  /** The park east of the service road, and a row of blocks closing the world off beyond it (from the street down to the district). */
+  private buildPark(): void {
+    const park = new Park()
+    this.root.add(park.root)
+    for (const b of park.solids) this.solid(b.x, b.y, b.z, b.hx, b.hy, b.hz)
+    for (const [x, z] of park.lamps) this.lamp(x, z, Math.PI)
+    this.park = park
+    const names = ['building-a', 'building-f', 'building-i', 'building-c', 'building-m', 'building-g', 'building-k']
+    let k = 0
+    for (let z = STREET.lot.minZ - 3; z > -100; ) {
+      const w = 7.2 + (k % 3) * 0.8
+      this.root.add(kenney('city', names[k % names.length]!, { x: PARK.borderX, z: z - w / 2, rotY: -Math.PI / 2, length: w }))
+      this.solid(PARK.borderX, 4, z - w / 2, 3.2, 4, w / 2 - 0.2)
+      z -= w + 0.5
+      k++
+    }
+    const tall = ['building-skyscraper-b', 'building-skyscraper-d', 'building-skyscraper-a']
+    for (let i = 0; i < 6; i++) this.root.add(kenney('city', tall[i % tall.length]!, { x: PARK.borderX + 16 + (i % 2) * 9, z: -12 - i * 15, rotY: -Math.PI / 2, scale: 7 + (i % 3) }))
+  }
+
   /** The main street's east end: it runs into a tunnel under a block, with taller blocks behind, so the town ends there. */
   private buildEastGate(): void {
     const road = STREET.road
@@ -856,6 +880,7 @@ export class Town {
     this.updateCars(dt, [player, ...obstacles])
     this.updateWalkers(dt, player)
     for (const rig of this.loungers) animatePerson(rig, dt, rig.root.userData.pose as 'sit' | 'idle')
+    this.park?.update(dt)
   }
 
   /** Walkers' positions (for anything else that should avoid them). */

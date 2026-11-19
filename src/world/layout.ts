@@ -468,6 +468,24 @@ export const STREET = {
   buildingZ: 20.6,
 } as const
 
+/**
+ * The park east of the service road, between the shops on the street and the warehouse district's blocks: a hedge round `minX…maxX` ×
+ * `minZ…maxZ`, paths `path` wide crossing at a round plaza (`plazaR`) with a fountain at `centre`, the path in from the service road
+ * starting at `entryX`, and a playground. `borderX` is the row of blocks closing the world off east of it.
+ */
+export const PARK = {
+  minX: 56,
+  maxX: 100,
+  minZ: -40,
+  maxZ: -8,
+  entryX: 48.5,
+  path: 3,
+  plazaR: 8,
+  centre: { x: 78, z: -24 },
+  playground: { x: 91, z: -33 },
+  borderX: 106,
+} as const
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 

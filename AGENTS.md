@@ -280,6 +280,9 @@ Rules:
   `Checkpost` (booth with a guard, canopy, island, barriers that lift for visible trucks and the police) at `WAREHOUSE.gate.checkZ`, then its tunnel
   at `gate.tunnelZ` (built with the warehouse, `Warehouse.buildGate`); the main street ends at `STREET.gateX` (`Town.buildEastGate`; the town's
   blocks and lamps stop short of it); the port road's tunnel is built with the container terminal. Vehicles appear and vanish inside the tunnels.
+- **The park** (`world/Park.ts`, `PARK` in `layout.ts`): east of the service road, a hedged park with paths, a fountain plaza (benches with
+  people), flower beds, a playground (swings animate in `Park.update`), trees and lamps; the Town builds it (`buildPark`) with a row of blocks at
+  `PARK.borderX` and towers behind, which close the world off to the east from the street down to the warehouse district.
 - **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
   blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
   `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use
