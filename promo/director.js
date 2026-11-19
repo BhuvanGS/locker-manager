@@ -10,7 +10,7 @@
 
   const SHOTS = [
     // A. Quiet, sneaking: night falls on the shop, then dawn.
-    ['front-night', 0, 7.06, 'S1', 0.93, [0, 1.7, 19.4], [0, 2.0, 12.5], [0, 2.8, 5], [0, 2.8, 5], 50],
+    ['front-night', 0, 7.06, 'S1', 0.93, [1.5, 1.6, 10.0], [0, 1.8, 7.6], [0, 2.6, 5], [0, 2.4, 4], 55],
     ['lobby-night', 7.06, 11.58, 'S1', 0.95, [-4.7, 1.65, 5.5], [-1.6, 1.65, 4.7], [1, 1.15, 0.6], [1.6, 1.15, 0.4], 55],
     ['storage-night', 11.58, 16.1, 'S1', 0.97, [4.6, 1.9, -3.3], [-1.4, 1.9, -3.3], [-0.5, 1.3, -9], [-1.5, 1.3, -9], 55],
     ['beach-dawn', 16.1, 21.62, 'S1', 0.255, [-66, 1.0, 34], [-66, 1.5, 20], [-46, 3, 10], [-44, 3, 8], 55],
@@ -41,7 +41,7 @@
     ['aerial-town', 78.2, 80.4, 'S1', 0.6, [-6, 22, 17], [10, 26, 15], [10, 0, -18], [14, 0, -20], 60],
     ['harbour-close', 80.4, 81.5, 'S2', 0.61, [-22, 9, -30], [-24, 9.5, -31], [-34, 8, -46], [-34, 8, -46], 50],
     // D. The climax: dusk, a star brightening, the strike on the last crash, the lobby roof blown open, the title.
-    ['sky-street', 81.5, 85.6, 'S3', 0.735, [10, 1.6, 19.2], [9, 1.6, 19.2], sky(140), sky(150), 55],
+    ['sky-street', 81.5, 85.6, 'S3', 0.735, [10, 2.1, 20.25], [9, 2.1, 20.25], sky(140), sky(150), 55],
     ['sky-plaza', 85.6, 89.7, 'S3', 0, [-41.5, 1.6, 3.2], [-42.5, 1.7, 2.6], sky(120), sky(110), 55],
     ['sky-close', 89.7, 92.8, 'S3', 0, [2, 1.7, 13], [2, 1.7, 12.5], sky(90), sky(60), 40],
     ['fall', 92.8, 94.8, 'S3', 0, [-58, 2.2, 8], [-58, 2.4, 7], [-36, 4, -24], [-36, 2, -24], 60],
@@ -100,9 +100,12 @@
         if (session === 'S3') {
           const g = __game.sim()
           const startT = list[0][1]
-          g.meteor.start(g.now)
-          g.meteor.hurry(g.now, 94.8 - startT)
-          setTimeOfDay(list[0][4])
+          // (The first-person walk into the climax may have started the countdown already.)
+          if (g.meteor.phase !== 'countdown') {
+            g.meteor.start(g.now)
+            g.meteor.hurry(g.now, 94.8 - startT)
+            setTimeOfDay(list[0][4])
+          }
           for (const s of list) await record([...s.slice(0, 4), 0, ...s.slice(5)])
         } else {
           for (const s of list) await record(s)

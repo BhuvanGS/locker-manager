@@ -147,7 +147,7 @@ export class Engine {
   /** Whether the mod menu was open last frame (to release / regain the mouse on the change). */
   private modWasOpen = false
   /** Debug only: forced walking input, so automation can walk through doors. */
-  private debugWalk: { forward: number; right: number } | null = null
+  private debugWalk: { forward: number; right: number; sprint?: boolean } | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -599,6 +599,7 @@ export class Engine {
     if (this.debugWalk) {
       input.forward = this.debugWalk.forward
       input.right = this.debugWalk.right
+      if (this.debugWalk.sprint) input.sprint = true
     }
     const player = this.player
     if (!player || !this.facility || !this.interaction) return
@@ -1155,6 +1156,15 @@ export class Engine {
         for (let i = 0; i < steps; i++) this.tick(1 / 30)
         this.renderer.render(this.scene, this.cameraRig.camera)
       },
+      /** Filming in first person: hold the movement keys (relative to the view) until called again (0, 0 lets go). */
+      drive: (forward: number, right: number, sprint = false) => {
+        this.debugWalk = forward || right ? { forward, right, sprint } : null
+      },
+      /** Filming: set the view's yaw and pitch outright; `angles()` reads them back. */
+      aim: (yaw: number, pitch: number) => this.cameraRig.setAngles(yaw, pitch),
+      angles: () => [this.cameraRig.getYaw(), this.cameraRig.getPitch()],
+      /** Filming: climb the vault ladder ('down' from the hatch, 'up' from below). */
+      climb: (to: 'down' | 'up') => this.startClimb(to),
       /** Run a mod-menu request directly (`{ type: 'unlockAll' }`, `{ type: 'meteor' }`, …). */
       mod: (request: Parameters<typeof applyMod>[1]) => applyMod(this.game, request),
       /** Filming: a free camera at `pos` looking at `look` (null: back to first person). */
@@ -1162,8 +1172,13 @@ export class Engine {
         this.cinematic = pos && look ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look), fov } : null
         if (!this.cinematic) this.cameraRig.resize(this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight))
       },
-      /** Filming: render at a fixed size (e.g. 1920 × 1080), whatever the window. */
+      /**
+       * Filming: render at a fixed size (e.g. 1920 × 1080), whatever the window, and stop the real-time loop so only `frame()` moves
+       * time (otherwise the browser's own frames run in between and time races ahead of the recording).
+       */
       filmSize: (w: number, h: number) => {
+        this.running = false
+        cancelAnimationFrame(this.raf)
         this.renderer.setPixelRatio(1)
         this.renderer.setSize(w, h, false)
         this.cameraRig.resize(w / h)

@@ -345,7 +345,10 @@ __game.filmSize(1920, 1080); __game.cinema([x,y,z], [lx,ly,lz], fov); __game.fra
 
 **Promo video** (`promo/`): `frame_server.py` receives frames, `director.js` (loaded into the page with `eval(await fetch(...))`) holds the shot list
 timed to the song and records each session (`film.setup('S1')`, `film.run('S1')`; S2 = harbour, S3 = the meteor climax in a fresh game),
-`build.sh` joins the frames with the song (from 0:55), captions and title into `promo/Locker Manager promo.mp4` (ignored by git).
+`build.sh` joins the frames with the song (from 0:55), captions, game-style toasts and the title into `promo/Locker Manager promo.mp4` (ignored by git).
+The middle (26–81.5 s) is first person: `pov.js` walks the real player (`__game.drive`, `__game.aim`, `__game.climb`) through beats of real game
+actions, `middle.js` records them all in one fresh game (setting each beat's state up off camera), and `pov.LEAD` walks into the climax.
+`__game.filmSize` stops the real-time loop, so only `frame()` moves time; without that the browser's own frames run in between.
 
 ## Skills (`.claude/skills/`)
 

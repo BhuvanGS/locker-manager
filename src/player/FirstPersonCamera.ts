@@ -91,6 +91,16 @@ export class FirstPersonCamera {
     this.pitch = THREE.MathUtils.clamp(this.pitch + pitch, this.minPitch, this.maxPitch)
   }
 
+  /** Set the view outright (filming: a scripted walk steers the head). */
+  setAngles(yaw: number, pitch: number): void {
+    this.yaw = yaw
+    this.pitch = THREE.MathUtils.clamp(pitch, this.minPitch, this.maxPitch)
+  }
+
+  getPitch(): number {
+    return this.pitch
+  }
+
   getYaw(): number {
     return this.yaw
   }
