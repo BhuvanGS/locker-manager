@@ -260,6 +260,9 @@ Rules:
   each car following the one ahead by distance along the loop and braking for the player, customers, walkers, the VIP's car and trucks
   (the Engine passes them in); passers-by who stroll, cross at the zebra and sit on benches; people on the beach. Cars and walkers are
   moving colliders (`PhysicsWorld.addMovingBox` / `moveBody`). Customers arrive and leave along the pavement, not across the road.
+- **Roundabout traffic**: the loop's ring is a dense arc with cubic entry and exit curves (keep the rounding radius well under the point
+  spacing, or the path doubles back and cars flip). Cars (`Car.drifter`: everything but delivery trucks) take it at 6.8 m/s and drift
+  (`Town.drift`: body yaw = path yaw + `slip`, smoke and skid marks from a `TyreFx`); delivery trucks slow to 3.6 m/s and drive round normally.
 - **Seafront, junction and lot** (`Town.buildSeafront`, `buildJunction`, `buildLot`; `STREET.roundabout`, `plaza`, `parking`, `wallX`, `boardwalkZ`,
   `lot`, `junction` in `layout.ts`): the main street ends in a roundabout (traffic's loop goes round the island at `roundabout.lane`; `turnX` is its
   centre) on a block-paved plaza with a car park, an ice-cream kiosk and café tables, benches facing the sea, a sea wall with a railing, boardwalks onto

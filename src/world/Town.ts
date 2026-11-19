@@ -13,6 +13,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { blockBeachHut, blockDeckChair, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
 import { blockBush } from './facade'
 import { tunnelPortal } from './Gates'
+import { TyreFx } from './drift'
 import { Park } from './Park'
 import { buildBounds } from './Bounds'
 
@@ -38,6 +39,12 @@ type Car = {
   half: number
   /** Our own vehicle (null: a Kenney model). */
   model: VehicleModel | null
+  /** Cars drift round the roundabout (delivery trucks do not): the body's angle off the way it is going, and the next puff of smoke. */
+  drifter: boolean
+  slip: number
+  smokeAt: number
+  /** The way along the road (the body may be turned off it in a drift). */
+  pathYaw: number
 }
 
 type Walker = {
@@ -74,8 +81,33 @@ export class Town {
     // West along the far lane, round the roundabout's island (north side, west, south side), and back east.
     const R = STREET.roundabout
     const ring: [number, number][] = []
-    for (let deg = 70; deg <= 290; deg += 20) ring.push([R.x + R.lane * Math.cos((deg * Math.PI) / 180), R.z + R.lane * Math.sin((deg * Math.PI) / 180)])
-    this.loop = rounded([[STREET.eastX, LANE_WEST], [R.x + 6, LANE_WEST], ...ring, [R.x + 6, LANE_EAST], [STREET.eastX, LANE_EAST]], 1.5)
+    // A smooth arc (points every 5°, rounded far less than their spacing: with corners rounded more than half a segment the path doubled
+    // back on itself and cars flipped round).
+    // Entry and exit: cubic curves from the lane into the ring and back out, tangent at both ends.
+    const at = (deg: number): [number, number] => [R.x + R.lane * Math.cos((deg * Math.PI) / 180), R.z + R.lane * Math.sin((deg * Math.PI) / 180)]
+    const tangent = (deg: number): [number, number] => [-Math.sin((deg * Math.PI) / 180), Math.cos((deg * Math.PI) / 180)]
+    const cubic = (a: [number, number], b: [number, number], c: [number, number], d: [number, number]) => {
+      const out: [number, number][] = []
+      for (let i = 1; i < 12; i++) {
+        const t = i / 12
+        const u = 1 - t
+        out.push([u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0], u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1]])
+      }
+      return out
+    }
+    const IN = 75
+    const OUT = 285
+    const e = at(IN)
+    const te = tangent(IN)
+    const x = at(OUT)
+    const tx = tangent(OUT)
+    const inStart: [number, number] = [R.x + 10, LANE_WEST]
+    const outEnd: [number, number] = [R.x + 10, LANE_EAST]
+    const entry = cubic(inStart, [inStart[0] - 3, LANE_WEST], [e[0] - te[0] * 2.5, e[1] - te[1] * 2.5], e)
+    for (let deg = IN; deg <= OUT; deg += 5) ring.push(at(deg))
+    const exit = cubic(x, [x[0] + tx[0] * 2.5, x[1] + tx[1] * 2.5], [outEnd[0] - 3, LANE_EAST], outEnd)
+    this.loop = rounded([[STREET.eastX, LANE_WEST], inStart, ...entry, ...ring, ...exit, outEnd, [STREET.eastX, LANE_EAST]], 0.15)
+    this.root.add(this.tyres.root)
     this.buildStreet()
     this.buildJunction()
     for (const x of [STREET.service.minX - STREET.junction.cornerR - 0.6, STREET.service.maxX + STREET.junction.cornerR + 0.6]) this.hydrant(x, STREET.near.maxZ - 0.45)
@@ -488,7 +520,10 @@ export class Town {
     }
     for (const [hx, hz] of [[-12.5, STREET.near.maxZ - 0.45], [26, STREET.near.maxZ - 0.45], [8, STREET.far.minZ + 0.5], [-34, STREET.far.minZ + 0.5]] as const) this.hydrant(hx, hz)
     // Picnic tables on the grass by the beach, north of the plaza.
-    for (const [px, pz] of [[LAKE.coast.grassX + 4, 28], [LAKE.coast.grassX + 5, 34]] as const) {
+    // A block on the corner where the back street meets the plaza.
+    this.root.add(kenney('city', 'building-j', { x: -47.6, z: 30.6, rotY: Math.PI, length: 8 }))
+    this.solid(-47.6, 4, 30.6, 3.8, 4, 3.3)
+    for (const [px, pz] of [[LAKE.coast.grassX + 4, 39], [LAKE.coast.grassX + 9, 41]] as const) {
       const t = blockPicnicTable()
       t.position.set(px, 0, pz)
       t.rotation.y = Math.PI / 2
@@ -705,6 +740,10 @@ export class Town {
       body: this.physics.addMovingBox(new THREE.Vector3(0, -20, 0), new THREE.Vector3((model?.width ?? 2.1) / 2, 0.8, half)),
       half,
       model,
+      drifter: !model || model.length < 5,
+      slip: 0,
+      smokeAt: 0,
+      pathYaw: 0,
     }
     if (model) car.wheels.push(...model.wheels)
     else
@@ -721,7 +760,8 @@ export class Town {
   private placeCar(car: Car): void {
     const p = car.leg.at(car.s / car.leg.length)
     car.group.position.set(p.x, 0, p.z)
-    car.group.rotation.y = p.yaw
+    car.group.rotation.y = p.yaw + car.slip
+    car.pathYaw = p.yaw
     this.physics.moveBody(car.body, p.x, 0.8, p.z, p.yaw)
   }
 
@@ -733,7 +773,7 @@ export class Town {
     const fwd = this.tmp
     for (const car of [...this.cars]) {
       const p = car.group.position
-      const yaw = car.group.rotation.y
+      const yaw = car.pathYaw
       fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw))
       // The nearest thing ahead in our path (people, the player, vehicles, other cars).
       let nearest = Infinity
@@ -756,9 +796,12 @@ export class Town {
       const gap = nearest - car.half - 1.4
       let target = CRUISE
       if (nearest < Infinity) target = Math.max(0, Math.min(CRUISE, gap * 1.3))
-      // Slow for the turn at the beach end.
+      // The roundabout: delivery trucks slow right down and go round normally; cars take it faster and drift round.
       const u = car.s / car.leg.length
-      if (Math.abs(p.x - STREET.turnX) < 9) target = Math.min(target, 3.6)
+      const R = STREET.roundabout
+      const onRing = Math.hypot(p.x - R.x, p.z - R.z) < R.r + 2
+      if (Math.abs(p.x - STREET.turnX) < 11) target = Math.min(target, car.drifter ? 6.8 : 3.6)
+      this.drift(car, dt, onRing)
       const accel = target > car.speed ? 3 : 9
       car.speed += THREE.MathUtils.clamp(target - car.speed, -accel * dt, accel * dt)
       const ds = car.speed * dt
@@ -772,6 +815,39 @@ export class Town {
       this.placeCar(car)
     }
   }
+
+  /**
+   * A drifting car: on the ring its body swings into the turn (the more it turns, the more it slides), with smoke and skid marks off the
+   * back tyres and the brake lights on; out of the ring it straightens up and carries on.
+   */
+  private drift(car: Car, dt: number, onRing: boolean): void {
+    let want = 0
+    if (car.drifter && onRing && car.speed > 3) {
+      const ahead = car.leg.at(Math.min(1, (car.s + 2.5) / car.leg.length))
+      const turn = Math.atan2(Math.sin(ahead.yaw - car.pathYaw), Math.cos(ahead.yaw - car.pathYaw))
+      want = THREE.MathUtils.clamp(turn * 1.5, -0.62, 0.62)
+    }
+    car.slip += (want - car.slip) * Math.min(1, dt * (want ? 3.5 : 2.2))
+    if (Math.abs(car.slip) < 0.2) return
+    if (car.model) setBraking(car.model, true)
+    car.smokeAt -= dt
+    const p = car.group.position
+    const body = car.group.rotation.y
+    const cos = Math.cos(body)
+    const sin = Math.sin(body)
+    const vx = -Math.sin(car.pathYaw) * car.speed
+    const vz = -Math.cos(car.pathYaw) * car.speed
+    const rear = car.model?.rearWheels ?? [new THREE.Vector3(-0.8, 0, 1.4), new THREE.Vector3(0.8, 0, 1.4)]
+    for (const r of rear) {
+      const wx = p.x + r.x * cos + r.z * sin
+      const wz = p.z - r.x * sin + r.z * cos
+      this.tyres.skid(wx, wz, Math.atan2(vx, vz))
+      if (car.smokeAt <= 0) this.tyres.smoke(wx, wz, vx, vz, 0.6 + Math.abs(car.slip))
+    }
+    if (car.smokeAt <= 0) car.smokeAt = 0.05
+  }
+
+  private readonly tyres = new TyreFx()
 
   private removeCar(car: Car): void {
     this.root.remove(car.group)
@@ -899,6 +975,7 @@ export class Town {
   update(dt: number, player: THREE.Vector3, obstacles: readonly THREE.Vector3[]): void {
     dt = Math.min(dt, 0.1)
     this.updateCars(dt, [player, ...obstacles])
+    this.tyres.update(dt)
     this.updateWalkers(dt, player)
     for (const rig of this.loungers) animatePerson(rig, dt, rig.root.userData.pose as 'sit' | 'idle')
     this.park?.update(dt)
