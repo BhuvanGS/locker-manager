@@ -1,6 +1,7 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
 import { kenney } from './kenney'
+import { BOX_COLOURS, KEI_COLOURS, makeDeliveryTruck, makeKeiTruck, setBraking, type VehicleModel } from './vehicles'
 import { conduit, floorBundle } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, type CargoType, type Section } from '../sim/config'
@@ -11,8 +12,9 @@ import { CONTACT_SPOT, FLOOR_HEIGHT, UNDERGROUND, WAREHOUSE } from './layout'
 import { animatePerson, makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
 import { aroundHole } from './Facility'
-import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, textured, wireMesh, woodMat, yardAsphalt } from './textures'
-import { Route, rounded, type Pose } from './paths'
+import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
+import { Route, rounded, type Leg, type Pose } from './paths'
+import { driftArrival, TyreFx } from './drift'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
 const T = 0.2
@@ -38,7 +40,25 @@ const CARGO_COLOUR: Record<CargoType, number> = { general: 0xb08a5a, food: 0x84c
 const SECTIONS: readonly Section[] = ['shelves', 'cold', 'vault', 'hidden']
 
 type Slot = { pos: THREE.Vector3; approach: { x: number; z: number } }
-type TruckView = { id: number; group: THREE.Group; crates: THREE.Mesh[]; shown: number; label: string; tag: THREE.Sprite | null; arrive: Route; leave: Route; park: Pose }
+type TruckView = {
+  id: number
+  group: THREE.Group
+  crates: THREE.Mesh[]
+  shown: number
+  label: string
+  tag: THREE.Sprite | null
+  arrive: Route
+  leave: Route
+  park: Pose
+  /** A kei truck's drive down the yard before it drifts in. */
+  approach: Leg | null
+  model: VehicleModel
+  /** Last frame's position and heading (wheel spin, body roll, drift effects). */
+  last: THREE.Vector3
+  lastYaw: number
+  roll: number
+  smokeAt: number
+}
 type CrateView = { group: THREE.Group; box: THREE.Mesh; band: THREE.Mesh }
 type Rect = { minX: number; maxX: number; minZ: number; maxZ: number }
 type Door = { roller: THREE.Mesh; body: RAPIER.RigidBody | null; open: number; z: number }
@@ -78,6 +98,8 @@ export class Warehouse {
   /** The contact: a person by the door (shown while he is here), his name over his head, and an invisible target to aim at. */
   private contactView: { group: THREE.Group; rig: PersonRig; label: THREE.Mesh | null; name: string } | null = null
   private readonly trucks = new Map<number, TruckView>()
+  /** Tyre smoke and skid marks (kei trucks drifting in). */
+  private readonly tyres = new TyreFx()
   private readonly built = new Set<string>()
   /** Fans and ventilators that turn all the time. */
   private readonly spinners: { obj: THREE.Object3D; axis: 'y' | 'z'; speed: number }[] = []
@@ -93,6 +115,7 @@ export class Warehouse {
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
+    this.yard.add(this.tyres.root)
     this.root.userData.zone = 'warehouse'
     const { minX, maxX, minZ, maxZ, height: H } = WAREHOUSE
     const w = maxX - minX
@@ -280,7 +303,8 @@ export class Warehouse {
     }
     this.syncUpgrades(game)
     this.syncCrates(game)
-    this.syncTrucks(game)
+    this.syncTrucks(game, dt)
+    this.tyres.update(dt)
     this.syncRobots(dt, game)
     this.syncPolice(game)
     this.syncDoors(dt, game, player)
@@ -406,7 +430,7 @@ export class Warehouse {
   // ------------------------------------------------------------------ vehicles
 
   /** One view per truck: down the road, into the yard, back into its dock; later out of the dock, down the yard and away. */
-  private syncTrucks(game: GameManager): void {
+  private syncTrucks(game: GameManager, dt: number): void {
     const wh = game.warehouse
     const w = CONFIG.warehouse
     const live = new Set<number>()
@@ -418,9 +442,16 @@ export class Warehouse {
         this.trucks.set(t.id, view)
         this.yard.add(view.group)
       }
-      const pose = t.phase === 'arriving' ? view.arrive.at(Math.min(1, t.t / w.arriveSeconds)) : t.phase === 'leaving' ? view.leave.at(Math.min(1, t.t / w.leaveSeconds)) : view.park
+      let slide = -1
+      let pose: Pose
+      if (t.phase === 'arriving' && view.approach) {
+        const d = driftArrival(view.approach, view.park, t.t, w.arriveSeconds)
+        slide = d.slide
+        pose = d
+      } else pose = t.phase === 'arriving' ? view.arrive.at(Math.min(1, t.t / w.arriveSeconds)) : t.phase === 'leaving' ? view.leave.at(Math.min(1, t.t / w.leaveSeconds)) : view.park
       view.group.position.set(pose.x, 0, pose.z)
       view.group.rotation.y = pose.yaw
+      this.truckMotion(view, pose, slide, dt)
       // The crates on board: a kei truck's are visible on its bed; a box truck's are counted on its sign.
       if (t.onBoard !== view.shown) {
         view.shown = t.onBoard
@@ -442,6 +473,46 @@ export class Warehouse {
     }
   }
 
+  /**
+   * What a truck's movement looks like: wheels turning by the distance covered, the body rolling into turns (and a lot in a slide),
+   * brake lights in the slide, and, while it drifts, smoke and skid marks from the rear tyres.
+   */
+  private truckMotion(view: TruckView, pose: Pose, slide: number, dt: number): void {
+    const dx = pose.x - view.last.x
+    const dz = pose.z - view.last.z
+    const dist = Math.hypot(dx, dz)
+    let dyaw = pose.yaw - view.lastYaw
+    dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw))
+    view.last.set(pose.x, 0, pose.z)
+    view.lastYaw = pose.yaw
+    if (dt <= 0 || dist > 5) return
+    // Forward or backward along the nose (−z of the model).
+    const fwd = -(dx * -Math.sin(pose.yaw) + dz * -Math.cos(pose.yaw)) < 0 ? 1 : -1
+    for (const w of view.model.wheels) w.rotation.x -= (fwd * dist) / view.model.wheelRadius
+    const drifting = slide >= 0 && slide < 0.9
+    const rate = dyaw / dt
+    const target = THREE.MathUtils.clamp(-rate * (drifting ? 0.06 : 0.025), -0.14, 0.14)
+    view.roll += (target - view.roll) * Math.min(1, dt * 6)
+    view.group.rotation.z = view.roll
+    // A little nose dip as it brakes out of the slide, then it settles.
+    view.group.rotation.x = drifting ? -0.03 * (1 - slide) : view.group.rotation.x * (1 - Math.min(1, dt * 5))
+    setBraking(view.model, drifting || (slide >= 0.9 && slide < 1))
+    if (!drifting) return
+    const speed = dist / dt
+    const vx = dx / dt
+    const vz = dz / dt
+    view.smokeAt -= dt
+    const cos = Math.cos(pose.yaw)
+    const sin = Math.sin(pose.yaw)
+    for (const r of view.model.rearWheels) {
+      const wx = pose.x + r.x * cos + r.z * sin
+      const wz = pose.z - r.x * sin + r.z * cos
+      this.tyres.skid(wx, wz, Math.atan2(vx, vz))
+      if (view.smokeAt <= 0) this.tyres.smoke(wx, wz, vx, vz, 0.7 + Math.min(1, speed / 8))
+    }
+    if (view.smokeAt <= 0) view.smokeAt = 0.045
+  }
+
   /** Trucks and the police car near the main street, for the traffic to keep clear of. */
   vehicles(): THREE.Vector3[] {
     const out: THREE.Vector3[] = []
@@ -451,7 +522,7 @@ export class Warehouse {
   }
 
   /** The way in and the way out for a truck at dock `spot`. */
-  private routes(spot: number, kind: Truck['kind']): { arrive: Route; leave: Route; park: Pose } {
+  private routes(spot: number, kind: Truck['kind']): { arrive: Route; leave: Route; park: Pose; approach: Leg | null } {
     const { yard, road } = WAREHOUSE
     const dz = WAREHOUSE.docks.z[spot] ?? WAREHOUSE.docks.z[0]!
     const parkX = WAREHOUSE.maxX + T + 0.35 + REAR[kind]
@@ -490,7 +561,20 @@ export class Warehouse {
         4,
       ),
     ])
-    return { arrive, leave, park: { x: parkX, z: dz, yaw: -Math.PI / 2 } }
+    // Kei trucks drift in instead of backing in: down the aisle flat out to just short of their dock, then slide in (`driftArrival`).
+    const approach =
+      kind === 'kei'
+        ? rounded(
+            [
+              [road.laneX, START_Z],
+              [road.laneX, yard.inZ],
+              [ax, yard.inZ],
+              [ax, Math.min(yard.inZ - 2.5, dz + 7)],
+            ],
+            2.5,
+          )
+        : null
+    return { arrive, leave, park: { x: parkX, z: dz, yaw: -Math.PI / 2 }, approach }
   }
 
   private truckLabel(game: GameManager, t: Truck): string {
@@ -538,80 +622,30 @@ export class Warehouse {
       group.add(mesh)
       return mesh
     }
-    // Textured parts (box faces get UVs in metres so the textures tile instead of stretching).
-    const box = (w: number, h: number, d: number) => metreUVs(new THREE.BoxGeometry(w, h, d))
-    const glass = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.08, metalness: 0.6 })
-    const tyre = textured('belt-rubber', { color: 0x2a2a2e, repeat: 0.6 })
-    const hub = textured('locker-door', { color: 0xc0c7cf, metalness: 0.6, repeat: 0.3 })
-    const head = new THREE.MeshStandardMaterial({ color: 0xfffbe8, emissive: 0xfff3c4, emissiveIntensity: 0.9 })
-    const tail = new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0x7f1d1d, emissiveIntensity: 0.6 })
-    const black = textured('till-plastic', { color: 0x2b2f36, repeat: 0.5 })
-    const wheel = (x: number, z: number, r: number) => {
-      const t = add(new THREE.CylinderGeometry(r, r, 0.26, 18), tyre, x, r, z)
-      t.rotation.z = Math.PI / 2
-      const h = add(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.28, 12), hub, x, r, z)
-      h.rotation.z = Math.PI / 2
-    }
-    // A cab facing −z: painted body, windscreen and side windows, grille, headlights, bumper, mirrors.
-    const cab = (w: number, h: number, d: number, y0: number, z: number, paint: THREE.Material) => {
-      add(box(w, h, d), paint, 0, y0 + h / 2, z)
-      add(box(w * 0.9, h * 0.42, 0.04), glass, 0, y0 + h * 0.72, z - d / 2 - 0.005)
-      for (const sx of [-1, 1]) {
-        add(box(0.04, h * 0.36, d * 0.55), glass, sx * (w / 2 + 0.005), y0 + h * 0.72, z - d * 0.12)
-        add(box(0.06, 0.22, 0.12), black, sx * (w / 2 + 0.12), y0 + h * 0.7, z - d / 2 + 0.1)
-        add(box(0.24, 0.14, 0.03), head, sx * (w / 2 - 0.22), y0 + h * 0.2, z - d / 2 - 0.01)
-      }
-      add(box(w * 0.5, h * 0.22, 0.03), black, 0, y0 + h * 0.22, z - d / 2 - 0.01)
-      add(box(w + 0.06, 0.16, 0.16), black, 0, y0 - 0.02, z - d / 2 - 0.04)
-    }
+    // The blueprint trucks (world/vehicles.ts): a kei truck with crates on its bed, or a delivery truck.
     const crates: THREE.Mesh[] = []
+    const plate = `LM-${String(1000 + ((t.id * 7919) % 9000)).slice(0, 4)}`
+    const model = t.kind === 'kei' ? makeKeiTruck(KEI_COLOURS[t.id % KEI_COLOURS.length]!, { plate }) : makeDeliveryTruck(BOX_COLOURS[t.id % BOX_COLOURS.length]!, { plate: `DL-${plate.slice(3)}` })
+    group.add(model.group)
     if (t.kind === 'kei') {
-      const paint = paintedSteel([0xf1f5f9, 0xfacc15, 0x60a5fa][t.id % 3]!)
-      add(box(1.4, 0.18, 3.5), black, 0, 0.6, 0.35)
-      cab(1.4, 1.15, 1.3, 0.68, -1.15, paint)
-      add(box(1.42, 0.05, 1.1), mat(0xdc2626, 0.5), 0, 1.84, -1.15)
-      // The bed: diamond-plate floor, drop sides and tailgate.
-      add(box(1.36, 0.04, 2.15), diamondPlate(0xa8b0ba), 0, 0.71, 0.9)
-      for (const x of [-0.7, 0.7]) add(box(0.05, 0.3, 2.1), paint, x, 0.86, 0.9)
-      add(box(1.4, 0.3, 0.05), paint, 0, 0.86, 1.95)
-      for (const sx of [-1, 1]) add(box(0.16, 0.08, 0.03), tail, sx * 0.55, 0.86, 1.98)
-      for (const x of [-0.7, 0.7]) for (const z of [-1.2, 1.3]) wheel(x, z, 0.3)
       const cardboard = cardboardMat(CARGO_COLOUR[t.declared])
       for (const [x, z] of [[-0.33, 0.1], [0.33, 0.1], [-0.33, 0.95], [0.33, 0.95], [-0.33, 1.7], [0.33, 1.7]] as const) {
         const crate = add(new THREE.BoxGeometry(0.58, 0.5, 0.7), cardboard, x, 1.0, z)
         crate.visible = false
         crates.push(crate)
       }
-    } else {
-      const colours = [0x1e3a8a, 0x7f1d1d, 0x14532d, 0x3f3f46]
-      const c = colours[t.id % colours.length]!
-      add(box(2.0, 0.22, 6.2), black, 0, 0.62, 0.5)
-      cab(2.0, 1.5, 1.7, 0.73, -2.2, paintedSteel(0xf1f5f9))
-      // The cargo box: corrugated steel, a painted band and the firm's name on both sides, rear doors with handles and lights.
-      add(box(2.2, 2.4, 4.2), shedCladding(c), 0, 1.95, 1.0)
-      add(box(2.22, 0.18, 4.22), paintedSteel(0xfbbf24), 0, 2.2, 1.0)
-      for (const sx of [-1, 1]) {
-        const logo = truckLogo(['SWIFT FREIGHT', 'HARBOUR LINES', 'GREEN GROCERS', 'METRO MOVERS'][t.id % 4]!)
-        logo.position.set(sx * 1.115, 1.6, 1.0)
-        logo.rotation.y = sx * Math.PI / 2
-        group.add(logo)
-        add(box(0.03, 2.2, 0.04), black, sx * 0.02, 1.9, 3.11) // the seam between the rear doors
-        add(box(0.04, 0.3, 0.04), hub, sx * 0.3, 1.6, 3.13)
-        add(box(0.2, 0.12, 0.03), tail, sx * 0.9, 0.9, 3.12)
-        add(box(0.5, 0.4, 0.03), black, sx * 0.85, 0.5, 2.9)
-      }
-      for (const x of [-1.0, 1.0]) for (const z of [-2.3, 0.9, 2.3]) wheel(x, z, 0.4)
     }
     // What you aim at: the whole truck.
     const proxy = new THREE.Mesh(new THREE.BoxGeometry(t.kind === 'kei' ? 1.8 : 2.6, 2.6, t.kind === 'kei' ? 4.0 : 6.6), new THREE.MeshBasicMaterial({ visible: false }))
     proxy.position.set(0, 1.3, 0.4)
     tag(proxy, { kind: 'truck', truckId: t.id })
     group.add(proxy)
-    const { arrive, leave, park } = this.routes(t.spot, t.kind)
-    const start = t.phase === 'parked' ? park : arrive.at(0)
+    const { arrive, leave, park, approach } = this.routes(t.spot, t.kind)
+    const start = t.phase === 'parked' ? park : approach ? approach.at(0) : arrive.at(0)
     group.position.set(start.x, 0, start.z)
     group.rotation.y = start.yaw
-    return { id: t.id, group, crates, shown: -1, label: '', tag: null, arrive, leave, park }
+    group.rotation.order = 'YXZ'
+    return { id: t.id, group, crates, shown: -1, label: '', tag: null, arrive, leave, park, approach, model, last: new THREE.Vector3(start.x, 0, start.z), lastYaw: start.yaw, roll: 0, smokeAt: 0 }
   }
 
   private syncPolice(game: GameManager): void {
@@ -1504,37 +1538,6 @@ const easeIn = (x: number): number => Math.min(1, Math.max(0, x)) ** 2
 const nameTextures = new Map<string, THREE.CanvasTexture>()
 
 /** A label on a dark pill that always faces the camera. */
-const logos = new Map<string, THREE.MeshStandardMaterial>()
-/** A firm's name painted on a truck's cargo box (a canvas decal, facing +z). */
-function truckLogo(text: string): THREE.Mesh {
-  let material = logos.get(text)
-  if (!material) {
-    material = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 })
-    if (typeof document !== 'undefined') {
-      const c = document.createElement('canvas')
-      c.width = 512
-      c.height = 128
-      const g = c.getContext('2d')
-      if (g) {
-        g.fillStyle = 'rgba(248,250,252,0.92)'
-        g.beginPath()
-        g.roundRect(6, 14, 500, 100, 22)
-        g.fill()
-        g.fillStyle = '#0f172a'
-        g.font = '800 58px system-ui, sans-serif'
-        g.textAlign = 'center'
-        g.textBaseline = 'middle'
-        g.fillText(text, 256, 66)
-      }
-      const tex = new THREE.CanvasTexture(c)
-      tex.colorSpace = THREE.SRGBColorSpace
-      material.map = tex
-    }
-    logos.set(text, material)
-  }
-  return new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.85), material)
-}
-
 function makeNameSprite(text: string): THREE.Sprite {
   let texture = nameTextures.get(text)
   if (!texture) {

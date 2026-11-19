@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { Appearance, Special } from '../sim/types'
-import { CAR_MODELS, kenney, loadKenney } from './kenney'
+import { kenney, loadKenney } from './kenney'
+import { BOX_COLOURS, CAR_COLOURS, KEI_COLOURS, makeCar, makeDeliveryTruck, makeKeiTruck, setBraking, type VehicleModel } from './vehicles'
 import { LAKE, STREET } from './layout'
 import { animatePerson, makePerson, mat, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
@@ -29,6 +30,8 @@ type Car = {
   speed: number
   body: RAPIER.RigidBody
   half: number
+  /** Our own vehicle (null: a Kenney model). */
+  model: VehicleModel | null
 }
 
 type Walker = {
@@ -220,25 +223,35 @@ export class Town {
   // ------------------------------------------------------------------ traffic
 
   private addCar(s = 0): void {
-    const name = CAR_MODELS[(this.nextCar * 7 + 3) % CAR_MODELS.length]!
-    this.nextCar++
+    // Mostly our own hatchbacks and kei trucks, some delivery trucks, and now and then a Kenney taxi, police car or ambulance.
+    const k = this.nextCar++
+    const pick = (k * 7 + 3) % 10
     const group = new THREE.Group()
-    const inner = kenney('cars', name, { x: 0, z: 0, rotY: Math.PI, scale: CAR_SCALE })
+    let model: VehicleModel | null = null
+    if (pick < 5) model = makeCar(CAR_COLOURS[(k * 5) % CAR_COLOURS.length]!, { plate: plateFor(k) })
+    else if (pick < 8) model = makeKeiTruck(KEI_COLOURS[(k * 3) % KEI_COLOURS.length]!, { cargo: k % 2 === 0, plate: plateFor(k) })
+    else if (pick < 9) model = makeDeliveryTruck(BOX_COLOURS[k % BOX_COLOURS.length]!, { plate: plateFor(k) })
+    const name = ['taxi', 'police', 'ambulance'][k % 3]!
+    const inner = model ? model.group : kenney('cars', name, { x: 0, z: 0, rotY: Math.PI, scale: CAR_SCALE })
     group.add(inner)
+    const half = model ? model.length / 2 : 2.0
     const car: Car = {
       group,
       wheels: [],
       leg: this.loop,
       s,
       speed: s > 0 ? CRUISE : CRUISE * 0.7,
-      body: this.physics.addMovingBox(new THREE.Vector3(0, -20, 0), new THREE.Vector3(1.05, 0.8, 2.0)),
-      half: 2.0,
+      body: this.physics.addMovingBox(new THREE.Vector3(0, -20, 0), new THREE.Vector3((model?.width ?? 2.1) / 2, 0.8, half)),
+      half,
+      model,
     }
-    void loadKenney('cars', name).then(() => {
-      inner.traverse((o) => {
-        if (o.name.startsWith('wheel')) car.wheels.push(o)
+    if (model) car.wheels.push(...model.wheels)
+    else
+      void loadKenney('cars', name).then(() => {
+        inner.traverse((o) => {
+          if (o.name.startsWith('wheel')) car.wheels.push(o)
+        })
       })
-    })
     this.root.add(group)
     this.cars.push(car)
     this.placeCar(car)
@@ -275,8 +288,9 @@ export class Town {
       for (const w of this.walkers) check(w.rig.root.position, 1.5)
       // Other cars: follow the one ahead along the loop (by distance along it, so two cars can never wait for each other).
       for (const other of this.cars) {
-        const d = other.s - car.s
-        if (other !== car && d > 0 && d < nearest) nearest = d
+        // Measured to the back of the car ahead (a delivery truck is long).
+        const d = other.s - car.s - (other.half - car.half)
+        if (other !== car && other.s > car.s && d < nearest) nearest = d
       }
       const gap = nearest - car.half - 1.4
       let target = CRUISE
@@ -288,7 +302,8 @@ export class Town {
       car.speed += THREE.MathUtils.clamp(target - car.speed, -accel * dt, accel * dt)
       const ds = car.speed * dt
       car.s += ds
-      for (const w of car.wheels) w.rotation.x += ds / (0.3 * CAR_SCALE)
+      for (const w of car.wheels) w.rotation.x += car.model ? -ds / car.model.wheelRadius : ds / (0.3 * CAR_SCALE)
+      if (car.model) setBraking(car.model, target < car.speed - 0.5 || car.speed < 0.3)
       if (u >= 1 || car.s >= car.leg.length) {
         this.removeCar(car)
         continue
@@ -453,8 +468,21 @@ function glowTexture(): THREE.Texture | null {
 
 /** A plausible look for a passer-by (only used to pick a model). */
 function randomLook(i: number): Appearance {
-  const k = (i + 1) * 2654435761
-  return { skin: k & 0xffffff, hair: (k >>> 3) & 0xffffff, hairStyle: 'short', shirt: (k >>> 7) & 0xffffff, trousers: (k >>> 11) & 0xffffff, height: 0.95 + ((i * 7) % 10) / 100 }
+  const k = ((i + 1) * 2654435761) >>> 0
+  const pick = <T,>(list: readonly T[], n: number): T => list[(k >>> n) % list.length]!
+  return {
+    skin: 0,
+    hair: pick([0x1f1a17, 0x2b1d14, 0x4a2f1b, 0x8b5a2b, 0xd8b06a, 0x9a9a9a, 0xa3392b], 3),
+    hairStyle: pick(['short', 'long', 'bun', 'bald', 'cap'] as const, 7),
+    shirt: pick([0x2563eb, 0xdc2626, 0x16a34a, 0xf59e0b, 0x7c3aed, 0x0d9488, 0xdb2777, 0x475569, 0xf8fafc, 0x111827], 11),
+    trousers: pick([0x1e293b, 0x374151, 0x3f3f46, 0x1e3a8a, 0x57534e, 0xd6c3a0], 15),
+    height: 0.95 + ((i * 7) % 10) / 100,
+  }
+}
+
+/** A number plate for traffic car `k`. */
+function plateFor(k: number): string {
+  return `${['LM', 'KT', 'DL', 'SW'][k % 4]}-${String(1000 + ((k * 7919) % 9000)).slice(0, 4)}`
 }
 
 /** The beach's height at x (matches the Lake's sand). */

@@ -248,6 +248,16 @@ Rules:
   each car following the one ahead by distance along the loop and braking for the player, customers, walkers, the VIP's car and trucks
   (the Engine passes them in); passers-by who stroll, cross at the zebra and sit on benches; people on the beach. Cars and walkers are
   moving colliders (`PhysicsWorld.addMovingBox` / `moveBody`). Customers arrive and leave along the pavement, not across the road.
+- **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
+  blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
+  `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use
+  them; the VIP's SUV, taxis, police and ambulances are Kenney models.
+- **Kei drift** (`world/drift.ts`): a kei truck's arrival is `driftArrival(approach, park, t, arriveSeconds)`: down the aisle flat out,
+  then the last `DRIFT_SECONDS` slide into the dock with the body turning ahead of the path; `Warehouse.truckMotion` spins wheels,
+  rolls the body, lights the brake lights and emits tyre smoke and skid marks (`TyreFx`, an instanced mesh that fades back to asphalt).
+  View only: the sim's arrival timing is unchanged.
+- **Facade** (`world/facade.ts`): the shopfront's dark wall panels, backlit logo sign, downlights with light pools, bollards (with
+  colliders), block bushes, hazard stripes and the VIP's painted bay.
 - **Kenney models** (`world/kenney.ts`, `public/models/kenney/<kit>/`): `kenney(kit, name, { x, z, rotY, scale | length | height, keepOrigin })`
   like `prop()`. Kenney vehicles and boats face +z (turn them π for our −z convention).
 - **Reminders** (`GameManager.reminders()`): up to three hints under the objective (impatient customers, a VIP about to leave, an open

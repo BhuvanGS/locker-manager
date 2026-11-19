@@ -8,7 +8,6 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
  */
 export type KenneyKit = 'cars' | 'boats' | 'city' | 'street'
 
-export const CAR_MODELS = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van', 'delivery', 'police', 'truck', 'ambulance', 'garbage-truck'] as const
 
 const loader = new GLTFLoader()
 const cache = new Map<string, Promise<GLTF>>()

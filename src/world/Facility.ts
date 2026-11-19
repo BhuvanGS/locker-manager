@@ -7,6 +7,7 @@ import type RAPIER from '@dimforge/rapier3d-compat'
 import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, HARBOUR } from './layout'
 import { mat } from './models'
 import { prop } from './props'
+import { blockBush, bollard, downlight, hazardStripes, shopSign, wallPanelDark } from './facade'
 import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
@@ -400,7 +401,8 @@ export class Facility {
     this.buildBackWall()
 
     // Front wall with a glass entrance and two shop windows.
-    const front = mat(0x2f3e4f, 0.6, 0.2)
+    // Dark composite panels (the facade sheet's Wall_Panel_Dark).
+    const front = wallPanelDark()
     const sideW = maxX - ENTRANCE.halfWidth
     const sideX = ENTRANCE.halfWidth + sideW / 2
     for (const s of [-1, 1]) {
@@ -448,7 +450,7 @@ export class Facility {
     for (const sx of [-1, 1]) {
       const px = sx * 2.1
       this.deco(0.9, 0.5, 0.5, mat(0x374151, 0.6), px, 0.25, maxZ + t + 0.45)
-      this.root.add(prop('potted_plant_02', { x: px, y: 0.4, z: maxZ + t + 0.45, height: 0.9 }))
+      this.root.add(blockBush(px, 0.5, maxZ + t + 0.45, 0.8, sx + 3))
     }
 
     // Sliding glass doors (visual only; customers and the player pass when open).
@@ -465,9 +467,20 @@ export class Facility {
     this.doorL = makeDoor(-0.5)
     this.doorR = makeDoor(0.5)
 
-    const sign = this.sign('LOCKER MANAGER', 4.4, 0.6, '#0f172a', '#fbbf24')
-    sign.position.set(0, 2.85, maxZ + 0.32)
+    const sign = shopSign(4.6, 0.66, 'LOCKER MANAGER')
+    sign.position.set(0, 2.86, maxZ + 0.3)
     this.root.add(sign)
+    // Warm downlights under the canopy, each throwing a pool of light on the pavement; bollards along the kerb of the forecourt.
+    for (const x of [-4.6, -2.2, 2.2, 4.6]) this.root.add(downlight(x, 2.4, maxZ + t + 0.7))
+    for (const x of [-5.6, -3.7, -1.8, 1.8, 3.7, 5.6]) {
+      this.root.add(bollard(x, 7.05))
+      this.physics.addStaticBox(new THREE.Vector3(x, 0.45, 7.05), new THREE.Vector3(0.12, 0.45, 0.12))
+    }
+    // The VIP's parking bay in front of the office: yellow lines and a hazard-striped kerb.
+    const bay = mat(0xf2c230, 0.6)
+    for (const z of [10.35, 12.65]) this.deco(5.4, 0.012, 0.12, bay, 9.3, 0.014, z)
+    for (const x of [6.6, 12.0]) this.deco(0.12, 0.012, 2.3, bay, x, 0.014, 11.5)
+    this.deco(5.4, 0.05, 0.16, hazardStripes(), 9.3, 0.045, 10.2)
     const hours = this.sign('Bag & luggage storage · Open', 2.2, 0.28, '#f8fafc', '#0f172a')
     hours.position.set(-3.5, 2.1, maxZ + 0.32)
     this.root.add(hours)
