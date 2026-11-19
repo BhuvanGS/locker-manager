@@ -275,6 +275,11 @@ Rules:
   the lobby (`Lake.blastSince`), `RoofBlast` punches a rough round hole (`holeEdge`, inside `LOBBY_HOLE` in `Facility.ts`) in its roof: the
   ceiling and deck are a frame round it plus six wedge chunks (`Facility.lobbyRoof`) that fly up and away from the crater, leaving charred bits
   round the rim (`lobbyScars`); no strike (a new game) mends it.
+- **The world's ends** (`world/Gates.ts`): every road that leaves the map runs into a tunnel under a block (`tunnelPortal`: portal, dark lining,
+  strip lights, a plug collider so you cannot walk in) with buildings round it, so nothing runs off to the horizon. The service road has a
+  `Checkpost` (booth with a guard, canopy, island, barriers that lift for visible trucks and the police) at `WAREHOUSE.gate.checkZ`, then its tunnel
+  at `gate.tunnelZ` (built with the warehouse, `Warehouse.buildGate`); the main street ends at `STREET.gateX` (`Town.buildEastGate`; the town's
+  blocks and lamps stop short of it); the port road's tunnel is built with the container terminal. Vehicles appear and vanish inside the tunnels.
 - **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
   blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
   `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use

@@ -238,6 +238,9 @@ export const WAREHOUSE = {
   yard: { minX: 24.2, maxX: 42, minZ: -40, maxZ: -2.5, aisleX: 36.1, inZ: -6, outZ: -36.5, turn: 7 },
   /** The service road: southbound lane `laneX` (the trucks), the other lane for the police. */
   road: { minX: 42, maxX: 48, minZ: -90, maxZ: 10.2, laneX: 43.5, upLaneX: 46.5 },
+  /** Where the service road leaves the world: a checkpost (`checkZ`), then a tunnel into a building (portal face at `tunnelZ`, beyond the
+   * trucks' end of the road), with more buildings either side and behind so the road never runs off to the horizon. */
+  gate: { checkZ: -64, tunnelZ: -86 },
   /**
    * Racks run along x (4 bays of `pitch`, 3 shelves): the shelves' racks in the order they are bought (3 to start with, then 1 per
    * capacity upgrade). `lane` is the robot lane their crates are reached from.
@@ -456,6 +459,8 @@ export const STREET = {
   lot: { minX: 17, maxX: 40.6, minZ: -1.6, maxZ: 6.0 },
   /** The junction with the service road: the pavement's corners are rounded (`cornerR`). */
   junction: { cornerR: 1.5 },
+  /** The main street leaves town east through a tunnel under a block (portal face at `gateX`; the traffic appears and goes at `eastX`). */
+  gateX: 108,
   eastX: 120,
   service: { minX: 42, maxX: 48 },
   crossingX: -16,

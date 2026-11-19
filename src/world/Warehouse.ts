@@ -15,6 +15,7 @@ import { aroundHole } from './Facility'
 import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
 import { Route, rounded, type Leg, type Pose } from './paths'
 import { driftArrival, TyreFx } from './drift'
+import { Checkpost, tunnelPortal, type Box } from './Gates'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
 const T = 0.2
@@ -107,6 +108,7 @@ export class Warehouse {
   private crateSignature = ''
   private police: { group: THREE.Group; lights: THREE.MeshBasicMaterial[] } | null = null
   private policeShown = false
+  private checkpost: Checkpost | null = null
   private readonly board = { canvas: document.createElement('canvas'), texture: null as THREE.CanvasTexture | null, signature: '' }
   private readonly desk = { canvas: document.createElement('canvas'), texture: null as THREE.CanvasTexture | null, signature: '' }
   private rise = 1
@@ -303,6 +305,12 @@ export class Warehouse {
     }
     this.syncUpgrades(game)
     this.syncCrates(game)
+    if (this.checkpost) {
+      const seen: THREE.Vector3[] = []
+      for (const t of this.trucks.values()) if (t.group.visible) seen.push(t.group.position)
+      if (this.police && this.policeShown) seen.push(this.police.group.position)
+      this.checkpost.update(dt, seen)
+    }
     this.syncTrucks(game, dt)
     this.tyres.update(dt)
     this.syncRobots(dt, game)
@@ -704,6 +712,46 @@ export class Warehouse {
 
   // ------------------------------------------------------------------ the yard and the road
 
+  /**
+   * The end of the service road: a checkpost, then the road runs into a tunnel under a building, with buildings along both sides and
+   * behind, so the world ends in streets and blocks rather than open country.
+   */
+  private buildGate(): void {
+    const { road, gate } = WAREHOUSE
+    const add = (b: Box) => this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(b.x, b.y, b.z), new THREE.Vector3(b.hx, b.hy, b.hz)))
+    const post = new Checkpost(road.minX, road.maxX, gate.checkZ, road.laneX, road.upLaneX)
+    this.yard.add(post.group)
+    post.solids.forEach(add)
+    this.checkpost = post
+    const portal = tunnelPortal({ along: 'z', dir: -1, centre: (road.minX + road.maxX) / 2, mouth: gate.tunnelZ, roadWidth: road.maxX - road.minX, span: 34, depth: 16, height: 12, colour: 0xa8987f, sign: 'DOCKLANDS · M4' })
+    this.yard.add(portal.group)
+    portal.solids.forEach(add)
+    // Pavements and blocks along both sides from the checkpost to the portal, and a wall of blocks behind.
+    const kerb = mat(0xbdb8b0, 0.95)
+    for (const x of [road.minX - 1.0, road.maxX + 1.0]) this.decoYard(2, 0.05, gate.checkZ - 4 - gate.tunnelZ, kerb, x, 0.02, (gate.checkZ - 4 + gate.tunnelZ) / 2)
+    const names = ['building-g', 'building-c', 'building-n', 'building-e', 'building-h', 'building-b']
+    let k = 0
+    for (const [cx, rot] of [[road.minX - 2.0 - 3.4, Math.PI / 2], [road.maxX + 2.0 + 3.4, -Math.PI / 2]] as const) {
+      for (let z = gate.checkZ - 5.5; z > gate.tunnelZ + 1; ) {
+        const w = 7 + (k % 2) * 1.5
+        const zc = z - w / 2
+        if (zc - w / 2 < gate.tunnelZ) break
+        this.yard.add(kenney('city', names[k % names.length]!, { x: cx, z: zc, rotY: rot, length: w }))
+        add({ x: cx, y: 4, z: zc, hx: 3.2, hy: 4, hz: w / 2 - 0.2 })
+        z -= w + 0.3
+        k++
+      }
+    }
+    // Behind the portal and away to each side: a row of blocks, then taller ones on the skyline.
+    const tall = ['building-skyscraper-a', 'building-skyscraper-b', 'building-skyscraper-c', 'building-skyscraper-d', 'building-skyscraper-e']
+    for (let x = 0; x < 100; x += 8.4) {
+      if (Math.abs(x + 4 - (road.minX + road.maxX) / 2) < 19) continue
+      this.yard.add(kenney('city', names[(k++) % names.length]!, { x: x + 4, z: gate.tunnelZ - 6, rotY: 0, length: 8 }))
+      add({ x: x + 4, y: 4, z: gate.tunnelZ - 6, hx: 3.8, hy: 4, hz: 3.2 })
+    }
+    for (let i = 0; i < 9; i++) this.yard.add(kenney('city', tall[i % tall.length]!, { x: 4 + i * 12, z: gate.tunnelZ - 24 - (i % 3) * 5, rotY: (i % 2) * Math.PI, scale: 7 + (i % 3) }))
+  }
+
   private buildYard(): void {
     const { road, yard, maxX, docks } = WAREHOUSE
     const asphalt = roadAsphalt(0x3a3d43)
@@ -714,6 +762,7 @@ export class Warehouse {
     this.decoYard(road.maxX - road.minX, 0.03, top - road.minZ, asphalt, (road.minX + road.maxX) / 2, 0.005, (top + road.minZ) / 2)
     for (let z = top - 1; z > road.minZ; z -= 3.6) this.decoYard(0.15, 0.012, 1.6, lineYellow, (road.minX + road.maxX) / 2, 0.025, z)
     // (The main street and its pavements here are the Town's, with the junction: none of them doubled up.)
+    this.buildGate()
     // The truck yard: concrete from the docks to the road, with bay lines, dock bumpers and the drive lane.
     // The truck yard (the parking lot for the docks) is asphalt, a shade lighter than the road.
     const concrete = yardAsphalt(0x6e7177)

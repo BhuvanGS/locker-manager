@@ -12,6 +12,7 @@ import { grassMat, metreUVs, pavingMat, roadAsphalt, sandMat, woodMat, yardAspha
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { blockBeachHut, blockDeckChair, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
 import { blockBush } from './facade'
+import { tunnelPortal } from './Gates'
 
 /**
  * The town round the shop, which lives on its own (no sim state): buildings across the street, street lamps and furniture, traffic
@@ -80,6 +81,7 @@ export class Town {
     this.buildBuildings()
     this.buildLot()
     this.buildLotEast()
+    this.buildEastGate()
     this.buildDunes()
     this.buildFurniture()
     this.buildBeachLife()
@@ -429,7 +431,7 @@ export class Town {
     const names = 'abcdefghijklmn'.split('').map((c) => `building-${c}`)
     let x = STREET.plaza.maxX + 1
     let i = 0
-    while (x < STREET.eastX - 4) {
+    while (x + 8.6 < STREET.gateX) {
       const name = names[(i * 5 + 3) % names.length]!
       const width = 6.5 + ((i * 7) % 3)
       this.root.add(kenney('city', name, { x: x + width / 2, z: STREET.buildingZ + 3.4, rotY: Math.PI, length: width }))
@@ -447,7 +449,7 @@ export class Town {
   private buildFurniture(): void {
     // Street lamps: a curved post every 12 m on both pavements, the lamp over the road.
     const lampAt: [number, number, number][] = []
-    for (let x = -50; x < STREET.eastX - 10; x += 12) {
+    for (let x = -50; x < STREET.gateX - 10; x += 12) {
       const nx = x + 3.5
       if (Math.abs(nx) > 2.5 && (nx < STREET.service.minX - 1 || nx > STREET.service.maxX + 1)) lampAt.push([nx, STREET.near.maxZ - 0.3, Math.PI])
       lampAt.push([x + 9.5, STREET.far.minZ + 0.35, 0])
@@ -522,6 +524,16 @@ export class Town {
     }
   }
 
+  /** The main street's east end: it runs into a tunnel under a block, with taller blocks behind, so the town ends there. */
+  private buildEastGate(): void {
+    const road = STREET.road
+    const portal = tunnelPortal({ along: 'x', dir: 1, centre: (road.minZ + road.maxZ) / 2, mouth: STREET.gateX, roadWidth: road.maxZ - road.minZ, span: 36, depth: 20, height: 14, colour: 0xb4a48c, sign: 'CITY CENTRE · TUNNEL' })
+    this.root.add(portal.group)
+    for (const b of portal.solids) this.solid(b.x, b.y, b.z, b.hx, b.hy, b.hz)
+    const tall = ['building-skyscraper-a', 'building-skyscraper-c', 'building-skyscraper-e', 'building-skyscraper-b']
+    for (let i = 0; i < 6; i++) this.root.add(kenney('city', tall[i % tall.length]!, { x: STREET.gateX + 28 + (i % 2) * 10, z: -14 + i * 9, rotY: -Math.PI / 2, scale: 7 + (i % 3) }))
+  }
+
   /** More shops along our side of the street east of the service road, facing it. */
   private buildLotEast(): void {
     const names = ['building-d', 'building-f', 'building-a', 'building-j', 'building-m', 'building-e', 'building-l', 'building-b', 'building-i']
@@ -529,7 +541,7 @@ export class Town {
     const depth = 6.8
     let x = STREET.service.maxX + STREET.junction.cornerR + 2.2
     let i = 0
-    while (x < STREET.eastX - 8) {
+    while (x + 8.6 < STREET.gateX) {
       const w = 6.6 + ((i * 5) % 3) * 0.9
       this.root.add(kenney('city', names[i % names.length]!, { x: x + w / 2, z: front - depth / 2, length: w }))
       this.solid(x + w / 2, 4, front - depth / 2, w / 2 - 0.2, 4, depth / 2 - 0.2)
