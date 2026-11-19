@@ -55,16 +55,22 @@ export class FirstPersonCamera {
     const sway = Math.sin(this.bobPhase) * amp * 0.6
     const t = performance.now() / 1000
     const shake = this.sprint * this.moving * 0.004
+    // Ground shake (the meteor): jitter in position and a little in angle.
+    const q = this.quake * this.quake
+    const qx = (Math.sin(t * 53) + Math.sin(t * 31 + 2)) * 0.12 * q
+    const qy = (Math.sin(t * 47 + 1) + Math.sin(t * 29)) * 0.1 * q
     this.camera.position.set(
-      this.eye.x + Math.cos(this.yaw) * sway + Math.sin(t * 37) * shake,
-      this.eye.y + bobY + this.dip + Math.sin(t * 41 + 1) * shake,
+      this.eye.x + Math.cos(this.yaw) * sway + Math.sin(t * 37) * shake + qx,
+      this.eye.y + bobY + this.dip + Math.sin(t * 41 + 1) * shake + qy,
       this.eye.z - Math.sin(this.yaw) * sway,
     )
-    this.camera.rotation.y = this.yaw
-    this.camera.rotation.x = this.pitch + this.dip * 0.25
-    this.camera.rotation.z = Math.sin(this.bobPhase) * this.moving * (0.006 + this.sprint * 0.008)
+    this.camera.rotation.y = this.yaw + Math.sin(t * 43) * 0.012 * q
+    this.camera.rotation.x = this.pitch + this.dip * 0.25 + Math.sin(t * 39 + 3) * 0.015 * q
+    this.camera.rotation.z = Math.sin(this.bobPhase) * this.moving * (0.006 + this.sprint * 0.008) + Math.sin(t * 35) * 0.02 * q
   }
 
+  /** How hard the ground is shaking (0…1), set every frame by the Engine. */
+  quake = 0
   private moving = 0
   private bobPhase = 0
   private sprint = 0

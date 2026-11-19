@@ -220,6 +220,16 @@ Rules:
   the crater fills over `fillSeconds`. `Lake` draws it from `game.meteor` every frame (sky approach, fireball, flash, dust and smoke sprites, crater, rising
   water) and owns the fence round the water. The ground has the whole harbour site (`HARBOUR.basin`) cut out; `Lake` covers it with grass (`cap` before the
   strike, `capRing` round the crater after it, none once the basin is dug). Mod menu: **Meteor** starts the countdown, or makes it strike in 15 s.
+- **The impact** (`Lake.update`, `Lake.shake`): the meteor is a brightening, flickering star for `APPROACH` seconds, then falls in `FALL` (2.5 s)
+  from `START` m out along `DIR` with a long tail and sparks; the impact is a blinding flash, a shockwave ring racing out to `WAVE_R`, glowing rocks
+  thrown out ballistically, then dust and smoke. `shake(game, at)` (a rumble during the fall, a jolt when the shockwave reaches you) drives
+  `FirstPersonCamera.quake`.
+- **Sky and time of day** (`world/Sky.ts`, `DAY_SECONDS`): a gradient dome, sun and moon, stars and drifting clouds around the camera, from game time.
+  `Sky.update` returns a `Daylight` the Engine applies each frame: `Facility.setDaylight` (sun or moon direction, strength and colour; the sky's
+  ambient light, never below a playable minimum), the fog and background colour, and `setStreetLampsNight` (lamp glow and light pools on the
+  ground). The sun keeps casting shadows at night (toggling it would recompile every material). `__game.engine.sky.offset` shifts the time.
+- **The world's edge** (`WORLD_EDGE` in `Facility.ts`): the ground collider reaches 220 m out (east, north, south) with a wall at the edge; the
+  sea's wading fence closes the west.
 - **The coast** (`LAKE.coast`; `Lake.buildBeach`, `buildChannel`): west of the lake the grass ends at `coast.grassX`, a beach runs to `shoreX`, then sand
   shelves into the sea (`seaY`); a fence at `wadeX` stops you wading out. Before the strike the channel (`coast.channel`) is beach; after it the channel is
   dug and joins the crater to the sea (`craterNotch()`). Boats and ships come in from the sea along it.

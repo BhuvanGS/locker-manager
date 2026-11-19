@@ -25,6 +25,22 @@ export class Facility {
   readonly root = new THREE.Group()
   /** The sun. Its shadow covers a square around the player (`followSun`), so the far rooms, halls and the warehouse get shadows too. */
   private readonly sun = new THREE.DirectionalLight(0xfff1d6, 1.6)
+  private readonly hemi = new THREE.HemisphereLight(0xf5f0e6, 0x6b6257, 1.1)
+  /** Where the sun (or the moon) sits relative to the point it lights: follows the time of day (`setDaylight`). */
+  private readonly sunOffset = SUN_OFFSET.clone()
+
+  /** Light the world for the time of day (from `Sky.update`): the sun or the moon, and the sky's ambient light. */
+  setDaylight(d: { lightDir: THREE.Vector3; lightIntensity: number; lightColour: THREE.Color; hemiSky: THREE.Color; hemiGround: THREE.Color; hemiIntensity: number }): void {
+    // Keep it a little above the horizon so shadows never stretch for ever.
+    const dir = d.lightDir.clone()
+    dir.y = Math.max(dir.y, 0.18)
+    this.sunOffset.copy(dir.normalize().multiplyScalar(SUN_OFFSET.length()))
+    this.sun.intensity = d.lightIntensity
+    this.sun.color.copy(d.lightColour)
+    this.hemi.color.copy(d.hemiSky)
+    this.hemi.groundColor.copy(d.hemiGround)
+    this.hemi.intensity = d.hemiIntensity
+  }
   private readonly physics: PhysicsWorld
   private doorL: THREE.Mesh | null = null
   private doorR: THREE.Mesh | null = null
@@ -72,7 +88,7 @@ export class Facility {
     const cz = Math.round(z / step) * step
     const cy = Math.max(0, Math.round(y / 3) * 3 - 1.5)
     this.sun.target.position.set(cx, cy, cz)
-    this.sun.position.set(cx + SUN_OFFSET.x, cy + SUN_OFFSET.y, cz + SUN_OFFSET.z)
+    this.sun.position.set(cx + this.sunOffset.x, cy + this.sunOffset.y, cz + this.sunOffset.z)
   }
 
   update(dt: number, someoneNearDoor: boolean): void {
@@ -642,7 +658,7 @@ export class Facility {
   }
 
   private buildLights(): void {
-    const hemi = new THREE.HemisphereLight(0xf5f0e6, 0x6b6257, 1.1)
+    const hemi = this.hemi
     this.root.add(hemi)
     const sun = this.sun
     sun.position.copy(SUN_OFFSET)

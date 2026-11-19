@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { Town } from '../world/Town'
+import { setStreetLampsNight, Town } from '../world/Town'
+import { Sky } from '../world/Sky'
 import { FirstPersonCamera } from '../player/FirstPersonCamera'
 import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
@@ -93,6 +94,7 @@ export class Engine {
   /** The VIP's car in the street (turns up with each offer). */
   private vipCar: VipCar | null = null
   private town: Town | null = null
+  readonly sky = new Sky()
   /** The warehouse, its road and its trucks, once bought. */
   private warehouse: Warehouse | null = null
   /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
@@ -160,7 +162,7 @@ export class Engine {
     this.lake = new Lake(this.physics)
     this.scene.add(this.lake.root)
     this.town = new Town(this.physics)
-    this.scene.add(this.town.root)
+    this.scene.add(this.town.root, this.sky.root)
     this.interactionTargets.push(this.facility.root, this.agents.root)
     this.buildStartingFurniture()
     this.interaction = new InteractionManager(this.interactionTargets)
@@ -614,6 +616,7 @@ export class Engine {
       this.physics.step(dt)
       player.syncFromPhysics()
     }
+    this.cameraRig.quake = this.lake ? Math.min(1, this.lake.shake(this.game, player.getEyePosition())) : 0
     this.cameraRig.update(player.getEyePosition(), playing ? dt : 0, player.isGrounded(), playing && !talking && input.sprint)
     const camera = this.cameraRig.camera
     const playerPos = player.getPosition()
@@ -654,6 +657,12 @@ export class Engine {
     this.agents.update(playing ? dt : 0, this.game, playerPos, camera)
     this.facility.setVaultOpen(this.game.hasWarehouse && this.game.warehouse.sectionCapacity('hidden') > 0)
     this.updateClimb(dt)
+    // The time of day: sky, sun or moon, ambient light, fog and the street lamps.
+    const daylight = this.sky.update(this.game.now, camera.position)
+    this.facility.setDaylight(daylight)
+    ;(this.scene.fog as THREE.Fog).color.copy(daylight.fog)
+    ;(this.scene.background as THREE.Color).copy(daylight.fog)
+    setStreetLampsNight(daylight.night)
     this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
     this.facility.update(dt, this.agents.nearDoor() || !!this.vipCar?.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)

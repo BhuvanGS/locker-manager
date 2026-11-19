@@ -769,7 +769,8 @@ export class Harbour {
     if (now < s.mooredAt) {
       const q = (now - s.spawnAt) / (s.mooredAt - s.spawnAt)
       if (q < 0.8) return { pose: rounded(this.shipWay(s.size), 8).at(1 - (1 - Math.max(0, q / 0.8)) ** 2), phase: 'in', q }
-      const k = smooth((q - 0.8) / 0.2)
+      // It holds off the berth while the tugs come alongside (0.8…0.88), then they push it in.
+      const k = smooth((q - 0.88) / 0.12)
       return { pose: { x: off.x, z: lerp(off.z, b.z, k), yaw: east + Math.sin(k * Math.PI) * 0.015 }, phase: 'crabIn', q }
     }
     if (now < s.leaveAt) return { pose: { x: b.x, z: b.z, yaw: east }, phase: 'moored', q: 0 }
@@ -789,7 +790,13 @@ export class Harbour {
     for (const m of this.ships) m.group.visible = false
     for (const l of this.lines) l.visible = false
     if (!s) {
-      for (const t of this.tugs) t.visible = false
+      // Between ships the tugs wait in the dock, south of the jetty.
+      const z = J.basinZ - J.halfWidth - 4.5
+      this.tugs.forEach((t, i) => {
+        t.visible = this.basinMode && this.built !== ''
+        t.position.set(i === 0 ? B.maxX - 4.5 : B.maxX - 13, BASIN_Y + Math.sin(now * 1.4 + i) * 0.05, z)
+        t.rotation.set(0, Math.PI / 2, Math.sin(now * 1.1 + i * 2) * 0.03)
+      })
       this.idleCranes()
       return
     }
@@ -861,58 +868,36 @@ export class Harbour {
   }
 
   /**
-   * The two tugs: escorting ahead and astern of the ship in the channel, alongside pushing it onto the berth (and pulling it off), and
-   * waiting south of the jetty while it is worked. They never go through the ship, the quays or the jetty: in the dock an escort that
-   * would be past a wall swings round to the ship's side instead, and a tug moving between escort and pushing goes out to the side first.
+   * The two tugs. They wait in the dock, south of the jetty (clear of everything), while a ship comes up the channel; once it has
+   * stopped off its berth they come alongside and push it in, then go back to wait while it is worked; when it leaves they pull it
+   * off the berth and go back again while it backs out on its own. Every move is between spots that are clear of the ship, the
+   * quays and the jetty, along lines that stay clear too.
    */
   private updateTugs(s: ShipVisit, state: ShipState, now: number): void {
     const def = CONFIG.harbour.ships[s.size]!
-    const { pose } = state
-    const fx = -Math.sin(pose.yaw)
-    const fz = -Math.cos(pose.yaw)
-    // The line the pushing tugs sit on (bows against the hull, 7.5 m long), kept clear of the jetty to the north.
     const jettySouth = J.basinZ - J.halfWidth
-    const pushZ = Math.min(pose.z + def.beam / 2 + 3.9, jettySouth - 4.1)
-    const push = [
-      { x: pose.x + def.length / 4, z: pushZ, yaw: 0 },
-      { x: pose.x - def.length / 4, z: pushZ, yaw: 0 },
-    ]
-    const eastLimit = B.maxX - 4.5
-    const westLimit = B.minX + 4.5
-    // Ahead and astern along the channel's line (east-west), not the ship's heading: while it turns in towards its berth, a tug off
-    // the bow along the heading would end up on the quay.
-    void fx
-    void fz
-    const ahead = { x: pose.x + (def.length / 2 + 6), z: pose.z, yaw: -Math.PI / 2 }
-    const astern = { x: pose.x - (def.length / 2 + 5), z: pose.z, yaw: -Math.PI / 2 }
-    const inChannel = (z: number) => Math.abs(z - CH.z) < CH.halfWidth - 1.5
-    // Near a wall the escort moves to the side (heading the same way as the ship), clear of the hull.
-    const side = [
-      { x: Math.min(pose.x + def.length / 4, eastLimit), z: pushZ, yaw: pose.yaw },
-      { x: Math.max(pose.x - def.length / 4, westLimit), z: pushZ, yaw: pose.yaw },
-    ]
-    const overEast = smooth((ahead.x - (eastLimit - 10)) / 10)
-    const overWest = inChannel(astern.z) ? 0 : smooth((westLimit + 10 - astern.x) / 10)
-    const escort = [blendPose(ahead, side[0]!, overEast), blendPose(astern, side[1]!, overWest)]
     const wait = [
-      { x: B.maxX - 5, z: jettySouth - 4.5, yaw: Math.PI / 2 },
-      { x: B.maxX - 14.5, z: jettySouth - 4.5, yaw: Math.PI / 2 },
+      { x: B.maxX - 4.5, z: jettySouth - 4.5, yaw: Math.PI / 2 },
+      { x: B.maxX - 13, z: jettySouth - 4.5, yaw: Math.PI / 2 },
     ]
-    /** From escort to pushing: first out to the side (onto the push line), then along to the push spot. */
-    const toPush = (i: number, k: number) => {
-      const e = escort[i]!
-      const p = push[i]!
-      const mid = { x: e.x, z: pushZ, yaw: e.yaw }
-      return k < 0.5 ? blendPose(e, mid, smooth(k * 2)) : blendPose(mid, p, smooth(k * 2 - 1))
+    // Alongside the north side, bows against the hull (a tug is 7.5 m long), following the ship while it moves sideways.
+    const pushAt = (p: Pose) => {
+      const z = Math.min(p.z + def.beam / 2 + 3.9, jettySouth - 4.1)
+      return [
+        { x: p.x + def.length / 4, z, yaw: 0 },
+        { x: p.x - def.length / 4, z, yaw: 0 },
+      ]
     }
-    let poses: { x: number; z: number; yaw: number }[]
-    if (state.phase === 'in') poses = [0, 1].map((i) => toPush(i, span(state.q, 0.5, 0.68)))
-    else if (state.phase === 'crabIn' || state.phase === 'crabOut') poses = push
+    const b = this.shipBerth(s.size)
+    const push = pushAt(state.pose)
+    const pushOff = pushAt({ x: b.x, z: b.z + OFF_BERTH, yaw: 0 })
+    let poses = wait
+    if (state.phase === 'crabIn') poses = state.q < 0.88 ? wait.map((w, i) => blendPose(w, pushOff[i]!, span(state.q, 0.8, 0.87))) : push
     else if (state.phase === 'moored') {
       const k = Math.min(span(now - s.mooredAt, 0, 10), span(s.leaveAt - now, 0, 10))
       poses = push.map((p, i) => blendPose(p, wait[i]!, k))
-    } else if (state.phase === 'astern') poses = [0, 1].map((i) => toPush(i, 1 - span(state.q, 0.14, 0.24)))
-    else poses = escort
+    } else if (state.phase === 'crabOut') poses = push
+    else if (state.phase === 'astern') poses = pushOff.map((p, i) => blendPose(p, wait[i]!, span(state.q, 0.14, 0.26)))
     this.tugs.forEach((tug, i) => {
       const p = poses[i]!
       tug.visible = true

@@ -8,11 +8,15 @@ import { craterNotch, FLOOR_Y, HARBOUR, LAKE } from './layout'
 import { makeSign, mat } from './models'
 import { grassMat, metreUVs, paintedSteel, sandMat, waterMat, waterRipples } from './textures'
 
-/** How long before impact the meteor is a growing light in the sky, and how long its fiery fall lasts. */
-const APPROACH = 90
-const FALL = 10
-/** Where it comes from: high in the north-west sky (relative to the crater). */
-const FROM = new THREE.Vector3(-90, 150, -110)
+/** How long before impact the meteor is a brightening star in the sky, and how long its fiery fall lasts (fast: ~90 m/s). */
+const APPROACH = 40
+const FALL = 2.5
+/** Where it comes from: high in the north-west sky (relative to the crater), and how far out it starts its fall. */
+const DIR = new THREE.Vector3(-0.5, 0.72, -0.48).normalize()
+const START = 215
+/** The impact's shockwave: how far its ring races out and how long it takes. */
+const WAVE_R = 140
+const WAVE_T = 3.2
 
 const C = new THREE.Vector3(LAKE.x, 0, LAKE.z)
 const COAST = LAKE.coast
@@ -88,6 +92,9 @@ export class Lake {
   private readonly trail: THREE.Mesh
   private readonly flash: THREE.Mesh
   private readonly dust: { mesh: THREE.Sprite; dir: THREE.Vector3; speed: number; size: number }[] = []
+  private readonly rocks: { mesh: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3 }[] = []
+  private readonly wave: THREE.Mesh
+  private readonly sparks: THREE.Sprite[] = []
   private readonly smoke: { mesh: THREE.Sprite; phase: number }[] = []
   private fence: RAPIER.RigidBody[] = []
   private fenceFor: string | null = null
@@ -209,6 +216,33 @@ export class Lake {
     this.flash.visible = false
     this.root.add(this.flash)
 
+    // The shockwave: a bright ring racing out over the ground.
+    this.wave = new THREE.Mesh(
+      new THREE.RingGeometry(0.86, 1, 96),
+      new THREE.MeshBasicMaterial({ color: 0xffe0b0, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+    )
+    this.wave.rotation.x = -Math.PI / 2
+    this.wave.position.set(C.x, 0.4, C.z)
+    this.wave.visible = false
+    this.root.add(this.wave)
+    // Burning sparks shed along its fall, and rocks thrown out by the impact.
+    for (let i = 0; i < 14; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffa040, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }))
+      sp.visible = false
+      this.root.add(sp)
+      this.sparks.push(sp)
+    }
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 1, flatShading: true, emissive: 0x7a2a08, emissiveIntensity: 0.6 })
+    for (let i = 0; i < 36; i++) {
+      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35 + (i % 5) * 0.18, 0), rockMat)
+      mesh.castShadow = true
+      mesh.visible = false
+      this.root.add(mesh)
+      const a = i * 2.39996
+      const out = 9 + (i % 7) * 3.5
+      this.rocks.push({ mesh, v: new THREE.Vector3(Math.cos(a) * out, 14 + (i % 4) * 6, Math.sin(a) * out), spin: new THREE.Vector3((i % 3) - 1, ((i + 1) % 3) - 1, 1).multiplyScalar(3) })
+    }
+
     // Dust thrown out by the impact, and smoke rising from the crater afterwards: soft puffs (sprites) that grow and fade.
     for (let i = 0; i < 40; i++) {
       const a = (i / 40) * Math.PI * 2 + Math.sin(i * 7.3) * 0.25
@@ -225,6 +259,24 @@ export class Lake {
       this.root.add(mesh)
       this.smoke.push({ mesh, phase: i / 12 })
     }
+  }
+
+  /**
+   * How hard the ground shakes for someone at `at` (0…1): a rumble as the meteor comes down, a hard jolt at the impact that dies
+   * away over a few seconds, weaker further off. The Engine shakes the camera by it.
+   */
+  shake(game: GameManager, at: THREE.Vector3): number {
+    const m = game.meteor
+    const now = game.now
+    const left = m.timeLeft(now)
+    const near = 1 / (1 + Math.hypot(at.x - C.x, at.z - C.z) / 70)
+    if (left !== null && left < FALL) return 0.25 * (1 - left / FALL) * near
+    const since = m.struck && m.impactAt !== null ? now - m.impactAt : -1
+    if (since < 0 || since > 8) return 0
+    // The jolt arrives with the shockwave.
+    const arrive = (Math.hypot(at.x - C.x, at.z - C.z) / WAVE_R) ** (1 / 0.55) * WAVE_T
+    if (since < arrive) return 0.05 * near
+    return Math.exp(-(since - arrive) * 1.1) * near
   }
 
   /** The crater: a rough bowl, a raised rim of thrown-up earth, boulders, a scorch mark, and the meteorite itself at the bottom. */
@@ -334,34 +386,62 @@ export class Lake {
     this.channel.visible = m.struck
     this.channelInland.visible = !basin
 
-    // The meteor coming in.
+    // The meteor coming in: a star that brightens and flickers far up in the north-west, then a streak of fire that falls in
+    // `FALL` seconds with a long tail and burning sparks.
     const left = m.timeLeft(now)
+    this.trail.visible = false
+    for (const sp of this.sparks) sp.visible = false
     if (left !== null && left < APPROACH) {
-      const k = 1 - left / APPROACH
-      const t = Math.pow(k, 6)
       this.fireball.visible = true
-      this.fireball.position.copy(C).addScaledVector(FROM, 1 - t)
-      this.fireball.scale.setScalar(0.4 + 1.6 * Math.pow(k, 3))
-      const falling = left < FALL
-      this.trail.visible = falling
-      if (falling) {
-        // The trail points back up the path, longer as it speeds up.
-        const len = 6 + 50 * (1 - left / FALL)
-        this.trail.scale.set(1, len, 1)
-        const back = FROM.clone().normalize()
-        this.trail.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), back.negate())
-        this.trail.position.copy(FROM).normalize().multiplyScalar(len / 2)
+      if (left > FALL) {
+        const k = 1 - (left - FALL) / (APPROACH - FALL)
+        this.fireball.position.copy(C).addScaledVector(DIR, START)
+        this.fireball.scale.setScalar((0.5 + 2.5 * k * k) * (0.9 + 0.1 * Math.sin(now * 23)))
+      } else {
+        const p = 1 - left / FALL
+        const d = START * (1 - p)
+        this.fireball.position.copy(C).addScaledVector(DIR, d)
+        this.fireball.scale.setScalar(3 + 2 * p)
+        // The tail points back up the path, longest as it comes down.
+        const len = 30 + 70 * p
+        this.trail.visible = true
+        this.trail.scale.set(2.2, len, 2.2)
+        this.trail.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), DIR.clone().negate())
+        this.trail.position.copy(DIR).multiplyScalar(len / 2 / this.fireball.scale.x)
+        this.trail.scale.divideScalar(this.fireball.scale.x)
+        this.sparks.forEach((sp, i) => {
+          const back = d + 6 + ((i * 7.3 + now * 40) % 60)
+          sp.visible = back < START
+          sp.position.copy(C).addScaledVector(DIR, back).add(new THREE.Vector3(Math.sin(i * 3.1) * 2, Math.cos(i * 1.7) * 2, Math.sin(i * 5.3) * 2))
+          sp.scale.setScalar(3 - ((back - d) / 66) * 2.5)
+        })
       }
     } else {
       this.fireball.visible = false
     }
 
-    // The impact: a flash, then dust flying out and settling, then smoke while it fills.
+    // The impact: a blinding flash, the shockwave racing out, rocks thrown up, dust, then smoke while it fills.
     const since = m.struck && m.impactAt !== null ? now - m.impactAt : -1
-    this.flash.visible = since >= 0 && since < 2.5
+    this.flash.visible = since >= 0 && since < 3
     if (this.flash.visible) {
-      this.flash.scale.setScalar(3 + since * 16)
-      ;(this.flash.material as THREE.MeshBasicMaterial).opacity = 1 - since / 2.5
+      this.flash.scale.setScalar(since < 0.35 ? 4 + (since / 0.35) * 46 : 50 + since * 8)
+      ;(this.flash.material as THREE.MeshBasicMaterial).opacity = since < 0.35 ? 1 : Math.max(0, 1 - (since - 0.35) / 2.65)
+    }
+    this.wave.visible = since >= 0 && since < WAVE_T
+    if (this.wave.visible) {
+      const r = WAVE_R * Math.pow(since / WAVE_T, 0.55)
+      this.wave.scale.setScalar(Math.max(0.1, r))
+      ;(this.wave.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - since / WAVE_T)
+    }
+    const rocksOn = since >= 0 && since < 14
+    for (const r of this.rocks) {
+      r.mesh.visible = rocksOn
+      if (!rocksOn) continue
+      // Ballistic, then resting where they land (fading out at the end).
+      const t = Math.min(since, (2 * r.v.y) / 20)
+      r.mesh.position.set(C.x + r.v.x * t, Math.max(0.3, 1 + r.v.y * t - 10 * t * t), C.z + r.v.z * t)
+      r.mesh.rotation.set(r.spin.x * t, r.spin.y * t, r.spin.z * t)
+      r.mesh.scale.setScalar(since > 12 ? Math.max(0.01, 1 - (since - 12) / 2) : 1)
     }
     const dustOn = since >= 0 && since < 22
     for (const d of this.dust) {

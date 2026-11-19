@@ -192,7 +192,11 @@ export class Town {
     const glow = new THREE.Sprite(GLOW)
     glow.scale.set(1.3, 0.7, 1)
     glow.position.set(0, 0.6 * s - 0.25, -0.17 * s)
-    post.add(lens, glow)
+    // Its pool of light on the ground under the head (the post is turned by `yaw`, so this is in its frame).
+    const pool = new THREE.Mesh(POOL_GEO, POOL)
+    pool.position.set(0, 0.06, -0.17 * s)
+    pool.renderOrder = 3
+    post.add(lens, glow, pool)
     this.solid(x, 2.6, z, 0.12, 2.6, 0.12)
   }
 
@@ -446,6 +450,34 @@ export class Town {
   people(): THREE.Vector3[] {
     return this.walkers.map((w) => w.rig.root.position)
   }
+}
+
+/** Street lamps glow brighter after dark (`night` 0…1, from the sky). */
+export function setStreetLampsNight(night: number): void {
+  LENS.emissiveIntensity = 1.2 + 2.6 * night
+  GLOW.opacity = 0.3 + 0.65 * night
+  POOL.opacity = 0.75 * night
+  POOL.visible = night > 0.02
+}
+
+/** The pool of warm light a street lamp throws on the ground (seen after dark). */
+const POOL = new THREE.MeshBasicMaterial({ map: poolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })
+const POOL_GEO = new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2)
+
+function poolTexture(): THREE.Texture | null {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  if (g) {
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+    grad.addColorStop(0, 'rgba(255,214,150,0.7)')
+    grad.addColorStop(0.45, 'rgba(255,196,120,0.25)')
+    grad.addColorStop(1, 'rgba(255,196,120,0)')
+    g.fillStyle = grad
+    g.fillRect(0, 0, 128, 128)
+  }
+  return new THREE.CanvasTexture(c)
 }
 
 const LENS = new THREE.MeshStandardMaterial({ color: 0xfff7e0, emissive: 0xffe2a8, emissiveIntensity: 1.6 })
