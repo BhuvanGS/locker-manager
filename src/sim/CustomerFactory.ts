@@ -1,6 +1,24 @@
-import type { Appearance, Customer, HairStyle, Item, ItemCategory, Personality } from './types'
+import type { Appearance, Customer, HairStyle, Item, ItemCategory, Personality, Special } from './types'
 
 const FIRST = ['Maya', 'Tomas', 'Priya', 'Jonah', 'Aiko', 'Lucas', 'Fatima', 'Dmitri', 'Grace', 'Omar', 'Ingrid', 'Kwame', 'Sofia', 'Ravi', 'Elena', 'Theo']
+
+/** Whether a first name is one of the women's names (FIRST alternates: even places are women's). The view picks a model by it. */
+export function isFemaleName(name: string): boolean {
+  const i = FIRST.indexOf(name.split(' ')[0] ?? '')
+  return i >= 0 && i % 2 === 0
+}
+/**
+ * Rare visitors (about one customer in `LEGEND_EVERY`): each has a name and a look of their own. Which customers they are comes from a
+ * hash of the customer number, not from `rand`, so the seeded sequence of everyone else is unchanged.
+ */
+export const LEGENDS: { special: Special; name: string; title: string }[] = [
+  { special: 'fighter', name: 'Goro Kaiden', title: 'a martial artist with very spiky hair' },
+  { special: 'ninja', name: 'Tobi Kazemaru', title: 'a ninja in an orange jumpsuit' },
+  { special: 'swordsman', name: 'Ryo Kurogane', title: 'a swordsman with an enormous blade' },
+  { special: 'caped', name: 'Hiro Hageda', title: 'a bald hero in a cape' },
+]
+export const LEGEND_EVERY = 28
+
 const LAST = ['Okafor', 'Lindqvist', 'Raman', 'Becker', 'Tanaka', 'Moreau', 'Haddad', 'Volkov', 'Nakamura', 'Ellis', 'Costa', 'Mensah', 'Rossi', 'Iyer', 'Novak', 'Walsh']
 
 const SKIN = [0xf1c9a5, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21, 0xffdbac]
@@ -117,14 +135,15 @@ export class CustomerFactory {
 
   customer(opts: { patience: number | null; fee: number; satisfaction: number; name?: string; avoid?: ReadonlySet<string> }): { customer: Customer; item: Item } {
     const id = `cust-${++this.customerSeq}`
-    const name = opts.name ?? this.freshName()
+    const legend = opts.name ? null : this.legendFor(this.customerSeq)
+    const name = legend?.name ?? opts.name ?? this.freshName()
     this.usedNames.add(name)
     this.usedFirst.add(name.split(' ')[0] ?? name)
     const item = this.item(id, undefined, opts.avoid)
     const customer: Customer = {
       id,
       name,
-      appearance: this.appearance(),
+      appearance: legend ? { ...this.appearance(), special: legend.special } : this.appearance(),
       personality: pick(this.rand, PERSONALITIES),
       itemId: item.id,
       lockerId: null,
@@ -140,6 +159,15 @@ export class CustomerFactory {
       nameTaken: false,
     }
     return { customer, item }
+  }
+
+  /** The rare visitor customer number `n` is, if any (never the first few, never one already met this game). */
+  private legendFor(n: number): (typeof LEGENDS)[number] | null {
+    if (n < 4) return null
+    const h = Math.imul(n ^ 0x5bd1e995, 2654435761) >>> 0
+    if (h % LEGEND_EVERY !== 0) return null
+    const legend = LEGENDS[(h >>> 8) % LEGENDS.length]!
+    return this.usedNames.has(legend.name) ? null : legend
   }
 
   /** Prefer an unused first name (people are remembered by first name), then any unused full name. */

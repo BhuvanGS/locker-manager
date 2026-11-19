@@ -1,9 +1,10 @@
+import { isFemaleName } from '../sim/CustomerFactory'
 import * as THREE from 'three'
 import type { GameManager } from '../sim/GameManager'
 import type { CustomerId, ItemId } from '../sim/types'
 import { tag } from './interactables'
 import { COUNTER, CUSTOMER_PATH } from './layout'
-import { fitInto, makeItemMesh, makePerson, type PersonRig } from './models'
+import { animatePerson, fitInto, makeItemMesh, makePerson, type PersonRig } from './models'
 
 type Slot = { kind: 'counter' | 'line'; index: number }
 
@@ -39,6 +40,9 @@ const NAME_H = 64
  * item, and a patience bar over anyone waiting. Only customers inside (or walking in/out) have an
  * agent; stored customers are just records in the sim.
  */
+/** The pavement in front of the shop, where customers arrive and leave along. */
+const PAVEMENT_Z = 8.9
+
 export class CustomerAgents {
   readonly root = new THREE.Group()
   private readonly bars = new THREE.Group()
@@ -55,9 +59,11 @@ export class CustomerAgents {
   spawn(game: GameManager, id: CustomerId): void {
     if (this.agents.has(id)) return
     const customer = game.customers.get(id)
-    const rig = makePerson(customer.appearance)
+    const rig = makePerson(customer.appearance, { female: isFemaleName(customer.name) })
     tag(rig.root, { kind: 'customer', customerId: id })
-    rig.root.position.copy(CUSTOMER_PATH.street).add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, 0))
+    // They come along the pavement from either side (the street is for cars).
+    const side = Math.random() < 0.5 ? -1 : 1
+    rig.root.position.set(side * (5 + Math.random() * 3), 0, PAVEMENT_Z + (Math.random() - 0.5) * 0.6)
     this.root.add(rig.root)
 
     const bar = new THREE.Group()
@@ -99,7 +105,13 @@ export class CustomerAgents {
     if (!agent) return
     agent.leaving = true
     agent.slot = null
-    agent.path = [CUSTOMER_PATH.insideDoor.clone(), CUSTOMER_PATH.outsideDoor.clone(), CUSTOMER_PATH.street.clone().add(new THREE.Vector3(3, 0, 0))]
+    const side = agent.rig.root.position.x < 0 ? -1 : 1
+    agent.path = [
+      CUSTOMER_PATH.insideDoor.clone(),
+      CUSTOMER_PATH.outsideDoor.clone(),
+      new THREE.Vector3(side * 2.5, 0, PAVEMENT_Z),
+      new THREE.Vector3(side * 9, 0, PAVEMENT_Z + (Math.random() - 0.5) * 0.6),
+    ]
   }
 
   /** True when any customer is close to the entrance (opens the sliding doors). */
@@ -109,6 +121,11 @@ export class CustomerAgents {
       if (Math.abs(p.x) < 2.2 && Math.abs(p.z - 6.1) < 2.6) return true
     }
     return false
+  }
+
+  /** Everyone's position (customers outside walk along the pavement, so the traffic watches them too). */
+  positions(): THREE.Vector3[] {
+    return [...this.agents.values()].map((a) => a.rig.root.position)
   }
 
   position(id: CustomerId): THREE.Vector3 | null {
@@ -152,6 +169,7 @@ export class CustomerAgents {
       agent.rig.legR.rotation.x = -swing
       agent.rig.armL.rotation.x = -swing * 0.7
       agent.rig.armR.rotation.x = agent.carried ? 0.15 : swing * 0.7
+      animatePerson(agent.rig, dt, agent.path.length > 0 ? 'walk' : agent.carried ? 'carry' : 'idle')
       this.updateBar(agent, game, camera)
       this.updateMood(agent, game)
       agent.nameTag.position.set(pos.x, NAME_Y, pos.z)

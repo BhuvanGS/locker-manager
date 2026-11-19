@@ -58,6 +58,20 @@ export class PhysicsWorld {
     return body
   }
 
+  /** A box that the game moves every frame (a car, a passer-by): the player bumps into it but cannot push it. */
+  addMovingBox(position: Vector3, halfExtents: Vector3): RAPIER.RigidBody {
+    const world = this.getWorld()
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(position.x, position.y, position.z))
+    world.createCollider(RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z), body)
+    return body
+  }
+
+  /** Put a moving box at a position, turned `yaw` about y. */
+  moveBody(body: RAPIER.RigidBody, x: number, y: number, z: number, yaw: number): void {
+    body.setNextKinematicTranslation({ x, y, z })
+    body.setNextKinematicRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) })
+  }
+
   /** Remove a body made by addStaticBox (e.g. an upgrade that is discarded on a new game). */
   removeBody(body: RAPIER.RigidBody): void {
     this.world?.removeRigidBody(body)

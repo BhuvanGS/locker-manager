@@ -29,6 +29,7 @@ export function HUD() {
       stageLabel: st.stageLabel,
       bigEvent: st.bigEvent,
       objective: st.objective,
+      reminders: st.reminders,
       prompt: st.prompt,
       promptHint: st.promptHint,
       holding: st.holding,
@@ -68,6 +69,13 @@ export function HUD() {
       <div className="objective">
         <span className="objective-label">Objective</span>
         <span className="objective-text">{s.objective}</span>
+        {s.reminders && (
+          <ul className="reminders">
+            {s.reminders.split('\n').map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />

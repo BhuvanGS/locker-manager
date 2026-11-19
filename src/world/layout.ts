@@ -390,6 +390,26 @@ export const HARBOUR = {
   hut: { dz: 3, dx: 3 },
 } as const
 
+/**
+ * The main street outside the shop (`world/Town.ts`): the road (z 10.2…18.2) from the beach in the west to far off east, the pavement
+ * on our side (z 6.2…10.2, with a gap where the service road joins) and on the far side (z 18.2…20), the shops and offices across it,
+ * traffic in two lanes (eastbound nearer us, clear of the VIP's parking spot at z 11.5) that turns round at the beach end, and a zebra
+ * crossing.
+ */
+export const STREET = {
+  road: { minZ: 10.2, maxZ: 18.2 },
+  lanes: { east: 13.3, west: 16.6 },
+  near: { minZ: 6.2, maxZ: 10.2, walkZ: [8.5, 9.3] },
+  far: { minZ: 18.2, maxZ: 20.0, walkZ: [18.8, 19.5] },
+  /** Where traffic turns round (just short of the beach) and where it comes from / goes to. */
+  turnX: -50,
+  eastX: 120,
+  service: { minX: 42, maxX: 48 },
+  crossingX: -16,
+  /** The fronts of the buildings across the street. */
+  buildingZ: 20.6,
+} as const
+
 /** The supplier catalogue desk, in the back-right corner of the staff area. */
 export const CATALOGUE_DESK = { x: 4.75, z: -1.9, width: 1.3, depth: 0.7, height: 0.78 }
 

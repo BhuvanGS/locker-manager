@@ -22,6 +22,45 @@ const MOUTH_X = LAKE.x - Math.sqrt(LAKE.r ** 2 - CH.halfWidth ** 2)
 /** The lake's water radius once full. */
 const FULL_R = LAKE.r * Math.sqrt(1 - LAKE.waterDrop / LAKE.depth) + 0.15
 /** The beach: flat to the shore, then shelving into the sea. */
+/** Where the sand meets the sea (sandY(x) = seaY). */
+const WATERLINE_X = COAST.shoreX - (-0.02 - COAST.seaY) / 0.12
+
+const beachMats = new Map<THREE.Material, THREE.Material>()
+/** The sand material with vertex colours on (only the beach strips carry colours). */
+function beachMat(m: THREE.Material): THREE.Material {
+  let b = beachMats.get(m)
+  if (!b) {
+    b = m.clone()
+    ;(b as THREE.MeshStandardMaterial).vertexColors = true
+    beachMats.set(m, b)
+  }
+  return b
+}
+
+let foamTex: THREE.CanvasTexture | null = null
+/** A soft white band, brightest along its middle, with a broken edge. */
+function foamTexture(): THREE.Texture {
+  if (foamTex) return foamTex
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 256
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 64; x++) {
+        const d = Math.abs(x - 32 + Math.sin(y * 0.21) * 6 + Math.sin(y * 0.07) * 4) / 32
+        const a = Math.max(0, 1 - d * d * 1.6) * (0.6 + 0.4 * Math.sin(x * 1.3 + y * 0.9) ** 2)
+        ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`
+        ctx.fillRect(x, y, 1, 1)
+      }
+    }
+  }
+  foamTex = new THREE.CanvasTexture(c)
+  foamTex.wrapT = THREE.RepeatWrapping
+  foamTex.repeat.set(1, 60)
+  return foamTex
+}
+
 const sandY = (x: number): number => (x >= COAST.shoreX ? -0.02 : Math.max(-4, -0.02 - (COAST.shoreX - x) * 0.12))
 const BASIN = HARBOUR.basin
 const JETTY = HARBOUR.jetty
@@ -57,6 +96,9 @@ export class Lake {
   private readonly channel = new THREE.Group()
   /** The parts of the channel the basin replaces (its walls under the grass, and its water). */
   private readonly channelInland = new THREE.Group()
+  private readonly sea: THREE.Mesh
+  private readonly foam: THREE.Mesh[] = []
+  private surfT = 0
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
@@ -82,10 +124,38 @@ export class Lake {
     this.root.add(this.sandStrip(-300, CH.z - hw, sand), this.sandStrip(CH.z + hw, 300, sand))
     this.sandWhole = this.sandStrip(CH.z - hw, CH.z + hw, sand)
     this.root.add(this.sandWhole)
-    const sea = new THREE.Mesh(metreWaterUVs(new THREE.PlaneGeometry(440, 1000)), waterMat())
-    sea.rotation.x = -Math.PI / 2
-    sea.position.set(-58 - 220, COAST.seaY, 0)
-    this.root.add(sea)
+    // The sea: shallow turquoise by the beach, deepening to dark blue offshore (vertex colours over the water material).
+    const seaGeo = metreWaterUVs(new THREE.PlaneGeometry(440, 1000, 88, 1))
+    const sp = seaGeo.getAttribute('position')
+    const seaCol: number[] = []
+    const shallow = new THREE.Color(0x7fe0d6)
+    const deep = new THREE.Color(0x2a4f7a)
+    const c = new THREE.Color()
+    for (let i = 0; i < sp.count; i++) {
+      const worldX = -58 - 220 + sp.getX(i)
+      const t = THREE.MathUtils.smoothstep(COAST.shoreX - worldX, 1, 40)
+      c.copy(shallow).lerp(deep, t)
+      seaCol.push(c.r * 1.6, c.g * 1.6, c.b * 1.6)
+    }
+    seaGeo.setAttribute('color', new THREE.Float32BufferAttribute(seaCol, 3))
+    const seaMat = waterMat().clone()
+    seaMat.vertexColors = true
+    this.sea = new THREE.Mesh(seaGeo, seaMat)
+    this.sea.rotation.x = -Math.PI / 2
+    this.sea.position.set(-58 - 220, COAST.seaY, 0)
+    this.root.add(this.sea)
+    // Surf: two soft white bands that wash up and down the sand at the waterline.
+    for (let k = 0; k < 2; k++) {
+      const foam = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.1, 600),
+        new THREE.MeshBasicMaterial({ map: foamTexture(), color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false }),
+      )
+      foam.rotation.x = -Math.PI / 2
+      foam.position.set(WATERLINE_X, COAST.seaY + 0.012 + k * 0.004, 0)
+      foam.renderOrder = 2
+      this.foam.push(foam)
+      this.root.add(foam)
+    }
     this.buildBeach()
     this.buildChannel(sand)
     this.channel.visible = false
@@ -249,6 +319,13 @@ export class Lake {
   }
 
   update(dt: number, game: GameManager): void {
+    this.surfT += dt
+    this.foam.forEach((f, k) => {
+      const w = Math.sin(this.surfT * 0.55 + k * Math.PI)
+      f.position.x = WATERLINE_X + 0.35 + w * 0.55
+      ;(f.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.4 * (0.5 + 0.5 * Math.sin(this.surfT * 0.55 + k * Math.PI + 1.2))
+    })
+    ;(this.sea.material as THREE.MeshStandardMaterial).normalMap?.offset.set(this.surfT * 0.004, this.surfT * 0.002)
     const m = game.meteor
     const now = game.now
     const basin = m.phase === 'lake' && game.harbour.basin
@@ -388,8 +465,23 @@ export class Lake {
 
   /** A strip of beach from z0 to z1: flat sand to the shore, then shelving down under the sea. UVs in metres. */
   private sandStrip(z0: number, z1: number, material: THREE.Material): THREE.Mesh {
+    // Colour across the beach: grassy at the top, pale dry sand, then darker wet sand and the sea floor below the waterline.
+    const tint = (x: number): [number, number, number] => {
+      if (x > COAST.grassX - 1.4) {
+        const t = (x - (COAST.grassX - 1.4)) / 1.4
+        return [1.02 - t * 0.2, 1.02 - t * 0.02, 0.98 - t * 0.28]
+      }
+      if (x > COAST.shoreX + 1.5) return [1.04, 1.02, 0.98]
+      if (x > WATERLINE_X) {
+        const t = (COAST.shoreX + 1.5 - x) / (COAST.shoreX + 1.5 - WATERLINE_X)
+        return [1.04 - t * 0.34, 1.02 - t * 0.32, 0.98 - t * 0.26]
+      }
+      const t = Math.min(1, (WATERLINE_X - x) / 6)
+      return [0.7 - t * 0.2, 0.7 - t * 0.12, 0.72 - t * 0.04]
+    }
+    const col: number[] = []
     const xs: number[] = []
-    for (let x = -130; x < COAST.grassX; x += 1) xs.push(x)
+    for (let x = -130; x < COAST.grassX; x += x > WATERLINE_X - 8 ? 0.5 : 2) xs.push(x)
     xs.push(COAST.grassX)
     const pos: number[] = []
     const uv: number[] = []
@@ -398,6 +490,7 @@ export class Lake {
       for (const z of [z0, z1]) {
         pos.push(x, sandY(x), z)
         uv.push(x, -z)
+        col.push(...tint(x))
       }
       if (i > 0) {
         const a = (i - 1) * 2
@@ -407,9 +500,10 @@ export class Lake {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
     geo.setIndex(idx)
     geo.computeVertexNormals()
-    const mesh = new THREE.Mesh(geo, material)
+    const mesh = new THREE.Mesh(geo, beachMat(material))
     mesh.receiveShadow = true
     return mesh
   }

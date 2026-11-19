@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { kenney } from './kenney'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
@@ -7,7 +8,6 @@ import type { BoatKind, BoatVisit, HarbourManager, ShipVisit } from '../sim/Harb
 import { HARBOUR, LAKE } from './layout'
 import { makeSign, mat } from './models'
 import { rounded, type Leg, type Pose } from './paths'
-import { prop } from './props'
 import { armYellow, concreteFloor, metreUVs, paintedSteel, roadAsphalt, roofGravel, shedCladding, shedRoof, waterMat, woodMat } from './textures'
 
 const H = HARBOUR
@@ -231,7 +231,7 @@ export class Harbour {
     officeSign.rotation.y = Math.PI
     g.add(officeSign)
     this.solid(o.minX, o.maxX, 0, 2.6, o.minZ, o.maxZ)
-    g.add(prop('street_lamp_02', { x: road.minX - 0.6, z: (basin ? H.basinQuayMaxZ : apron.maxZ) + 1, height: 4.4 }))
+    g.add(kenney('street', 'light-curved', { x: road.minX - 0.6, z: (basin ? H.basinQuayMaxZ : apron.maxZ) + 1, rotY: -Math.PI / 2, scale: 7.5, keepOrigin: true }))
   }
 
   /** The timber jetty (and the marina's floating pontoon on beyond it), the footpath round to it, and the marina hut. */
@@ -701,81 +701,16 @@ const BOAT: Record<BoatKind, { length: number; beam: number }> = {
   motor: { length: 4.6, beam: 1.9 },
 }
 
-/** A pointed hull outline (bow +y in shape space), extruded `h` up from `y0`; laid flat its bow points to −z. */
-function hull(length: number, beam: number, y0: number, h: number, colour: number, bow = 0.35): THREE.Mesh {
-  const L = length / 2
-  const W = beam / 2
-  const shape = new THREE.Shape([
-    new THREE.Vector2(-W * 0.8, -L),
-    new THREE.Vector2(W * 0.8, -L),
-    new THREE.Vector2(W, -L * 0.3),
-    new THREE.Vector2(W * 0.9, L * (1 - bow)),
-    new THREE.Vector2(0, L),
-    new THREE.Vector2(-W * 0.9, L * (1 - bow)),
-    new THREE.Vector2(-W, -L * 0.3),
-  ])
-  const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.1 }))
-  m.rotation.x = -Math.PI / 2
-  m.position.y = y0
-  m.castShadow = true
-  return m
-}
 
 /** A rowing boat, a small sailing yacht, or a motorboat (bow to −z, waterline at y = 0). */
 function makeBoat(kind: BoatKind, seed: number): THREE.Group {
+  // Kenney Watercraft Kit boats (bow +z, so turned round: our boats' noses point −z), sunk a little into the water.
   const g = new THREE.Group()
-  const { length: L, beam: W } = BOAT[kind]
-  const part = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
-    mesh.position.set(x, y, z)
-    mesh.castShadow = true
-    g.add(mesh)
-    return mesh
-  }
-  if (kind === 'row') {
-    const wood = [0x8b5a2b, 0x2f6f8f, 0x9f1d1d][seed % 3]!
-    g.add(hull(L, W, -0.15, 0.55, wood, 0.4))
-    part(W * 0.85, 0.05, 0.3, mat(0xd6b98c, 0.8), 0, 0.3, 0.1)
-    part(W * 0.85, 0.05, 0.3, mat(0xd6b98c, 0.8), 0, 0.3, 0.9)
-    for (const s of [-1, 1]) {
-      const oar = part(1.9, 0.05, 0.08, mat(0xd6b98c, 0.8), s * (W / 2 + 0.6), 0.35, 0.1)
-      oar.rotation.y = s * 0.35
-    }
-    // Somebody at the oars.
-    part(0.42, 0.55, 0.3, mat([0xef4444, 0x22c55e, 0xf59e0b][seed % 3]!, 0.8), 0, 0.6, 0.15)
-    part(0.24, 0.24, 0.24, mat(0xf1c9a5, 0.7), 0, 1.0, 0.15)
-  } else if (kind === 'sail') {
-    g.add(hull(L, W, -0.3, 0.45, 0xf8fafc, 0.45))
-    part(W * 0.62, 0.05, L * 0.55, woodMat(0xb08a5a), 0, 0.17, 0.25)
-    part(1.0, 0.35, 1.3, mat(0xf1f5f9, 0.5), 0, 0.38, -0.2)
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 6.2, 8), mat(0xd1d5db, 0.4, 0.6))
-    mast.position.set(0, 3.2, -0.6)
-    g.add(mast)
-    const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.3, 6), mat(0xd1d5db, 0.4, 0.6))
-    boom.rotation.x = Math.PI / 2
-    boom.position.set(0, 0.95, 0.55)
-    g.add(boom)
-    // The mainsail (furled colours vary) and a small jib.
-    const sailCloth = new THREE.MeshStandardMaterial({ color: [0xfefce8, 0xf8fafc, 0xfee2e2][seed % 3], roughness: 0.9, side: THREE.DoubleSide })
-    const main = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(2.2, 0), new THREE.Vector2(0, 5.0)])), sailCloth)
-    main.rotation.y = -Math.PI / 2
-    main.position.set(0, 1.0, -0.55)
-    g.add(main)
-    const jib = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(1.7, 0), new THREE.Vector2(0, 4.2)])), sailCloth)
-    jib.rotation.y = Math.PI / 2
-    jib.position.set(0, 0.6, -0.65)
-    g.add(jib)
-  } else {
-    const colour = [0xf8fafc, 0x1e3a8a, 0xb91c1c][seed % 3]!
-    g.add(hull(L, W, -0.3, 0.75, colour, 0.4))
-    part(W * 0.6, 0.05, L * 0.5, woodMat(0xc8a676), 0, 0.47, 0.5)
-    // Cabin and windscreen, a seat, and an outboard motor at the stern.
-    part(W * 0.7, 0.55, 1.4, mat(0xf1f5f9, 0.4), 0, 0.75, -0.6)
-    const screen = part(W * 0.68, 0.45, 0.04, new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1, metalness: 0.5, transparent: true, opacity: 0.7 }), 0, 1.12, -1.33)
-    screen.rotation.x = 0.35
-    part(W * 0.6, 0.35, 0.5, mat(0x334155, 0.7), 0, 0.68, 1.3)
-    part(0.35, 0.7, 0.35, mat(0x111827, 0.5, 0.3), 0, 0.35, L / 2 + 0.1)
-  }
+  const { length: L } = BOAT[kind]
+  const names = kind === 'row' ? ['boat-row-small', 'boat-row-large'] : kind === 'sail' ? ['boat-sail-a', 'boat-sail-b'] : ['boat-speed-a', 'boat-speed-c', 'boat-speed-e', 'boat-fishing-small']
+  const name = names[seed % names.length]!
+  const model = kenney('boats', name, { x: 0, y: kind === 'sail' ? -0.35 : -0.25, z: 0, rotY: Math.PI, length: L })
+  g.add(model)
   return g
 }
 

@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
 import * as THREE from 'three'
+import { kenney } from './kenney'
 import { conduit, floorBundle } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { CONFIG, type CargoType, type Section } from '../sim/config'
@@ -7,7 +8,7 @@ import type { GameManager } from '../sim/GameManager'
 import type { RobotJob, Truck } from '../sim/WarehouseManager'
 import { markBlocker, tag } from './interactables'
 import { CONTACT_SPOT, FLOOR_HEIGHT, UNDERGROUND, WAREHOUSE } from './layout'
-import { makePerson, makeSign, mat, type PersonRig } from './models'
+import { animatePerson, makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
 import { aroundHole } from './Facility'
 import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
@@ -285,7 +286,7 @@ export class Warehouse {
     this.syncDoors(dt, game, player)
     this.syncHatch(dt, game)
     this.syncHalls(game)
-    this.syncContact(game, player)
+    this.syncContact(game, player, dt)
     for (const sp of this.spinners) sp.obj.rotation[sp.axis] += sp.speed * dt
     if (this.fanHead) this.fanHead.rotation.y = Math.sin(performance.now() / 2600) * 0.7
     this.drawBoard(game)
@@ -439,6 +440,14 @@ export class Warehouse {
       this.yard.remove(view.group)
       this.trucks.delete(id)
     }
+  }
+
+  /** Trucks and the police car near the main street, for the traffic to keep clear of. */
+  vehicles(): THREE.Vector3[] {
+    const out: THREE.Vector3[] = []
+    for (const t of this.trucks.values()) if (t.group.position.z > 4) out.push(t.group.position)
+    if (this.police && this.policeShown && this.police.group.position.z > 4) out.push(this.police.group.position)
+    return out
   }
 
   /** The way in and the way out for a truck at dock `spot`. */
@@ -609,20 +618,12 @@ export class Warehouse {
       group.add(mesh)
       return mesh
     }
-    add(new THREE.BoxGeometry(1.9, 0.6, 4.6), mat(0xf1f5f9, 0.45, 0.3), 0, 0.6, 0)
-    add(new THREE.BoxGeometry(1.7, 0.55, 2.4), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1, metalness: 0.6 }), 0, 1.15, 0.1)
-    add(new THREE.BoxGeometry(1.92, 0.3, 4.62), mat(0x111827, 0.5, 0.3), 0, 0.5, 0)
+    // A Kenney police car (nose +z; it drives south, −z), with our own flashing bar on its roof.
+    group.add(kenney('cars', 'police', { x: 0, z: 0, rotY: Math.PI, scale: 1.55 }))
     const red = new THREE.MeshBasicMaterial({ color: 0xef4444 })
     const blue = new THREE.MeshBasicMaterial({ color: 0x3b82f6 })
-    add(new THREE.BoxGeometry(0.5, 0.14, 0.3), red, -0.4, 1.5, 0.1)
-    add(new THREE.BoxGeometry(0.5, 0.14, 0.3), blue, 0.4, 1.5, 0.1)
-    const tyre = mat(0x111827, 0.9)
-    for (const x of [-0.95, 0.95]) {
-      for (const z of [-1.4, 1.4]) {
-        const wh = add(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14), tyre, x, 0.34, z)
-        wh.rotation.z = Math.PI / 2
-      }
-    }
+    add(new THREE.BoxGeometry(0.42, 0.12, 0.26), red, -0.3, 1.98, 0.05)
+    add(new THREE.BoxGeometry(0.42, 0.12, 0.26), blue, 0.3, 1.98, 0.05)
     const label = makeNameSprite('POLICE · inspection')
     label.position.set(0, 2.3, 0)
     group.add(label)
@@ -1098,7 +1099,7 @@ export class Warehouse {
   }
 
   /** The contact by the door: shown while he is here, walking in and out along `CONTACT_WALK`. */
-  private syncContact(game: GameManager, player: THREE.Vector3): void {
+  private syncContact(game: GameManager, player: THREE.Vector3, dt: number): void {
     const c = game.warehouse.contact
     if (!c) {
       if (this.contactView) this.contactView.group.visible = false
@@ -1106,7 +1107,7 @@ export class Warehouse {
     }
     if (!this.contactView || this.contactView.name !== c.name) {
       if (this.contactView) this.root.remove(this.contactView.group)
-      const rig = makePerson({ skin: 0xc68e5e, hair: 0x111827, hairStyle: 'cap', shirt: 0x1f2937, trousers: 0x111111, height: 1.02 })
+      const rig = makePerson({ skin: 0xc68e5e, hair: 0x111827, hairStyle: 'cap', shirt: 0x1f2937, trousers: 0x111111, height: 1.02 }, {})
       const group = new THREE.Group()
       group.add(rig.root)
       const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.9, 0.7), new THREE.MeshBasicMaterial({ visible: false }))
@@ -1142,6 +1143,7 @@ export class Warehouse {
     v.rig.legR.rotation.x = -swing
     v.rig.armL.rotation.x = moving ? -swing * 0.6 : -0.3
     v.rig.armR.rotation.x = moving ? swing * 0.6 : -0.3
+    animatePerson(v.rig, dt, moving ? 'walk' : 'idle')
     if (v.label) v.label.lookAt(v.label.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(1, 0, 0)))
   }
 

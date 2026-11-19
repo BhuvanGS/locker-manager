@@ -6,7 +6,7 @@ import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { markBlocker, tag } from './interactables'
 import { OFFICE, ROOM } from './layout'
-import { makePerson, makeSign, mat, type PersonRig } from './models'
+import { animatePerson, makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
 import { carpetFloor, ceilingMat, glassMat, lightPanel, metreUVs, roofGravel, wallMat, woodMat } from './textures'
 
@@ -157,7 +157,7 @@ export class Office {
     if (!this.vip || this.vip.id !== offer.id) {
       if (this.vip) this.root.remove(this.vip.group)
       const look = offer.special ? CONFIG.harbour.vip.look : CONFIG.deals.vips[offer.vip]?.look
-      const rig = makePerson({ ...(look ?? CONFIG.deals.vips[0]!.look), hairStyle: (look?.hairStyle ?? 'bald') as 'bald' })
+      const rig = makePerson({ ...(look ?? CONFIG.deals.vips[0]!.look), hairStyle: (look?.hairStyle ?? 'bald') as 'bald' }, { smart: true, female: offer.name.startsWith('Oprah') })
       const group = new THREE.Group()
       group.add(rig.root)
       group.position.set(OFFICE.vip.x, 0.02, OFFICE.vip.z)
@@ -172,7 +172,7 @@ export class Office {
     const t = performance.now() / 1000
     this.vip.rig.armR.rotation.x = -0.7 + Math.sin(t * 3) * 0.08
     this.vip.rig.armL.rotation.x = Math.sin(t * 0.8) * 0.05
-    void dt
+    animatePerson(this.vip.rig, dt, 'sit')
   }
 
   private drawBoard(game: GameManager): void {

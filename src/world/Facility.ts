@@ -358,16 +358,7 @@ export class Facility {
     for (let x = -32; x > LAKE.coast.grassX + 2; x -= 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
 
-    // Buildings across the street.
-    const fronts = [0xc9b8a3, 0xa7b8c9, 0xd6c2b4, 0xb7c4ae, 0xcfc6b8]
-    for (let i = 0; i < 6; i++) {
-      const h = 5 + (i % 3) * 2.2
-      const x = -25 + i * 10
-      this.deco(9, h, 6, mat(fronts[i % fronts.length] ?? 0xcccccc, 0.9), x, h / 2, 22)
-      for (let fx = -3; fx <= 3; fx += 2) {
-        for (let fy = 1.6; fy < h - 0.8; fy += 1.8) this.deco(1.1, 1, 0.05, mat(0x9fbfd6, 0.2, 0.3), x + fx, fy, 18.97)
-      }
-    }
+    // The buildings across the street, the lamps, benches, traffic and passers-by are the Town's (world/Town.ts).
     // Neighbouring shops on our side.
     // Each is a front half and a back half: the back half is what an annex replaces when it is built.
     const west = wallMat(0xb9a58f)
@@ -453,13 +444,7 @@ export class Facility {
     }
     this.root.add(canopy)
 
-    // Street lamps along the pavement, and planters either side of the door.
-    for (const [x, ry] of [
-      [-7.5, 0],
-      [14.5, 0],
-      [-20, 0],
-    ] as const)
-      this.root.add(prop('street_lamp_02', { x, z: 9.85, rotY: ry, height: 4.6 }))
+    // Planters either side of the door (the street lamps are the Town's).
     for (const sx of [-1, 1]) {
       const px = sx * 2.1
       this.deco(0.9, 0.5, 0.5, mat(0x374151, 0.6), px, 0.25, maxZ + t + 0.45)

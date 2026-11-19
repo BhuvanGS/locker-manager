@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Appearance, ItemCategory } from '../sim/types'
+import { animateToon, makeToon, type ToonOptions, type ToonPose, type ToonRig } from './people'
 
 /**
  * Procedural low-poly models. Materials are cached by colour so hundreds of items/customers share a
@@ -172,9 +173,28 @@ export type PersonRig = {
   armR: THREE.Object3D
   /** Where a carried item hangs (right hand). */
   hand: THREE.Object3D
+  /** A stylised person (`world/people.ts`): `animatePerson` moves its limbs; the limb objects above are then unused. */
+  toon?: ToonRig
 }
 
-export function makePerson(a: Appearance): PersonRig {
+export type Pose = ToonPose
+
+/** Play a pose on a person and advance it by dt (`speed` scales the walk). Box people ignore it. */
+export function animatePerson(rig: PersonRig, dt: number, pose: Pose, speed = 1): void {
+  if (rig.toon) animateToon(rig.toon, dt, pose, speed)
+}
+
+export type PersonKind = ToonOptions
+
+/** A person: a stylised toon figure (see `world/people.ts`). */
+export function makePerson(a: Appearance, kind: PersonKind = {}): PersonRig {
+  const toon = makeToon(a, kind)
+  const none = () => new THREE.Object3D()
+  return { root: toon.root, legL: none(), legR: none(), armL: none(), armR: none(), hand: toon.hand, toon }
+}
+
+/** The old box figure (kept for reference and as a fallback). */
+export function boxPerson(a: Appearance): PersonRig {
   const root = new THREE.Group()
   const body = new THREE.Group()
   body.scale.setScalar(a.height)

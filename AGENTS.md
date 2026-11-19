@@ -233,6 +233,24 @@ Rules:
   and the crane(s) from the visit times: `unloadOrder` and `craneJob` must match the sim's `unloadSeconds` per container per crane. Boats moor on the
   jetty's north side (`jettyBerths`, `marinaBerths`) and come in along `boatLane`, south of the ship. `grantUpgrade('lake-…')` grants the whole chain,
   the contract included.
+- **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is a procedural toon figure: rounded capsule body,
+  big round head with a simple face, hair as a cap over the crown, and clothes chosen from a hash of the `Appearance` (sleeves, jacket,
+  shorts or skirt, glasses, beard). `makePerson(appearance, { female, smart, worker })` builds one (`isFemaleName` picks women's
+  builds for women's names) and `animatePerson(rig, dt, pose)` (walk / idle / sit / carry / run) must be called every frame; the old
+  `legL`/`armR` fields are dummies now. **Rare visitors**: `CustomerFactory.LEGENDS` (about one customer in `LEGEND_EVERY`, from a hash of
+  the customer number so the seeded sequence is unchanged, each once a game) set `appearance.special` (`fighter`, `ninja`, `swordsman`,
+  `caped`): original characters with their own look and a toast when they walk in. Keep them original, never a copy of someone else's.
+- **The town** (`world/Town.ts`, `STREET` in `layout.ts`): Kenney buildings across the street, curved street lamps (`lamp`), benches,
+  bins, hydrants, a zebra crossing, picnic tables and buoys; traffic on one loop (west lane to the beach end, U-turn, east lane back),
+  each car following the one ahead by distance along the loop and braking for the player, customers, walkers, the VIP's car and trucks
+  (the Engine passes them in); passers-by who stroll, cross at the zebra and sit on benches; people on the beach. Cars and walkers are
+  moving colliders (`PhysicsWorld.addMovingBox` / `moveBody`). Customers arrive and leave along the pavement, not across the road.
+- **Kenney models** (`world/kenney.ts`, `public/models/kenney/<kit>/`): `kenney(kit, name, { x, z, rotY, scale | length | height, keepOrigin })`
+  like `prop()`. Kenney vehicles and boats face +z (turn them π for our −z convention).
+- **Reminders** (`GameManager.reminders()`): up to three hints under the objective (impatient customers, a VIP about to leave, an open
+  empty locker, a worn arm, customers due back), derived from state and never the objective itself. The store holds them as one string.
+- **The beach** (`Lake.sandStrip`, `WATERLINE_X`): vertex colours fade grassy → dry → wet sand → sea floor; the sea has a shallow-to-deep
+  colour gradient and animated surf bands at the waterline.
 - **Details** (`world/details.ts`): `doorFrame` (jambs, head, casing both sides, threshold plate) on every opened doorway, `levelSign` (floor
   number disc) in each hall, `pedestalFace` on console and kiosk pedestals. A new model = download, shrink textures, add it to `PropName`.
 - `models.ts` has procedural meshes (items, keys, people) with cached materials. Swap them for GLB later behind

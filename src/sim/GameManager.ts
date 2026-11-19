@@ -16,7 +16,7 @@ import { DealManager, type Offer } from './DealManager'
 import { HarbourManager, type HarbourEvent } from './HarbourManager'
 import { MeteorEvent } from './MeteorEvent'
 import { WarehouseManager, type WarehouseEvent } from './WarehouseManager'
-import { CustomerFactory } from './CustomerFactory'
+import { CustomerFactory, LEGENDS } from './CustomerFactory'
 import { CustomerManager } from './CustomerManager'
 import { ConveyorSystem } from './ConveyorSystem'
 import { CustomerScheduler } from './CustomerScheduler'
@@ -385,6 +385,8 @@ export class GameManager {
     this.scheduler.introduce(customer.id)
     if (first) this.firstCustomerId = customer.id
     this.notify({ type: 'customerSpawned', customerId: customer.id })
+    const legend = LEGENDS.find((l) => l.special === customer.appearance.special)
+    if (legend) this.notify({ type: 'message', text: `A rare visitor! ${legend.name}, ${legend.title}, is walking in.` })
     this.scheduleNextArrival()
   }
 
@@ -1749,6 +1751,31 @@ export class GameManager {
     if (!id) return 'Open for business. Your first customer is on the way.'
     if (this.tutorialComplete || !this.customers.has(id)) return this.generalObjective()
     return this.tutorialObjective(this.customers.get(id))
+  }
+
+  /**
+   * Things to keep an eye on besides the objective (at most three, most urgent first), derived from state like the objective: a
+   * customer running out of patience, a VIP about to give up, a locker left open, a worn robot arm, customers due back soon. Nothing
+   * during the tutorial, and never what the objective already says.
+   */
+  reminders(): string[] {
+    if (!this.tutorialComplete) return []
+    const out: string[] = []
+    const now = this.now
+    const queue = this.queue()
+    const impatient = queue
+      .filter((c) => c.patienceDrains && c.maxPatience > 0 && c.patience / c.maxPatience < 0.35 && this.dialogue?.customerId !== c.id)
+      .sort((a, b) => a.patience - b.patience)
+    for (const c of impatient.slice(0, 2)) out.push(`${c.name.split(' ')[0]} is running out of patience (${Math.ceil(c.patience)}s).`)
+    const offer = this.deals.offer
+    if (offer && now >= offer.readyAt && offer.expiresAt - now < 40 && !this.dealOpen) out.push(`${offer.name} leaves the deal office in ${Math.ceil(offer.expiresAt - now)}s.`)
+    if (this.lockers.all().some((l) => l.doorOpen && !l.itemId && l.state !== 'reserved')) out.push('A locker door is standing open.')
+    const worn = this.conveyor.coveredZones().find((z) => this.conveyor.jammedCount(z) === 0 && this.conveyor.zoneCondition(z) < 30)
+    if (worn) out.push(`A robot arm in the ${ZONE_TITLES[worn]} is worn: service it at its console.`)
+    const dueSoon = this.customers.all().filter((c) => c.state === 'stored' && c.expectedReturnAt !== null && c.expectedReturnAt - now < 45).length
+    if (dueSoon > 0) out.push(dueSoon === 1 ? 'A customer is due back within a minute.' : `${dueSoon} customers are due back within a minute.`)
+    const objective = this.objective()
+    return out.filter((r) => r !== objective).slice(0, 3)
   }
 
   /** After the tutorial: point at the most useful next thing without giving away what you must remember. */

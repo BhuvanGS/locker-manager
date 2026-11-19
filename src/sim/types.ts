@@ -32,7 +32,12 @@ export interface Appearance {
   trousers: number
   /** Body height multiplier, ~0.92–1.08. */
   height: number
+  /** A rare visitor with a look of their own (`CustomerFactory.LEGENDS`). */
+  special?: Special
 }
+
+/** The rare visitors: a spiky-haired fighter in a gi, a ninja, a swordsman in a black robe, a bald hero in a cape. */
+export type Special = 'fighter' | 'ninja' | 'swordsman' | 'caped'
 
 export interface Personality {
   /** Opening line on the deposit visit. */

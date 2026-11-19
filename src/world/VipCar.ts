@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { CONFIG } from '../sim/config'
 import type { GameManager } from '../sim/GameManager'
 import { OFFICE } from './layout'
-import { makePerson, makeSign, mat, type PersonRig } from './models'
+import { kenney, loadKenney } from './kenney'
+import { animatePerson, makePerson, makeSign, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
 
 /** Where the car parks (in the street in front of the deal office), and where it comes from and goes to. */
@@ -40,7 +41,6 @@ export class VipCar {
   private phase: Phase = 'away'
   private offerId = 0
   private plate: THREE.Mesh | null = null
-  private readonly wheels: THREE.Mesh[] = []
   /** The VIP on foot (between the car and their chair), and where they are on the walk. */
   private walker: { rig: PersonRig; group: THREE.Group } | null = null
   private walk: Walk = 'none'
@@ -50,32 +50,19 @@ export class VipCar {
   private walked = 0
 
   constructor() {
-    const body = mat(0x0b0f19, 0.35, 0.5)
-    const trim = mat(0xfbbf24, 0.4, 0.6)
-    const glass = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1, metalness: 0.6 })
-    // The car faces −x. Length 4.8, width 1.9.
-    const add = (geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number) => {
-      const mesh = new THREE.Mesh(geo, material)
-      mesh.position.set(x, y, z)
-      mesh.castShadow = true
-      this.root.add(mesh)
-      return mesh
-    }
-    add(new THREE.BoxGeometry(4.8, 0.62, 1.9), body, 0, 0.62, 0)
-    add(new THREE.BoxGeometry(2.9, 0.55, 1.7), glass, 0.2, 1.18, 0)
-    add(new THREE.BoxGeometry(2.7, 0.06, 1.6), body, 0.2, 1.49, 0)
-    add(new THREE.BoxGeometry(4.82, 0.05, 1.92), trim, 0, 0.9, 0)
-    for (const z of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.08, 0.14, 0.3), mat(0xfff7d6, 0.3), -2.4, 0.7, z)
-    for (const z of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.08, 0.12, 0.3), mat(0xef4444, 0.4), 2.4, 0.7, z)
-    const tyre = mat(0x111827, 0.9)
-    for (const x of [-1.5, 1.5]) {
-      for (const z of [-0.95, 0.95]) {
-        const wheel = add(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 16), tyre, x, 0.38, z)
-        wheel.rotation.x = Math.PI / 2
-        this.wheels.push(wheel)
-        add(new THREE.CylinderGeometry(0.2, 0.2, 0.28, 12), mat(0xc0c7cf, 0.3, 0.8), x, 0.38, z).rotation.x = Math.PI / 2
-      }
-    }
+    // A black luxury SUV (Kenney Car Kit; its nose is +z, ours −x), with its own dark paint.
+    const car = kenney('cars', 'suv-luxury', { x: 0, z: 0, rotY: -Math.PI / 2, scale: 1.55 })
+    void loadKenney('cars', 'suv-luxury').then(() => {
+      car.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || o.name.startsWith('wheel')) return
+        const m = (o.material as THREE.MeshStandardMaterial).clone()
+        m.color.set(0x3a3f4a)
+        m.metalness = 0.5
+        m.roughness = 0.35
+        o.material = m
+      })
+    })
+    this.root.add(car)
     this.root.position.set(FAR, 0, PARK.z)
     this.root.visible = false
   }
@@ -84,6 +71,14 @@ export class VipCar {
   dispose(): void {
     this.walker?.group.removeFromParent()
     this.walker = null
+  }
+
+  /** Where the car (and the VIP walking to the office) are, for the traffic to keep clear of. */
+  obstacles(): THREE.Vector3[] {
+    const out: THREE.Vector3[] = []
+    if (this.phase !== 'away') out.push(this.root.position)
+    if (this.walker) out.push(this.walker.group.position)
+    return out
   }
 
   /** The VIP is near the shop's front door (so it opens for them). */
@@ -125,8 +120,6 @@ export class VipCar {
     // Drive at a steady speed and ease off as it reaches the kerb.
     const step = Math.sign(dx) * Math.min(Math.abs(dx), (this.phase === 'arriving' ? Math.max(1.2, Math.min(SPEED, Math.abs(dx) * 1.1)) : SPEED) * dt)
     this.root.position.x += step
-    const moving = Math.abs(step) > 1e-4
-    if (moving) for (const w of this.wheels) w.rotation.y += (step / 0.38) * Math.sign(-1)
     if (this.phase === 'arriving' && Math.abs(dx) < 0.02) {
       this.phase = 'parked'
       // Out they get, timed to sit down at the desk when the offer is ready.
@@ -145,7 +138,7 @@ export class VipCar {
   private makeWalker(vip: number, name: string): void {
     if (this.walker) this.walker.group.removeFromParent()
     const look = CONFIG.deals.vips[vip]?.look ?? CONFIG.deals.vips[0]!.look
-    const rig = makePerson({ ...look, hairStyle: look.hairStyle as 'bald' })
+    const rig = makePerson({ ...look, hairStyle: look.hairStyle as 'bald' }, { smart: true, female: name.startsWith('Oprah') })
     const group = new THREE.Group()
     group.add(rig.root)
     // Their name over their head, always facing you (a sprite made from a sign's texture).
@@ -180,6 +173,7 @@ export class VipCar {
     }
     walker.group.visible = pose !== null
     if (!pose) return
+    animatePerson(walker.rig, dt, 'walk')
     walker.group.position.set(pose.x, 0.02, pose.z)
     // People face +z, paths give a −z heading.
     walker.group.rotation.y = pose.yaw + Math.PI

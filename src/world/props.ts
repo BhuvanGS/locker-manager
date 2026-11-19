@@ -13,10 +13,14 @@ export type PropName =
   | 'modern_arm_chair_01'
   | 'industrial_storage_cart'
   | 'power_box_01'
-  | 'street_lamp_02'
   | 'metal_office_desk'
   | 'desk_lamp_arm_01'
   | 'plastic_monobloc_chair_01'
+  | 'fire_hydrant'
+  | 'metal_trash_can'
+  | 'painted_wooden_bench'
+  | 'ocean_buoy'
+  | 'wooden_picnic_table'
 
 const loader = new GLTFLoader()
 const models = new Map<PropName, Promise<THREE.Object3D>>()

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { Town } from '../world/Town'
 import { FirstPersonCamera } from '../player/FirstPersonCamera'
 import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
@@ -91,6 +92,7 @@ export class Engine {
   private lake: Lake | null = null
   /** The VIP's car in the street (turns up with each offer). */
   private vipCar: VipCar | null = null
+  private town: Town | null = null
   /** The warehouse, its road and its trucks, once bought. */
   private warehouse: Warehouse | null = null
   /** The robot-arm stations of the halls the belts have been extended to (the storage room's is inside the bay). */
@@ -157,6 +159,8 @@ export class Engine {
     this.scene.add(this.facility.root, this.agents.root, this.held.root)
     this.lake = new Lake(this.physics)
     this.scene.add(this.lake.root)
+    this.town = new Town(this.physics)
+    this.scene.add(this.town.root)
     this.interactionTargets.push(this.facility.root, this.agents.root)
     this.buildStartingFurniture()
     this.interaction = new InteractionManager(this.interactionTargets)
@@ -662,6 +666,7 @@ export class Engine {
     this.vipCar?.update(dt, this.game)
     this.warehouse?.update(dt, this.game, playerPos)
     this.lake?.update(dt, this.game)
+    this.town?.update(dt, playerPos, [...this.agents.positions(), ...(this.vipCar?.obstacles() ?? []), ...(this.warehouse?.vehicles() ?? [])])
     for (const station of this.stations) station.update(dt, this.game)
     for (const console of this.consoles.values()) console.update(this.game)
     this.registerBoard?.update(dt, this.game)
@@ -1029,6 +1034,7 @@ export class Engine {
       activeDeposits: game.activeDeposits(),
       queue: game.queue().length,
       objective: game.objective(),
+      reminders: game.reminders().join('\n'),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
       bigEvent: game.meteorStatus(),
       prompt: game.dialogue || game.catalogueOpen || game.terminalOpen || game.consoleScope !== null || game.dealOpen || game.receivingOpen ? null : (aim?.action ?? null),
