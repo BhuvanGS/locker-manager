@@ -750,6 +750,22 @@ export class Warehouse {
       add({ x: x + 4, y: 4, z: gate.tunnelZ - 6, hx: 3.8, hy: 4, hz: 3.2 })
     }
     for (let i = 0; i < 9; i++) this.yard.add(kenney('city', tall[i % tall.length]!, { x: 4 + i * 12, z: gate.tunnelZ - 24 - (i % 3) * 5, rotY: (i % 2) * Math.PI, scale: 7 + (i % 3) }))
+    // The open ground between the warehouse halls and the checkpost: two rows of blocks west of the road (the first facing the halls),
+    // and a few east of it, so the district is built up all the way to the tunnel.
+    const row = (x0: number, x1: number, zc: number, rot: number) => {
+      for (let x = x0; x + 7 <= x1; ) {
+        const w = 7 + (k % 3) * 0.8
+        this.yard.add(kenney('city', names[(k++) % names.length]!, { x: x + w / 2, z: zc, rotY: rot, length: w }))
+        add({ x: x + w / 2, y: 4, z: zc, hx: w / 2 - 0.2, hy: 4, hz: 3.2 })
+        x += w + 0.6
+      }
+    }
+    row(-10, road.minX - 2, -62, 0)
+    row(-10, road.minX - 9, -73.5, Math.PI)
+    for (const [x, zc] of [[road.maxX + 5.4, -46], [road.maxX + 14, -56], [road.maxX + 14, -66]] as const) {
+      this.yard.add(kenney('city', names[(k++) % names.length]!, { x, z: zc, rotY: -Math.PI / 2, length: 7.4 }))
+      add({ x, y: 4, z: zc, hx: 3.2, hy: 4, hz: 3.5 })
+    }
   }
 
   private buildYard(): void {
