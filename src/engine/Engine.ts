@@ -96,6 +96,11 @@ export class Engine {
   /** The meteor's crater and lake (built at start; it draws itself from `game.meteor`). */
   private lake: Lake | null = null
   private roofBlast: RoofBlast | null = null
+  /**
+   * A free camera for filming (debug handle only, `__game.cinema`): replaces the first-person view, shows every zone, keeps the sun's
+   * shadows round the camera and hides the held item. `quake` from the meteor still shakes it.
+   */
+  private cinematic: { pos: THREE.Vector3; look: THREE.Vector3; fov: number } | null = null
   /** The VIP's car in the street (turns up with each offer). */
   private vipCar: VipCar | null = null
   private town: Town | null = null
@@ -408,6 +413,23 @@ export class Engine {
    * Only draw the part of the building you are in and the parts you can see into (through doorways and stairwells).
    * Locker banks are hundreds of small meshes, so hiding the rest keeps the frame rate up in a big building.
    */
+  /** Filming: everything visible, wherever the camera is. */
+  private showAllZones(): void {
+    const roots: THREE.Object3D[] = [
+      ...this.lockerWalls.map((w) => w.root),
+      ...this.keyRacks.map((r) => r.root),
+      ...[...this.statusScreens.values()].map((s) => s.root),
+      ...[...this.occupancyBoards.values()].map((b) => b.root),
+      ...this.stations.map((s) => s.root),
+      ...[...this.consoles.values()].map((c) => c.root),
+      ...this.annexes.map((a) => a.root),
+      ...this.halls.map((h) => h.root),
+      ...this.stairs.map((f) => f.root),
+    ]
+    for (const o of [this.conveyorBay, this.office, this.counterArm, this.warehouse]) if (o) roots.push(o.root)
+    for (const r of roots) r.visible = true
+  }
+
   private applyZoneVisibility(playerPos: THREE.Vector3): void {
     const zone = zoneAt(playerPos.x, playerPos.z, playerPos.y - 0.9)
     const visible = new Set<Zone>([zone, ...ADJACENT_ZONES[zone]])
@@ -629,6 +651,16 @@ export class Engine {
     this.cameraRig.update(player.getEyePosition(), playing ? dt : 0, player.isGrounded(), playing && !talking && input.sprint)
     const camera = this.cameraRig.camera
     const playerPos = player.getPosition()
+    const cine = this.cinematic
+    if (cine) {
+      const q = this.cameraRig.quake * 0.35
+      camera.position.copy(cine.pos).add(new THREE.Vector3((Math.random() - 0.5) * q, (Math.random() - 0.5) * q, (Math.random() - 0.5) * q))
+      camera.lookAt(cine.look)
+      if (Math.abs(camera.fov - cine.fov) > 0.01) {
+        camera.fov = cine.fov
+        camera.updateProjectionMatrix()
+      }
+    }
 
     // Simulation only advances while playing (pausing stops the clock).
     if (playing) this.game.update(dt)
@@ -672,7 +704,8 @@ export class Engine {
     ;(this.scene.fog as THREE.Fog).color.copy(daylight.fog)
     ;(this.scene.background as THREE.Color).copy(daylight.fog)
     setStreetLampsNight(daylight.night)
-    this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
+    if (cine) this.facility.followSun(cine.pos.x, Math.max(0, cine.pos.y - 1.6), cine.pos.z)
+    else this.facility.followSun(playerPos.x, playerPos.y - 0.9, playerPos.z)
     this.facility.update(dt, this.agents.nearDoor() || !!this.vipCar?.nearDoor() || (Math.abs(playerPos.x) < 1.8 && Math.abs(playerPos.z - 6.1) < 2))
     for (const wall of this.lockerWalls) wall.update(dt, this.game)
     for (const rack of this.keyRacks) rack.update(dt, this.game)
@@ -691,7 +724,9 @@ export class Engine {
     for (const annex of this.annexes) annex.update(dt)
     for (const hall of this.halls) hall.update(dt)
     for (const flight of this.stairs) flight.update(dt)
-    this.applyZoneVisibility(playerPos)
+    if (cine) this.showAllZones()
+    else this.applyZoneVisibility(playerPos)
+    this.held.root.visible = !cine
     this.held.update(dt, camera, this.game, !talking && (input.forward !== 0 || input.right !== 0))
 
     // Interaction.
@@ -1119,6 +1154,25 @@ export class Engine {
         const steps = Math.max(1, Math.round(seconds * 30))
         for (let i = 0; i < steps; i++) this.tick(1 / 30)
         this.renderer.render(this.scene, this.cameraRig.camera)
+      },
+      /** Run a mod-menu request directly (`{ type: 'unlockAll' }`, `{ type: 'meteor' }`, …). */
+      mod: (request: Parameters<typeof applyMod>[1]) => applyMod(this.game, request),
+      /** Filming: a free camera at `pos` looking at `look` (null: back to first person). */
+      cinema: (pos: [number, number, number] | null, look?: [number, number, number], fov = 55) => {
+        this.cinematic = pos && look ? { pos: new THREE.Vector3(...pos), look: new THREE.Vector3(...look), fov } : null
+        if (!this.cinematic) this.cameraRig.resize(this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight))
+      },
+      /** Filming: render at a fixed size (e.g. 1920 × 1080), whatever the window. */
+      filmSize: (w: number, h: number) => {
+        this.renderer.setPixelRatio(1)
+        this.renderer.setSize(w, h, false)
+        this.cameraRig.resize(w / h)
+      },
+      /** Filming: run one frame of `dt` seconds and return it as a JPEG data URL. */
+      frame: (dt = 1 / 30, quality = 0.9) => {
+        this.tick(dt)
+        this.renderer.render(this.scene, this.cameraRig.camera)
+        return this.canvas.toDataURL('image/jpeg', quality)
       },
       interact: () => {
         const aim = this.interaction?.aim(this.cameraRig.camera, this.game)

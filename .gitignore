@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rendered promo videos (the scripts that make them are tracked)
+promo/*.mp4
+promo/frames

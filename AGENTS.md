@@ -339,7 +339,13 @@ __game.skip(s)            // fast-forward sim time only
 __game.teleport(x, z)     // move the player
 __game.face(x, z)         // look at a point; __game.look(dYaw, dPitch) turns relative
 __game.interact()         // press E on whatever is under the crosshair → { aim, result }
+__game.mod({ type: 'unlockAll' })      // run a mod-menu request directly
+__game.filmSize(1920, 1080); __game.cinema([x,y,z], [lx,ly,lz], fov); __game.frame(1/30)  // filming: free camera, one frame → JPEG data URL
 ```
+
+**Promo video** (`promo/`): `frame_server.py` receives frames, `director.js` (loaded into the page with `eval(await fetch(...))`) holds the shot list
+timed to the song and records each session (`film.setup('S1')`, `film.run('S1')`; S2 = harbour, S3 = the meteor climax in a fresh game),
+`build.sh` joins the frames with the song (from 0:55), captions and title into `promo/Locker Manager promo.mp4` (ignored by git).
 
 ## Skills (`.claude/skills/`)
 
