@@ -233,9 +233,12 @@ Rules:
   and the crane(s) from the visit times: `unloadOrder` and `craneJob` must match the sim's `unloadSeconds` per container per crane. Boats moor on the
   jetty's north side (`jettyBerths`, `marinaBerths`) and come in along `boatLane`, south of the ship. `grantUpgrade('lake-…')` grants the whole chain,
   the contract included.
-- **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is a procedural toon figure: rounded capsule body,
-  big round head with a simple face, hair as a cap over the crown, and clothes chosen from a hash of the `Appearance` (sleeves, jacket,
-  shorts or skirt, glasses, beard). `makePerson(appearance, { female, smart, worker })` builds one (`isFemaleName` picks women's
+- **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is the game's own blocky figure: soft-edged boxes
+  (`RoundedBoxGeometry`), a big square head with a drawn face on a canvas texture (heavy-lidded eyes, thick brows; five expressions,
+  `setPersonExpression`, plus blinking), messy block hair, and an outfit by archetype from a hash of the `Appearance` (student hoodie +
+  backpack, office shirt + tie + lanyard, traveller/tourist print + sun hat + shades + camera, local tank top + chain, business suit, casual
+  open jacket; cargo or wide pants, sneakers, caps, beanies, headphones, glasses, earrings). `CustomerAgents.updateMood` sets the face:
+  surprised then confused then annoyed at wrong bags, annoyed when nearly out of patience, happy while served and leaving with their bag. `makePerson(appearance, { female, smart, worker })` builds one (`isFemaleName` picks women's
   builds for women's names) and `animatePerson(rig, dt, pose)` (walk / idle / sit / carry / run) must be called every frame; the old
   `legL`/`armR` fields are dummies now. **Rare visitors**: `CustomerFactory.LEGENDS` (about one customer in `LEGEND_EVERY`, from a hash of
   the customer number so the seeded sequence is unchanged, each once a game) set `appearance.special` (`fighter`, `ninja`, `swordsman`,

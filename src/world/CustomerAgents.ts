@@ -4,7 +4,7 @@ import type { GameManager } from '../sim/GameManager'
 import type { CustomerId, ItemId } from '../sim/types'
 import { tag } from './interactables'
 import { COUNTER, CUSTOMER_PATH } from './layout'
-import { animatePerson, fitInto, makeItemMesh, makePerson, type PersonRig } from './models'
+import { animatePerson, fitInto, makeItemMesh, makePerson, setPersonExpression, type Expression, type PersonRig } from './models'
 
 type Slot = { kind: 'counter' | 'line'; index: number }
 
@@ -25,6 +25,8 @@ type Agent = {
   /** Face above the head that shows how annoyed they are (after wrong packages). */
   mood: THREE.Sprite | null
   moodTier: number
+  /** When their surprised face ends (performance.now ms). */
+  surprisedUntil: number
 }
 
 const WALK_SPEED = 1.35
@@ -96,6 +98,7 @@ export class CustomerAgents {
       nameTag,
       mood: null,
       moodTier: 0,
+      surprisedUntil: 0,
     }
     this.agents.set(id, agent)
   }
@@ -226,8 +229,21 @@ export class CustomerAgents {
 
   /** 0 = calm, 1 = confused, 2 = angry, 3 = furious: from how many wrong packages they were handed. */
   private updateMood(agent: Agent, game: GameManager): void {
-    const tries = game.customers.has(agent.id) ? game.customers.get(agent.id).visit.wrongAttempts : 0
+    const record = game.customers.has(agent.id) ? game.customers.get(agent.id) : null
+    const tries = record ? record.visit.wrongAttempts : 0
     const tier = agent.leaving ? 0 : Math.min(3, tries)
+    // Their face: surprised for a moment when handed the wrong bag, then confused, then annoyed; annoyed when nearly out of patience;
+    // pleased while you serve them and on the way out with their bag (unless they gave up waiting).
+    if (tier > agent.moodTier) agent.surprisedUntil = performance.now() + 1400
+    const ratio = record && record.patienceDrains && record.maxPatience > 0 ? record.patience / record.maxPatience : 1
+    const served = record ? game.customers.itemOf(record)?.status === 'returned' || record.state === 'stored' || record.state === 'completed' : false
+    const talking = game.dialogue?.customerId === agent.id
+    let expr: Expression = 'neutral'
+    if (performance.now() < agent.surprisedUntil) expr = 'surprised'
+    else if (tier >= 2 || ratio < 0.25 || (agent.leaving && !served)) expr = 'annoyed'
+    else if (tier === 1) expr = 'confused'
+    else if ((agent.leaving && served) || talking) expr = 'happy'
+    setPersonExpression(agent.rig, expr)
     if (tier !== agent.moodTier) {
       agent.moodTier = tier
       if (tier > 0) {

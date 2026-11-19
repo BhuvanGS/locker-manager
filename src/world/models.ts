@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Appearance, ItemCategory } from '../sim/types'
-import { animateToon, makeToon, type ToonOptions, type ToonPose, type ToonRig } from './people'
+import { animateToon, makeToon, setExpression, type Expression, type ToonOptions, type ToonPose, type ToonRig } from './people'
 
 /**
  * Procedural low-poly models. Materials are cached by colour so hundreds of items/customers share a
@@ -185,6 +185,12 @@ export function animatePerson(rig: PersonRig, dt: number, pose: Pose, speed = 1)
 }
 
 export type PersonKind = ToonOptions
+export type { Expression }
+
+/** Set a person's face (neutral, happy, surprised, confused, annoyed). */
+export function setPersonExpression(rig: PersonRig, expr: Expression): void {
+  if (rig.toon) setExpression(rig.toon, expr)
+}
 
 /** A person: a stylised toon figure (see `world/people.ts`). */
 export function makePerson(a: Appearance, kind: PersonKind = {}): PersonRig {
