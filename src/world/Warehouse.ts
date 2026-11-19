@@ -448,6 +448,10 @@ export class Warehouse {
         const d = driftArrival(view.approach, view.park, t.t, w.arriveSeconds)
         slide = d.slide
         pose = d
+        view.group.visible = d.visible
+      } else if (!view.group.visible) {
+        view.group.visible = true
+        pose = t.phase === 'leaving' ? view.leave.at(Math.min(1, t.t / w.leaveSeconds)) : view.park
       } else pose = t.phase === 'arriving' ? view.arrive.at(Math.min(1, t.t / w.arriveSeconds)) : t.phase === 'leaving' ? view.leave.at(Math.min(1, t.t / w.leaveSeconds)) : view.park
       view.group.position.set(pose.x, 0, pose.z)
       view.group.rotation.y = pose.yaw
@@ -561,13 +565,14 @@ export class Warehouse {
         4,
       ),
     ])
-    // Kei trucks drift in instead of backing in: down the aisle flat out to just short of their dock, then slide in (`driftArrival`).
+    // Kei trucks drift in instead of backing in: up the service road from the south (no traffic there), into the yard and down the
+    // aisle flat out to just short of their dock, then slide in (`driftArrival`).
     const approach =
       kind === 'kei'
         ? rounded(
             [
-              [road.laneX, START_Z],
-              [road.laneX, yard.inZ],
+              [road.upLaneX, road.minZ],
+              [road.upLaneX, yard.inZ],
               [ax, yard.inZ],
               [ax, Math.min(yard.inZ - 2.5, dz + 7)],
             ],

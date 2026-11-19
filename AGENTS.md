@@ -252,7 +252,7 @@ Rules:
   blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
   `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use
   them; the VIP's SUV, taxis, police and ambulances are Kenney models.
-- **Kei drift** (`world/drift.ts`): a kei truck's arrival is `driftArrival(approach, park, t, arriveSeconds)`: down the aisle flat out,
+- **Kei drift** (`world/drift.ts`): a kei truck's arrival is `driftArrival(approach, park, t, arriveSeconds)`: it waits out of sight, then comes up the service road from the south (accelerating once, then holding exactly the slide's entry speed, so they join smoothly) and down the aisle,
   then the last `DRIFT_SECONDS` slide into the dock with the body turning ahead of the path; `Warehouse.truckMotion` spins wheels,
   rolls the body, lights the brake lights and emits tyre smoke and skid marks (`TyreFx`, an instanced mesh that fades back to asphalt).
   View only: the sim's arrival timing is unchanged.

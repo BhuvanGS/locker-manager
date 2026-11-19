@@ -11,22 +11,57 @@ import type { Leg, Pose } from './paths'
  */
 export const DRIFT_SECONDS = 2.8
 
-export type DriftPose = Pose & { /** 0…1 through the slide, or −1 before it. */ slide: number }
+export type DriftPose = Pose & {
+  /** 0…1 through the slide, or −1 before it. */
+  slide: number
+  /** False until the truck sets off (it waits out of sight at the start of the approach). */
+  visible: boolean
+}
+
+/** How hard a truck accelerates from a standstill on the approach (m/s²). */
+const ACCEL = 5
+/** How the slide loses speed: distance 1 − (1 − s)^SLIDE_POW (lower = gentler braking at the start of the slide). */
+const SLIDE_POW = 1.7
 
 export function driftArrival(approach: Leg, park: Pose, t: number, total: number, drift = DRIFT_SECONDS): DriftPose {
   const before = Math.max(0.1, total - drift)
+  const curve = slideCurve(approach, park)
+  // The slide starts at this speed: the curve's speed at its start (3 |p1 − p0| per unit of u) times du/ds = SLIDE_POW at s = 0.
+  const entry = (SLIDE_POW * curve.startRate) / drift
   if (t < before) {
-    // Speed up over the first fifth, then hold the speed: arrive at the drift still moving.
-    const x = t / before
-    const a = 0.2
-    const u = x < a ? (x * x) / (2 * a) / (1 - a / 2) : (x - a / 2) / (1 - a / 2)
-    const p = approach.at(u)
-    return { ...p, slide: -1 }
+    // Speed up once and then hold the slide's entry speed, so drive and slide join without a jolt. The truck waits out of sight at
+    // the start of the approach until it has to set off to reach the slide on time.
+    const L = approach.length
+    const accelDist = Math.min(L, (entry * entry) / (2 * ACCEL))
+    const accelTime = Math.sqrt((2 * accelDist) / ACCEL)
+    const need = accelTime + (L - accelDist) / entry
+    const go = before - need
+    if (t < go) return { ...approach.at(0), slide: -1, visible: go <= 0.05 }
+    const tt = t - Math.max(0, go)
+    // If the approach is too long for the time (never with the yard's numbers), squeeze it evenly.
+    const squeeze = go < 0 ? need / before : 1
+    const tm = tt * squeeze
+    const d = tm < accelTime ? 0.5 * ACCEL * tm * tm : accelDist + (tm - accelTime) * entry
+    return { ...approach.at(Math.min(1, d / L)), slide: -1, visible: true }
   }
   const s = Math.min(1, (t - before) / drift)
   const start = approach.at(1)
+  // Lose speed through the slide.
+  const u = 1 - (1 - s) ** SLIDE_POW
+  const q = curve.at(u)
+  // The body: from the approach heading round to the park heading, ahead of the path, with an overshoot that settles.
+  let turn = park.yaw - start.yaw
+  turn = Math.atan2(Math.sin(turn), Math.cos(turn))
+  const lead = 1 - (1 - Math.min(1, s * 1.25)) ** 3
+  const over = Math.sin(Math.min(1, s * 1.15) * Math.PI) * 0.22 * Math.sign(turn) * (1 - s)
+  const yaw = start.yaw + turn * lead + over
+  return { x: q.x, z: q.y, yaw: s >= 1 ? park.yaw : yaw, slide: s, visible: true }
+}
+
+/** The slide's path: a cubic from the end of the approach (carrying straight on) round into the bay (from in front of it). */
+function slideCurve(approach: Leg, park: Pose): { at: (u: number) => THREE.Vector2; length: number; startRate: number } {
+  const start = approach.at(1)
   const end = approach.at(0.995)
-  // The direction the truck was going at the end of the approach.
   const dx = start.x - end.x
   const dz = start.z - end.z
   const len = Math.hypot(dx, dz) || 1
@@ -35,21 +70,19 @@ export function driftArrival(approach: Leg, park: Pose, t: number, total: number
   const reach = Math.hypot(park.x - start.x, park.z - start.z)
   const p0 = new THREE.Vector2(start.x, start.z)
   const p1 = new THREE.Vector2(start.x + fx * reach * 0.55, start.z + fz * reach * 0.55)
-  // Come into the bay from straight out in front of it (the park pose's nose direction).
   const nx = -Math.sin(park.yaw)
   const nz = -Math.cos(park.yaw)
   const p2 = new THREE.Vector2(park.x + nx * reach * 0.45, park.z + nz * reach * 0.45)
   const p3 = new THREE.Vector2(park.x, park.z)
-  // Lose speed through the slide.
-  const u = 1 - (1 - s) ** 2.2
-  const q = cubic(p0, p1, p2, p3, u)
-  // The body: from the approach heading round to the park heading, ahead of the path, with an overshoot that settles.
-  let turn = park.yaw - start.yaw
-  turn = Math.atan2(Math.sin(turn), Math.cos(turn))
-  const lead = 1 - (1 - Math.min(1, s * 1.25)) ** 3
-  const over = Math.sin(Math.min(1, s * 1.15) * Math.PI) * 0.22 * Math.sign(turn) * (1 - s)
-  const yaw = start.yaw + turn * lead + over
-  return { x: q.x, z: q.y, yaw: s >= 1 ? park.yaw : yaw, slide: s }
+  const at = (u: number) => cubic(p0, p1, p2, p3, u)
+  let length = 0
+  let prev = at(0)
+  for (let k = 1; k <= 24; k++) {
+    const q = at(k / 24)
+    length += q.distanceTo(prev)
+    prev = q
+  }
+  return { at, length, startRate: 3 * p1.distanceTo(p0) }
 }
 
 function cubic(a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, d: THREE.Vector2, u: number): THREE.Vector2 {
