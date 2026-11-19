@@ -35,9 +35,19 @@ function powerBox(): THREE.Group {
   block(g, 0.44, 0.56, 0.02, m(0x9ea5ad, 0.5, 0.3), 0, 0.31, 0.155)
   block(g, 0.02, 0.5, 0.01, m(0x5b6168, 0.6), 0, 0.31, 0.168, 0.004)
   block(g, 0.03, 0.09, 0.03, m(0x2a2d33, 0.5), 0.15, 0.32, 0.18, 0.01)
-  block(g, 0.12, 0.1, 0.01, m(0xf2c230, 0.6), -0.11, 0.45, 0.168, 0.004)
-  block(g, 0.05, 0.05, 0.012, m(0x111111, 0.6), -0.11, 0.45, 0.174, 0.004)
+  // A yellow warning triangle with a black bolt.
+  const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.01, 3).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), m(0xf2c230, 0.6))
+  tri.rotation.z = Math.PI / 2
+  tri.position.set(-0.11, 0.46, 0.168)
+  g.add(tri)
+  const bolt = block(g, 0.014, 0.07, 0.01, m(0x111111, 0.6), -0.11, 0.455, 0.175, 0.003)
+  bolt.rotation.z = 0.45
+  // The conduit stub on top, and two struts back to the wall (not counted when the prop is centred).
   block(g, 0.08, 0.12, 0.08, grey, 0, 0.68, 0)
+  for (const x of [-0.18, 0.18]) {
+    const strut = block(g, 0.04, 0.7, 0.16, m(0x5f6670, 0.5, 0.4), x, 0.31, -0.22, 0.008)
+    strut.userData.noBounds = true
+  }
   return g
 }
 
@@ -46,8 +56,8 @@ function cardboardBox(): THREE.Group {
   const g = new THREE.Group()
   block(g, 0.5, 0.36, 0.4, m(0xc3955a, 0.9), 0, 0.18, 0, 0.03)
   const tape = m(0xe9d9a8, 0.6)
-  block(g, 0.5, 0.012, 0.09, tape, 0, 0.362, 0, 0.004)
-  block(g, 0.5, 0.1, 0.012, tape, 0, 0.31, 0.2, 0.004)
+  block(g, 0.508, 0.012, 0.09, tape, 0, 0.362, 0, 0.004)
+  block(g, 0.508, 0.1, 0.012, tape, 0, 0.31, 0.202, 0.004)
   block(g, 0.05, 0.08, 0.008, m(0x5a4128, 0.9), -0.15, 0.17, 0.202, 0.003)
   block(g, 0.08, 0.025, 0.008, m(0x5a4128, 0.9), -0.15, 0.22, 0.202, 0.003)
   return g

@@ -25,7 +25,12 @@ export function prop(name: PropName, p: PropPlacement): THREE.Group {
   holder.position.set(p.x, p.y ?? 0, p.z)
   holder.rotation.y = p.rotY ?? 0
   const model = buildBlocky(name)
-  const box = new THREE.Box3().setFromObject(model)
+  // Sized and centred on its body: parts marked `noBounds` (wall brackets) stick out behind without moving it.
+  const box = new THREE.Box3()
+  model.updateMatrixWorld(true)
+  model.traverse((o) => {
+    if (o instanceof THREE.Mesh && !o.userData.noBounds) box.expandByObject(o)
+  })
   const size = box.getSize(new THREE.Vector3())
   const s = p.height ? p.height / Math.max(size.y, 1e-3) : 1
   model.scale.setScalar(s)

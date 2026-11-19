@@ -262,7 +262,7 @@ export class Warehouse {
     this.root.add(prop('industrial_storage_cart', { x: 17.6, z: -9.95, height: 0.9, glow: 0.35 }))
     this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(17.6, 0.45, -9.95), new THREE.Vector3(0.6, 0.45, 0.35)))
     this.root.add(prop('korean_fire_extinguisher_01', { x: 6.55, z: -19.6, rotY: Math.PI / 2, height: 0.6, glow: 0.3 }))
-    this.root.add(prop('power_box_01', { x: 9.4, y: 1.0, z: maxZ - 0.2, rotY: Math.PI, height: 0.7, glow: 0.3 }))
+    this.root.add(prop('power_box_01', { x: 9.28, y: 1.0, z: maxZ - 0.2, rotY: Math.PI, height: 0.7, glow: 0.3 }))
     this.root.add(conduit([new THREE.Vector3(9.28, 1.66, maxZ - 0.2), new THREE.Vector3(9.28, H - 0.05, maxZ - 0.2)]))
 
     // Signs, the notice board and the receiving desk.
@@ -427,7 +427,7 @@ export class Warehouse {
     }
     // The chargers' own electrical box on the east wall, with a bundle from each pad running to it.
     const box = { x: WAREHOUSE.maxX - 0.22, z: -28.6 }
-    this.root.add(prop('power_box_01', { x: box.x, y: 1.0, z: box.z - 0.12, rotY: -Math.PI / 2, height: 0.7, glow: 0.3 }))
+    this.root.add(prop('power_box_01', { x: box.x, y: 1.0, z: box.z, rotY: -Math.PI / 2, height: 0.7, glow: 0.3 }))
     this.root.add(conduit([new THREE.Vector3(box.x, 1.66, box.z), new THREE.Vector3(box.x, WAREHOUSE.height - 0.05, box.z)]))
     this.root.add(floorBundle([[21.2, -29.0], [21.2, -28.7], [23.6, -28.7]], { ...box, top: 1.0 }, 4))
     this.root.add(floorBundle([[23.0, -29.0], [23.0, -28.9], [23.55, -28.9]], { x: box.x, z: box.z - 0.08, top: 1.0 }, 3))

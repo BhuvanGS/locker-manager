@@ -88,7 +88,7 @@ export class Hall {
     }
 
     // An electrical box on the far wall, west of the windows, with its conduit to the ceiling.
-    this.root.add(prop('power_box_01', { x: minX + 0.9, y: 1.0, z: minZ + 0.2, height: 0.6 }))
+    this.root.add(prop('power_box_01', { x: minX + 1.02, y: 1.0, z: minZ + 0.2, height: 0.6 }))
     this.root.add(conduit([new THREE.Vector3(minX + 1.02, 1.56, minZ + 0.2), new THREE.Vector3(minX + 1.02, H - 0.05, minZ + 0.2)]))
 
     // Walls: west, east and the far (south) end. Floors above also need their own north wall (on the ground the old

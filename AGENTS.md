@@ -83,12 +83,10 @@ Rules:
   (removes the doorway's wall panel and collider, hides the neighbour's back half, adds a door frame), builds an `Annex` (the hall) and fits
   `LockerWall`s at `ANNEX[side].bankX` and `KeyRack`s at `ANNEX[side].rackX` (hall front wall, `ANNEX_RACK`). A new game undoes all of it
   (`removeBuiltFurniture`). Positions live in `world/layout.ts` (`ANNEX_DOOR`, `ANNEX`, `LOCKER_BANKS`, `KEY_RACKS`).
-- **Mod menu** (`sim/mods.ts`, `ui/ModMenu.tsx`): M / ` toggles it (Engine tick), it releases the mouse, and Esc closes it instead of pausing.
-  The buttons push `ModRequest`s onto `store.modRequests`; the Engine runs each through `applyMod(game, request)` (pure and tested in
-  `Mods.test.ts`) and toasts the result. Everything goes through normal `GameManager` code (`grantXp`, `grantUpgrade` which shares
-  `applyUpgrade` with `buyUpgrade`, `spawnExtraCustomer`, `skipStage`, `callBackStoredCustomers`, `mods.noPatienceLoss`), so level-ups,
-  banners and the 3D furniture behave exactly as in normal play. Mod-spawned customers are not part of the stage plan. A new mod action
-  = a `ModRequest` variant, a case in `applyMod`, a button, and a test. `CONFIG.modMenu.enabled = false` removes it.
+- **Cheats are debug-only** (`sim/mods.ts`): there is no mod menu in the game any more. `applyMod(game, request)` (pure, tested in `Mods.test.ts`)
+  is reached only through the debug handle (`__game.mod(...)`, with `?debug=1`) and the promo scripts. Everything goes through normal
+  `GameManager` code (`grantXp`, `grantUpgrade` which shares `applyUpgrade` with `buyUpgrade`, `spawnExtraCustomer`, `skipStage`,
+  `callBackStoredCustomers`, `mods.noPatienceLoss`), so level-ups, banners and the 3D furniture behave exactly as in normal play.
 - **South expansion and floors** (`kind: 'hall'` in `CONFIG.upgrades`, `world/Hall.ts`, `world/Stairs.ts`): the south hall is behind the storage
   room's back wall (doorway `SOUTH.door`, cut by `Facility.setSouthOpen`), with lockers in rows (`SOUTH.rowFrontZ`, `SOUTH.bankX`) and key racks along
   the old back wall (`SOUTH.rackX`). Floors 1 and 2 are the same `Hall` at `level × FLOOR_HEIGHT`; a hall's ceiling slab is the floor above and has a
@@ -205,8 +203,12 @@ Rules:
   Never put a texture on a material from `mat()`'s cache: it is shared by everything of that colour.
 - **3D props** (`world/props.ts`, `world/blockyProps.ts`): `prop(name, { x, y, z, rotY, height, glow })` returns the game's own blocky model
   (soft-edged blocks, flat colours; the photo-real glTF models are no longer used), standing on `y` and scaled to `height`. Decoration only: add a
-  collider yourself, and keep props out of `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Walls (`wallMat`) are flat
-  paint, cables are flat four-sided cords, and the hall ducts are square galvanised sections: keep new things blocky, not photo-textured.
+  collider yourself, and keep props out of `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Walls (`wallMat`) are
+  painted block-work (a drawn canvas in `textures.ts`, tinted per colour, on `metreUVs` boxes), cables are flat four-sided cords, and the hall ducts
+  are square galvanised sections: keep new things blocky, not photo-textured.
+- **Z-fighting** (`world/coplanar.ts`, `dezfight`): the Engine runs it 1.5 s after start or a new game and 6 s after each upgrade (once rooms have
+  risen). It finds axis-aligned boxes in different materials sharing a plane and moves the smaller one 3 mm out, at most once per box ever. Still
+  avoid coplanar faces when you build; this is the safety net.
 - **Cables** (`world/cables.ts`): `floorBundle` (several cables side by side along the floor, then up the wall into a power box), `festoon`
   (looped cable along a gantry rail, first rail of each station only), `cable` and `conduit` (pipe to a ceiling junction box). Every room with
   robotics has an electrical box (`power_box_01`) as its supply: arm consoles run a bundle to it (`POWER_FEEDS` in `layout.ts`; the console

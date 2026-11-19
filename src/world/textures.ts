@@ -177,12 +177,55 @@ export function cylinderMetreUVs(geometry: THREE.CylinderGeometry): THREE.Cylind
 export const armYellow = (): THREE.MeshStandardMaterial => textured('arm-paint', { color: 0xe5a50a, metalness: 0.2, normalScale: 0.8, repeat: 0.5, colorMap: false })
 
 /** Painted plaster in a wall's own colour, tiled every 2 m. Use it on boxes whose UVs are in metres (`metreUVs`). */
-/** Painted walls: flat colour (the world is blocky; the old photo plaster texture is gone). Own material per colour. */
+/**
+ * Walls: painted block-work, drawn here (blocky, like the rest of the world, rather than a photo texture). Blocks 0.4 × 0.2 m in running
+ * bond with thin mortar lines and a faint shade per block; the colour tints it, so each wall keeps its colour. One tile covers
+ * 1.6 × 0.8 m on boxes with `metreUVs`. Own material per colour.
+ */
+let blockTexture: THREE.CanvasTexture | null = null
+function wallBlocks(): THREE.CanvasTexture | null {
+  if (blockTexture || typeof document === 'undefined') return blockTexture
+  const W = 512
+  const H = 256
+  const c = document.createElement('canvas')
+  c.width = W
+  c.height = H
+  const g = c.getContext('2d')
+  if (g) {
+    const rand = (k: number) => Math.abs(Math.sin(k * 91.7 + 3.1) * 43758.5453) % 1
+    g.fillStyle = '#c9c9c9'
+    g.fillRect(0, 0, W, H)
+    const bw = W / 4
+    const bh = H / 4
+    for (let row = 0; row < 4; row++) {
+      const shift = row % 2 === 0 ? 0 : bw / 2
+      for (let col = -1; col < 5; col++) {
+        const x = col * bw + shift
+        const v = Math.round(238 + (rand(row * 13 + col * 7) - 0.5) * 14)
+        g.fillStyle = `rgb(${v},${v},${v})`
+        g.fillRect(x + 2, row * bh + 2, bw - 4, bh - 4)
+        // A slight bevel: light along the top edge, shade along the bottom.
+        g.fillStyle = 'rgba(255,255,255,0.35)'
+        g.fillRect(x + 2, row * bh + 2, bw - 4, 2)
+        g.fillStyle = 'rgba(0,0,0,0.06)'
+        g.fillRect(x + 2, row * bh + bh - 5, bw - 4, 3)
+      }
+    }
+  }
+  blockTexture = new THREE.CanvasTexture(c)
+  blockTexture.colorSpace = THREE.SRGBColorSpace
+  blockTexture.wrapS = blockTexture.wrapT = THREE.RepeatWrapping
+  blockTexture.repeat.set(1 / 1.6, 1 / 0.8)
+  blockTexture.anisotropy = 8
+  return blockTexture
+}
 const walls = new Map<number, THREE.MeshStandardMaterial>()
 export const wallMat = (color: number): THREE.MeshStandardMaterial => {
   let m = walls.get(color)
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color, roughness: 0.92 })
+    const map = wallBlocks()
+    // The blocks average about 0.86 of white (linear), so lift the tint to keep the wall's colour.
+    m = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(map ? 1.15 : 1), map, roughness: 0.9 })
     walls.set(color, m)
   }
   return m

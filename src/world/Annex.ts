@@ -59,7 +59,7 @@ export class Annex {
     // The east annex's electrical box on its far wall (its arm console's cables run to it), fed from the ceiling.
     if (side === 'east') {
       const { x: bx, z: bz } = POWER_FEEDS.east.riser
-      this.root.add(prop('power_box_01', { x: a.maxX - 0.22, y: 1.0, z: bz - 0.12, rotY: -Math.PI / 2, height: 0.6 }))
+      this.root.add(prop('power_box_01', { x: bx, y: 1.0, z: bz, rotY: -Math.PI / 2, height: 0.6 }))
       this.root.add(conduit([new THREE.Vector3(bx, 1.56, bz), new THREE.Vector3(bx, h - 0.05, bz)]))
     }
 

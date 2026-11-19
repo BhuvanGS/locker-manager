@@ -737,11 +737,6 @@ export const CONFIG = {
   /** When the idle guard pulls an event forward, it fires this many seconds from now [min, max]. */
   idlePullIn: [2, 5],
   /**
-   * The mod menu (press M): free cash, levels and upgrades, extra customers, time skips. It exists so testing
-   * and tinkering does not mean grinding. Set `enabled: false` to remove it from a release build.
-   */
-  modMenu: { enabled: true },
-  /**
    * The late game: once every upgrade is bought, a `countdownSeconds` countdown (30 game minutes) to a meteor strike west of the shop;
    * its crater fills with water over `fillSeconds`. Then the lake's road and dock are sold at the control hub (`LAKE_UPGRADES`).
    */

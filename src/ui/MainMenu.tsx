@@ -34,7 +34,7 @@ export function MainMenu() {
           <li>
             Talking: the next step is pre-selected, so just press <kbd>E</kbd>. Scroll or <kbd>W</kbd>/<kbd>S</kbd> to choose
             something else, <kbd>1</kbd>–<kbd>6</kbd> to jump to an answer, <kbd>Q</kbd> to step away. You stand still while
-            talking. <kbd>Esc</kbd> pauses. <kbd>M</kbd> opens the mod menu (free cash, levels and upgrades, so you don't have to grind).
+            talking. <kbd>Esc</kbd> pauses.
           </li>
         </ul>
       </div>
