@@ -223,16 +223,18 @@ Rules:
 - **The coast** (`LAKE.coast`; `Lake.buildBeach`, `buildChannel`): west of the lake the grass ends at `coast.grassX`, a beach runs to `shoreX`, then sand
   shelves into the sea (`seaY`); a fence at `wadeX` stops you wading out. Before the strike the channel (`coast.channel`) is beach; after it the channel is
   dug and joins the crater to the sea (`craterNotch()`). Boats and ships come in from the sea along it.
-- **The harbour** (`sim/HarbourManager.ts`, `world/Harbour.ts`, `HARBOUR` in `layout.ts`, `CONFIG.harbour`, `LAKE_UPGRADES` sold at the hub, bought with
-  `buyAutomation`): `lake-road` (road, harbour office, timber jetty: rowing and sailing boats) → `lake-marina` (pontoon, fuel, motorboats) → the shipping
-  line's VIP comes to the deal desk (`DealManager.offerHarbour`, an `Offer` with `special: 'harbour'` and a `pitch`; signing sets `harbour.contract`,
-  declining or letting it expire brings them back after `vipRetry`) → `lake-dock` (needs the contract: cargo quay, ship-to-shore crane, port warehouse and
-  yard) → `lake-ships` (bigger ships) → `lake-harbour` (the round lake is dug into a rectangular basin with a long north quay and two cranes; the biggest
-  ships). Visits are records on game time: `BoatVisit` (paid on leaving) and one `ShipVisit` at a time (each container is paid as the crane lands it,
-  `stock` fills the yard and lorries empty it). `Harbour` rebuilds its static parts and colliders when what is built changes, and draws boats, ships
-  and the crane(s) from the visit times: `unloadOrder` and `craneJob` must match the sim's `unloadSeconds` per container per crane. Boats moor on the
-  jetty's north side (`jettyBerths`, `marinaBerths`) and come in along `boatLane`, south of the ship. `grantUpgrade('lake-…')` grants the whole chain,
-  the contract included.
+- **The harbour** (`sim/HarbourManager.ts`, `world/Harbour.ts`, `world/terminal.ts`, `HARBOUR` in `layout.ts`, `CONFIG.harbour`, `LAKE_UPGRADES` sold at
+  the hub, bought with `buyAutomation`): `lake-road` (road, harbour office, timber jetty: rowing and sailing boats) → `lake-marina` (pontoon, fuel, motorboats)
+  → the shipping line's VIP at the deal desk (`DealManager.offerHarbour`, `special: 'harbour'`; signing sets `harbour.contract`) → `lake-dock` digs the round lake
+  into the dock basin (`harbour.basin`): the jetty moves to its north side (`jetty.basinZ`) and the south quay becomes the **container terminal**
+  (`HARBOUR.terminal`): quay crane rails, the yard (import stacks 3 high, export stacks 2 high, `columns`/`importRows`/`exportRows`) under a rubber-tyred
+  gantry, three lorry bays, lanes, a gate and an access road from the south, the port warehouse, floodlights and a fence → `lake-ships` (bigger ships) →
+  `lake-harbour` (a second quay crane, the biggest ships). A `ShipVisit` unloads its imports into the yard (`stock`), then loads the yard's exports
+  (`exports`, planned on arrival); each crane's jobs (`craneTasks`: imports top tier first, then exports bottom tier first; two cranes split the
+  columns) follow `unloadSeconds`, and the view runs `craneJob` backwards for an export. Ships come in with two tugs (`updateTugs`), are pushed
+  sideways onto the berth, and back out to sea before turning (`shipState`). `LorryVisit`s (1–`lorry.atOnce` at a time, in random bursts, one per bay)
+  collect an import or deliver an export; the gantry handles one lorry at a time (`handleAt`…`handledAt`, never overlapping) and each pays a
+  handling fee. Containers are 6 × 2.6 × 2.45 m (`BOX` in `terminal.ts`) and everything is scaled to them.
 - **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is the game's own blocky figure: soft-edged boxes
   (`RoundedBoxGeometry`), a big square head with a drawn face on a canvas texture (one shared warm skin tone, heavy-lidded eyes, thick brows; five expressions,
   `setPersonExpression`, plus blinking), messy block hair, and an outfit by archetype from a hash of the `Appearance` (student hoodie +

@@ -256,15 +256,13 @@ export class Lake {
     bowl.receiveShadow = true
     this.crater.add(bowl)
 
-    // The rim: a ring of earth just outside the edge, open where the channel, the cargo quay and the jetty cross it.
+    // The rim: a ring of earth just outside the edge, open where the channel and the jetty cross it.
     const rimMat = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1, flatShading: true })
     const rimR = LAKE.r + 0.7
-    const q = HARBOUR.quay
     const half = (w: number) => Math.asin(Math.min(1, w / rimR))
     // Gaps as [centre angle, half width] (angles from +x towards +z).
     const gaps: [number, number][] = [
       [Math.PI, half(CH.halfWidth + 1)],
-      [Math.PI / 2, half((q.maxX - q.minX) / 2 + 0.8)],
       [Math.atan2(JETTY.z - LAKE.z, Math.sqrt(rimR ** 2 - (JETTY.z - LAKE.z) ** 2)), half(JETTY.halfWidth + 0.9)],
     ]
     gaps.sort((a, b) => ((a[0] + Math.PI * 2) % (Math.PI * 2)) - ((b[0] + Math.PI * 2) % (Math.PI * 2)))
@@ -408,9 +406,8 @@ export class Lake {
    */
   private syncFence(struck: boolean, h: HarbourManager | null): void {
     const jetty = !!h?.has('lake-road')
-    const quay = !!h?.has('lake-dock')
     const basin = !!h?.basin
-    const want = struck ? `${jetty}${quay}${basin}` : null
+    const want = struck ? `${jetty}${basin}` : null
     if (want === this.fenceFor) return
     for (const b of this.fence) this.physics.removeBody(b)
     this.fence = []
@@ -424,8 +421,8 @@ export class Lake {
       const t = 0.2
       wall(B.minX - t, B.maxX + t, B.maxZ + 0.15, B.maxZ + 0.15 + t)
       wall(B.minX - t, B.maxX + t, B.minZ - 0.15 - t, B.minZ - 0.15)
-      wall(B.maxX + 0.15, B.maxX + 0.15 + t, B.minZ, JETTY.z - JETTY.halfWidth - 0.1)
-      wall(B.maxX + 0.15, B.maxX + 0.15 + t, JETTY.z + JETTY.halfWidth + 0.1, B.maxZ)
+      wall(B.maxX + 0.15, B.maxX + 0.15 + t, B.minZ, JETTY.basinZ - JETTY.halfWidth - 0.1)
+      wall(B.maxX + 0.15, B.maxX + 0.15 + t, JETTY.basinZ + JETTY.halfWidth + 0.1, B.maxZ)
       wall(B.minX - 0.15 - t, B.minX - 0.15, B.minZ, CH.z - hw - 0.25)
       wall(B.minX - 0.15 - t, B.minX - 0.15, CH.z + hw + 0.25, B.maxZ)
       for (const z of [CH.z + hw + 0.25, CH.z - hw - 0.25]) wall(COAST.wadeX - 0.4, B.minX - 0.15, z - 0.2, z + 0.2)
@@ -435,7 +432,6 @@ export class Lake {
     const n = 72
     const seg = (2 * Math.PI * r) / n
     const west = Math.asin((CH.halfWidth + 0.2) / r)
-    const q = HARBOUR.quay
     const rootX = JETTY.lakeRootX
     for (let i = 0; i < n; i++) {
       const th = (i / n) * Math.PI * 2
@@ -443,7 +439,6 @@ export class Lake {
       const x = LAKE.x + Math.cos(th) * r
       const z = LAKE.z + Math.sin(th) * r
       if (jetty && x > rootX - 2.5 && Math.abs(z - JETTY.z) < JETTY.halfWidth + 0.5) continue
-      if (quay && x > q.minX - 0.6 && x < q.maxX + 0.6 && z > q.minZ) continue
       const phi = -(th + Math.PI / 2)
       const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), phi)
       this.fence.push(

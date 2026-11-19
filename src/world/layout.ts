@@ -354,40 +354,61 @@ export function craterNotch(): [number, number][] {
 
 /**
  * The harbour on the lake (`HarbourManager`, `world/Harbour.ts`). On the round lake: a timber jetty from the south-east shore along
- * `jetty.z` (rowing and sailing boats moor on its north side; the marina carries it on west with motorboat berths), the cargo quay on the
- * north shore (`quay`; the container ship lies along its south face and the crane runs on rails across it), and the port warehouse with
- * its container yard north-west. The great harbour digs the lake out into `basin`: the ship then lies along its north quay with two
- * cranes, and the jetty moves to the basin's east wall (`jetty.basinRootX`). Everything else stays where it is.
+ * `jetty.z` (rowing and sailing boats moor on its north side; the marina carries it on west with motorboat berths). The cargo dock digs
+ * the lake out into `basin`: the jetty moves to its north side (`jetty.basinZ`, from the east wall `jetty.basinRootX`), and its south
+ * quay is the container terminal (`terminal`): the ship lies alongside it (`berthX`) under the quay crane(s) (`crane.basin`).
  */
 export const HARBOUR = {
   basin: { minX: -56, maxX: -14, minZ: -42, maxZ: -10.6, floorY: -4.3 },
-  quay: { minX: -43, maxX: -29, minZ: -19.3, maxZ: -10.6 },
   /** The jetty's root (on the shore) and how far it runs west; the marina adds `marinaLength` more. Berths are on its north side. */
-  jetty: { z: -31.5, halfWidth: 1.1, lakeRootX: -25.0, basinRootX: -14, length: 11.5, marinaLength: 9.5 },
+  jetty: { z: -31.5, basinZ: -18, halfWidth: 1.1, lakeRootX: -25.0, basinRootX: -14, length: 11.5, marinaLength: 9.5 },
   /** Where along the jetty (metres west of its root) each berth is: row and sail boats, then motorboats on the marina. */
   jettyBerths: [3.4, 8.9],
   marinaBerths: [14.2, 19.2],
-  /** Boats come in along this line (south of any ship), then turn into their berth. */
+  /** Boats come in along this line, then turn into their berth (in the dock: north of the jetty, clear of the ships to the south). */
   boatLane: -27.2,
-  /** The harbour office (north of the hard-standing), the port warehouse and its yard (2 rows × 2 stacks × 3 high). */
+  boatLaneBasin: -13.2,
+  /** The harbour office (north of the hard-standing). */
   office: { minX: -41, maxX: -37.8, minZ: -2, maxZ: 0.8 },
-  warehouse: { minX: -55, maxX: -46.5, minZ: -6, maxZ: 2 },
-  yard: { x: [-52.4, -47.8], z: [-9.4, -7.25] },
-  /** Concrete in front of the warehouse, joining the hard-standing. */
-  portApron: { minX: -56, maxX: -42, minZ: -10.6, maxZ: -6 },
-  /** The crane's rails (x range it can travel) and its geometry on the round lake and in the basin. */
+  /** The quay cranes' rails (x range they travel) and their geometry. */
   crane: {
-    lake: { minX: -41.5, maxX: -30.5, waterZ: -18.4, landZ: -13.6, outZ: -27.2, backZ: -11.2, dropZ: -12.2, topY: 0.05 },
-    basin: { minX: -43, maxX: -17.5, waterZ: -9.7, landZ: -5.3, outZ: -21, backZ: -2.6, dropZ: -3.9, topY: 0.05 },
+    /** The quay cranes on the dock's south quay: rails on the quay, the boom out over the berth to the north. */
+    basin: { minX: -49, maxX: -17.5, waterZ: -43.2, landZ: -48.0, outZ: -29.5, backZ: -50.5, dropZ: -45.6, topY: 0.05 },
   },
-  /** The ship's berth centre on each (z from its beam: along the quay's face). */
-  berthX: { lake: -36, basin: -31 },
+  /** The ship's berth centre along the terminal's quay (z from its beam: alongside the quay's face). */
+  berthX: { basin: -33 },
   /** The basin's north quay: concrete from its edge back to here (it takes in the hard-standing). */
   basinQuayMaxZ: -2.5,
   /** The footpath from the hard-standing round to the jetty (on the round lake, and beside the basin). */
   path: { lake: { x: -20.5 }, basin: { x: -12.8 } },
   /** The marina hut by the jetty's root (north of it). */
   hut: { dz: 3, dx: 3 },
+  /**
+   * The container terminal behind the dock's south quay (built with the cargo dock). From the quay southwards: the quay cranes' rails,
+   * the container yard (import stacks, then export stacks, in three columns along x) straddled by the yard gantry on its two runways,
+   * the three loading bays (a lorry backs in under the gantry, nose south), the lanes (in westwards, out eastwards), the gate and the
+   * access road away to the south. The port warehouse stands east of the yard.
+   */
+  terminal: {
+    minX: -56,
+    maxX: -14,
+    minZ: -84,
+    columns: [-46.3, -39.1, -31.9],
+    importRows: [-52.0, -54.75],
+    exportRows: [-58.2, -60.95],
+    importTiers: 3,
+    exportTiers: 2,
+    gantry: { northZ: -50.2, southZ: -68.2, minX: -46.3, maxX: -31.9 },
+    /** Where a parked lorry's container sits (its centre's z); the lorry itself is parked nose south, centred `bayOriginZ`. */
+    bayContainerZ: -65.6,
+    bayOriginZ: -67.0,
+    laneIn: -76.0,
+    laneOut: -79.5,
+    laneWestX: -54,
+    road: { inX: -25.6, outX: -28.6, minZ: -170 },
+    gateZ: -83,
+    warehouse: { minX: -27, maxX: -15, minZ: -68, maxZ: -52 },
+  },
 } as const
 
 /**

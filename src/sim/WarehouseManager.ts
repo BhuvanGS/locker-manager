@@ -586,7 +586,9 @@ export class WarehouseManager {
       const cargo = this.rollKeiCargo(rand())
       const owner = `${KEI_NAMES[Math.floor(rand() * KEI_NAMES.length)]} (kei truck)`
       this.queue.push({ kind: 'kei', job: 'deliver', owner, crates, dealId: null, loadId: ++this.loadSeq, cargo, declared: cargo === 'illegal' ? 'general' : cargo })
-      const [gLo, gHi] = w.keiGap
+      // Sometimes another follows close behind (two or three at once, never more than `keiAtOnce` about at a time).
+      const keiAbout = this.queue.filter((q) => q.kind === 'kei' && q.job === 'deliver').length + this.trucks.filter((t) => t.kind === 'kei' && t.job === 'deliver').length
+      const [gLo, gHi] = keiAbout < w.keiAtOnce && rand() < w.keiBurst ? w.keiBurstGap : w.keiGap
       this.nextKeiAt = now + gLo + (gHi - gLo) * rand()
     }
     for (const deal of deals.signed) {

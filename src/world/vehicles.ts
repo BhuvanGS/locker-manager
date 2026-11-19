@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import { BOX, makeContainer } from './terminal'
 
 /**
  * The game's own vehicles, built to the Locker Manager blueprints: a kei truck (3.4 × 1.5 × 1.8 m, cab-over with an open bed), a
@@ -414,4 +415,71 @@ export function makeCar(colour: number, opts: { plate?: string } = {}): VehicleM
   decal(group, 0.36, 0.13, plateTex(opts.plate ?? 'LM-1027'), 0, 0.42, L / 2 + 0.06)
   for (const s of [-1, 1]) for (const z of [-1.3, 1.3]) wheel(group, s * 0.72, z, 0.31, 0.2, wheels)
   return { group, wheels, wheelRadius: 0.31, rearWheels: [new THREE.Vector3(-0.72, 0, 1.3), new THREE.Vector3(0.72, 0, 1.3)], tail, length: L, width: W }
+}
+
+// ------------------------------------------------------------------ the container lorry
+
+export const LORRY_COLOURS = [0xf1efe9, 0x2f62b5, 0xc93a31, 0x2e7d4f, 0xe0a52c, 0x3a3f4a] as const
+
+/** A container lorry and where its container sits (its centre, in the lorry's frame). */
+export type ContainerLorry = VehicleModel & { container: THREE.Group; containerAt: THREE.Vector3 }
+
+/**
+ * The container lorry: a cab-over tractor (cab z −5.2…−2.6: windscreen, amber roof lights, grille, square lamps, mirrors, step,
+ * exhaust stack) and a skeletal trailer (two beams, cross members, twist locks, landing legs, tandem axles, rear lights and bumper)
+ * with one container lying along it (doors at the back). Nose −z; 10.2 m long, 2.5 m wide.
+ */
+export function makeContainerLorry(cab: number, opts: { plate?: string } = {}): ContainerLorry {
+  const group = new THREE.Group()
+  const wheels: THREE.Object3D[] = []
+  const paint = m(cab, 0.55, 0.1)
+  const trim = TRIM()
+  const glass = GLASS()
+  const tail = tailMat()
+  const W = 2.5
+  // Tractor: chassis, cab, details.
+  part(group, 1.0, 0.3, 4.6, trim, 0, 0.85, -3.3, 0.04)
+  part(group, W, 2.2, 2.6, paint, 0, 2.15, -3.9, 0.14)
+  part(group, W - 0.2, 0.95, 0.05, glass, 0, 2.55, -5.205, 0.03)
+  for (const s of [-1, 1]) {
+    part(group, 0.04, 0.8, 1.2, glass, s * (W / 2 + 0.005), 2.55, -4.0, 0.02)
+    part(group, 0.06, 0.5, 0.18, trim, s * (W / 2 + 0.18), 2.4, -5.0, 0.02) // mirror
+    part(group, 0.05, 0.05, 0.3, trim, s * (W / 2 + 0.08), 2.4, -5.0, 0.01)
+    part(group, 0.36, 0.26, 0.05, HEAD(), s * 0.82, 1.42, -5.21, 0.03)
+    part(group, 0.16, 0.09, 0.04, AMBER(), s * 0.82, 1.22, -5.21, 0.01)
+    part(group, 0.5, 0.1, 0.4, trim, s * 0.95, 0.95, -3.4, 0.02) // step
+    part(group, 0.2, 0.45, 1.3, trim, s * (W / 2 - 0.1), 0.9, -4.6, 0.04) // wheel arch
+  }
+  for (let k = 0; k < 4; k++) part(group, 0.12, 0.06, 0.08, AMBER(), -0.45 + k * 0.3, 3.28, -5.0, 0.02)
+  decal(group, 1.1, 0.42, grilleTex(''), 0, 1.5, -5.215, Math.PI)
+  part(group, W + 0.05, 0.28, 0.28, trim, 0, 0.88, -5.2, 0.05)
+  decal(group, 0.42, 0.15, plateTex(opts.plate ?? 'CT-2210'), 0, 0.88, -5.35, Math.PI)
+  const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.6, 10), m(0xb8bec6, 0.3, 0.8))
+  stack.position.set(W / 2 - 0.25, 3.2, -2.55)
+  group.add(stack)
+  part(group, 0.8, 0.12, 0.8, m(0x2b2f36, 0.5, 0.5), 0, 1.06, -1.9, 0.03) // fifth wheel
+  // Trailer: beams, cross members, twist locks at the container's corners, landing legs, bumper, lights.
+  for (const s of [-1, 1]) part(group, 0.16, 0.28, 7.2, trim, s * 0.45, 1.18, 1.0, 0.03)
+  for (let z = -2.4; z <= 4.5; z += 1.15) part(group, 2.3, 0.1, 0.12, trim, 0, 1.3, z, 0.02)
+  for (const z of [-1.6, 4.4]) for (const s of [-1, 1]) part(group, 0.14, 0.08, 0.14, m(0xf2b51d, 0.5, 0.3), s * 1.08, 1.37, z, 0.02)
+  for (const s of [-1, 1]) {
+    part(group, 0.08, 0.9, 0.08, trim, s * 0.7, 0.75, -1.2, 0.02)
+    part(group, 0.28, 0.14, 0.04, tail, s * 0.95, 1.05, 4.62, 0.02)
+    part(group, 0.5, 0.5, 0.03, trim, s * 1.05, 0.55, 3.95, 0.01)
+  }
+  part(group, 2.3, 0.12, 0.12, trim, 0, 0.72, 4.58, 0.03)
+  decal(group, 0.42, 0.15, plateTex(opts.plate ?? 'CT-2210'), 0, 0.92, 4.65)
+  // Wheels: steer axle, drive axle, trailer tandem.
+  for (const s of [-1, 1]) {
+    wheel(group, s * 1.05, -4.6, 0.5, 0.3, wheels)
+    wheel(group, s * 1.05, -2.95, 0.5, 0.3, wheels, true)
+    for (const z of [2.9, 3.95]) wheel(group, s * 1.05, z, 0.5, 0.3, wheels, true)
+  }
+  // The container (doors at the back), on the twist locks.
+  const containerAt = new THREE.Vector3(0, 1.36 + BOX.h / 2, 1.4)
+  const container = makeContainer(0xb91c1c)
+  container.rotation.y = -Math.PI / 2
+  container.position.copy(containerAt)
+  group.add(container)
+  return { group, wheels, wheelRadius: 0.5, rearWheels: [new THREE.Vector3(-1.05, 0, 3.95), new THREE.Vector3(1.05, 0, 3.95)], tail, length: 10.2, width: W, container, containerAt }
 }

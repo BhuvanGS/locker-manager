@@ -265,21 +265,22 @@ export class GameManager {
     if (!h.has('lake-dock')) return 'Contract signed! Build the cargo dock at the control hub'
     const ship = h.ship
     if (ship && this.now < ship.mooredAt) return `${ship.name} is sailing in…`
-    if (ship && ship.unloaded < ship.containers) return `Unloading ${ship.name}: ${ship.unloaded}/${ship.containers} containers`
+    if (ship && this.now >= ship.mooredAt && ship.unloaded < ship.containers) return `Unloading ${ship.name}: ${ship.unloaded}/${ship.containers} containers`
+    if (ship && this.now >= ship.mooredAt && ship.loaded < ship.exports) return `Loading ${ship.name}: ${ship.loaded}/${ship.exports} exports`
     return null
   }
 
   private handleHarbourEvents(events: HarbourEvent[]): void {
     let boats = 0
     for (const e of events) {
-      if (e.type === 'boatPaid') {
+      if (e.type === 'boatPaid' || e.type === 'lorryPaid') {
         this.economy.earn(e.amount)
         boats += e.amount
-      } else if (e.type === 'container') this.economy.earn(e.amount)
+      } else if (e.type === 'container' || e.type === 'exportLoaded') this.economy.earn(e.amount)
       else if (e.type === 'shipArrived') this.notify({ type: 'message', text: `${e.ship.name} is sailing in with ${e.ship.containers} containers.` })
       else if (e.type === 'shipDone') {
         this.gainXp(CONFIG.harbour.shipXp)
-        this.notify({ type: 'message', text: `${e.ship.name} is unloaded: ${e.ship.containers} containers, $${e.earned}.` })
+        this.notify({ type: 'message', text: `${e.ship.name} is turned round: ${e.ship.containers} in, ${e.ship.exports} out, $${e.earned}.` })
       } else if (e.type === 'wantsVip') this.harbourVipWaiting = true
     }
     if (boats > 0) this.notify({ type: 'payment', amount: boats })

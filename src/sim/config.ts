@@ -639,6 +639,10 @@ export const CONFIG = {
     capacity: 24,
     firstKeiDelay: 12,
     keiGap: [35, 80] as [number, number],
+    /** Kei trucks often come in twos and threes: the chance the next one follows close behind (`keiBurstGap`), up to `keiAtOnce` at a time. */
+    keiBurst: 0.55,
+    keiBurstGap: [4, 9] as [number, number],
+    keiAtOnce: 3,
     keiCrates: [2, 5] as [number, number],
     keiStay: [70, 160] as [number, number],
     boxCrates: 10,
@@ -768,15 +772,26 @@ export const CONFIG = {
     shipGap: 30,
     shipLinger: 12,
     unloadSeconds: 11,
+    /** Ship sizes: import containers on board (they take as many exports, at most), pay per import landed, hull length and beam (m). */
     ships: [
-      { containers: 6, perContainer: 450, length: 18, beam: 5 },
-      { containers: 10, perContainer: 520, length: 24, beam: 6 },
-      { containers: 24, perContainer: 600, length: 34, beam: 8 },
+      { containers: 6, perContainer: 450, length: 25, beam: 7 },
+      { containers: 10, perContainer: 520, length: 31, beam: 7.4 },
+      { containers: 24, perContainer: 600, length: 37, beam: 9.6 },
     ],
     shipNames: ['Maersky Minnow', 'Ever Given Up', 'MSC Mostly Afloat', 'Cosco Coaster', 'Hapag Happy', 'CMA Seaworthy'],
-    yardCapacity: 12,
+    /** The container yard: import stacks (3 columns x 2 rows x 3 high) and export stacks (3 x 2 x 2), and exports waiting when it opens. */
+    yardCapacity: 18,
+    exportCapacity: 12,
+    startExports: 3,
+    /** Paid for every export container loaded onto a ship. */
+    exportFee: 380,
     shipXp: 120,
-    collectSeconds: 18,
+    /**
+     * Container lorries: seconds from the gate to the bay (and back out), seconds the yard gantry takes per container, gaps between
+     * lorries (often a short `burstGap`: two or three come together), at most `atOnce` in the terminal, `bays` loading bays, the
+     * handling fee each pays, and seconds a lorry needs to pull out of its bay before the next can use it.
+     */
+    lorry: { firstDelay: 8, travel: 20, handleSeconds: 9, gap: [14, 34] as [number, number], burst: 0.5, burstGap: [3, 7] as [number, number], atOnce: 3, bays: 3, fee: 85, pullOut: 5 },
     vip: {
       name: 'Merrick Maersky',
       title: 'Chair, Maersky Line',
@@ -793,8 +808,8 @@ export const AUTOMATION_UPGRADES: readonly AutomationUpgradeDef[] = buildAutomat
 export const LAKE_UPGRADES: readonly WarehouseUpgradeDef[] = [
   { id: 'lake-road', title: 'Road and jetty', description: 'A road down to the lake, a hard-standing, a harbour office and a timber jetty: rowing and sailing boats call and pay to moor', cost: 8000, level: 12 },
   { id: 'lake-marina', title: 'Motorboat marina', description: 'A floating pontoon with a fuel pump: motorboats call too (bigger fees, more often). A shipping line will hear about it', cost: 14000, level: 13, requires: 'lake-road' },
-  { id: 'lake-dock', title: 'Cargo dock', description: 'A concrete quay, a ship-to-shore crane and a port warehouse: the shipping line\'s container feeder calls, and every container landed pays', cost: 22000, level: 14, requires: 'lake-marina', needs: 'contract' },
+  { id: 'lake-dock', title: 'Cargo dock', description: 'Dig the lake out into a proper dock with a container terminal: a quay crane, a container yard with a gantry, lorry bays and a gate. Ships unload imports and load exports; lorries collect and deliver', cost: 22000, level: 14, requires: 'lake-marina', needs: 'contract' },
   { id: 'lake-ships', title: 'Deeper berth', description: 'Dredge the berth: bigger ships with more containers', cost: 35000, level: 15, requires: 'lake-dock' },
-  { id: 'lake-harbour', title: 'Great harbour', description: 'Dig the lake out into a big rectangular basin with long quays and a second crane: the biggest container ships come', cost: 70000, level: 16, requires: 'lake-ships' },
+  { id: 'lake-harbour', title: 'Great harbour', description: 'A second quay crane on the terminal: the biggest container ships come, and are turned round twice as fast', cost: 70000, level: 16, requires: 'lake-ships' },
 ]
 
