@@ -513,7 +513,8 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
     const jm = m(o.topColor, 0.8)
     const panel = (tw - 0.14) / 2
     for (const s of [-1, 1]) part(torso, panel, th + 0.02, 0.05, jm, s * (tw / 2 - panel / 2 + 0.01), th / 2, td / 2 - 0.005, 0.02)
-    part(torso, tw + 0.02, th + 0.02, td - 0.06, jm, 0, th / 2, -0.03, 0.05)
+    // (Its back sits 1 cm behind the shirt's: the same plane flickered.)
+    part(torso, tw + 0.02, th + 0.02, td - 0.04, jm, 0, th / 2, -0.03, 0.05)
     for (const s of [-1, 1]) {
       const lapel = part(torso, 0.06, 0.2, 0.03, m(shade(o.topColor, 0.8), 0.8), s * 0.06, th - 0.12, td / 2 + 0.02, 0.01)
       lapel.rotation.z = s * 0.35
@@ -548,7 +549,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
     // Straps over the shoulders, down to the chest.
     for (const s of [-1, 1]) {
       part(torso, 0.06, 0.05, td + 0.04, bm, s * (tw / 2 - 0.07), th + 0.005, 0, 0.015)
-      part(torso, 0.06, 0.2, 0.03, bm, s * (tw / 2 - 0.07), th - 0.1, td / 2 + 0.01, 0.01)
+      part(torso, 0.06, 0.19, 0.03, bm, s * (tw / 2 - 0.07), th - 0.105, td / 2 + 0.01, 0.01)
     }
   }
   // Specials' extras.
@@ -621,7 +622,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
     part(arm, 0.16, 0.3, 0.17, bare === 'both' ? (o.top === 'hero' ? topM : skinM) : sleeveM, 0, -0.13, 0, 0.04)
     const elbow = pivot(arm, 0, -0.27)
     part(elbow, 0.15, 0.24, 0.16, bare === 'none' || o.top === 'hero' ? (o.top === 'hero' ? topM : sleeveM) : skinM, 0, -0.1, 0, 0.04)
-    part(elbow, 0.14, 0.12, 0.15, o.top === 'hero' ? m(0xdc2626, 0.6) : skinM, 0, -0.27, 0.005, 0.04)
+    part(elbow, 0.14, 0.12, 0.15, o.top === 'hero' ? m(0xdc2626, 0.6) : skinM, 0, -0.27, 0.011, 0.04)
     elbows.push(elbow)
   }
   const hand = pivot(elbows[1]!, 0, -0.33, 0.02)
@@ -633,7 +634,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
   const knees: THREE.Group[] = []
   const wide = o.pants === 'wide' ? 0.03 : 0
   for (const [i, leg] of [legL, legR].entries()) {
-    part(leg, 0.2 + wide, 0.42, 0.22 + wide, pantsM, 0, -0.19, 0, 0.04)
+    part(leg, 0.2 + wide - 0.006, 0.42, 0.22 + wide, pantsM, 0, -0.19, 0, 0.04)
     if (o.pants === 'cargo') part(leg, 0.04, 0.14, 0.12, m(shade(o.pantsColor, 0.85)), (i === 0 ? -1 : 1) * 0.115, -0.24, 0, 0.015)
     const knee = pivot(leg, 0, -0.4)
     part(knee, 0.19 + wide, 0.36, 0.21 + wide, o.pants === 'shorts' ? skinM : pantsM, 0, -0.18, 0, 0.04)
@@ -641,7 +642,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
     part(knee, 0.22, 0.04, 0.31, soleM, 0, -0.43, 0.04, 0.015)
     knees.push(knee)
   }
-  part(hips, female ? 0.44 : 0.48, 0.12, 0.25, pantsM, 0, -0.03, 0, 0.04) // seat
+  part(hips, female ? 0.43 : 0.48, 0.12, 0.25, pantsM, 0, -0.03, 0, 0.04) // seat
 
   return {
     root,
@@ -749,7 +750,7 @@ function addHair(head: THREE.Group, a: Appearance, female: boolean, h: number, s
   } else if (o.hat === 'beanie') {
     const cm = m(o.hatColor, 0.9)
     part(head, HEAD.w + 0.06, 0.2, HEAD.d + 0.06, cm, 0, top + 0.04, 0, 0.07)
-    part(head, HEAD.w + 0.08, 0.06, HEAD.d + 0.08, m(shade(o.hatColor, 0.85), 0.9), 0, top - 0.04, 0, 0.02)
+    part(head, HEAD.w + 0.09, 0.06, HEAD.d + 0.09, m(shade(o.hatColor, 0.85), 0.9), 0, top - 0.04, 0, 0.02)
   } else if (o.hat === 'sunhat') {
     const sm = m(o.hatColor, 0.9)
     part(head, HEAD.w + 0.02, 0.14, HEAD.d + 0.02, sm, 0, top + 0.06, 0, 0.05)
@@ -757,7 +758,7 @@ function addHair(head: THREE.Group, a: Appearance, female: boolean, h: number, s
     brim.position.set(0, top, 0)
     brim.castShadow = true
     head.add(brim)
-    part(head, HEAD.w + 0.03, 0.04, HEAD.d + 0.03, m(0x7c2d12, 0.8), 0, top + 0.02, 0, 0.015)
+    part(head, HEAD.w + 0.055, 0.04, HEAD.d + 0.055, m(0x7c2d12, 0.8), 0, top + 0.02, 0, 0.015)
   }
 }
 
