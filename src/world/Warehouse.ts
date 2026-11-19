@@ -595,7 +595,7 @@ export class Warehouse {
         logo.position.set(sx * 1.115, 1.6, 1.0)
         logo.rotation.y = sx * Math.PI / 2
         group.add(logo)
-        add(box(0.03, 2.2, 0.04), black, sx * 0.0 + sx * 0.02, 1.9, 3.11)
+        add(box(0.03, 2.2, 0.04), black, sx * 0.02, 1.9, 3.11) // the seam between the rear doors
         add(box(0.04, 0.3, 0.04), hub, sx * 0.3, 1.6, 3.13)
         add(box(0.2, 0.12, 0.03), tail, sx * 0.9, 0.9, 3.12)
         add(box(0.5, 0.4, 0.03), black, sx * 0.85, 0.5, 2.9)
