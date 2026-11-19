@@ -500,7 +500,7 @@ export class Harbour {
     this.box(2.6, 0.15, 2.6, mat(0xc0392b, 0.6), T.road.inX + 4.2, 2.68, T.gateZ, g)
     this.box(0.05, 0.9, 1.4, mat(0x1d2633, 0.15, 0.5), T.road.inX + 3.08, 1.6, T.gateZ, g)
     // The road leaves the world through a tunnel under a block (the lorries come and go inside it).
-    const portal = tunnelPortal({ along: 'z', dir: -1, centre: roadX, mouth: T.road.minZ + 12, roadWidth: roadW, span: 44, depth: 18, height: 12, colour: 0x9fa6ad, sign: 'PORT ROAD · M4' })
+    const portal = tunnelPortal({ along: 'z', dir: -1, centre: roadX, mouth: T.road.minZ + 20, roadWidth: roadW, span: 44, depth: 22, height: 12, colour: 0x9fa6ad, sign: 'PORT ROAD · M4' })
     g.add(portal.group)
     for (const b of portal.solids) this.solid(b.x - b.hx, b.x + b.hx, b.y - b.hy, b.y + b.hy, b.z - b.hz, b.z + b.hz)
     const gateSign = makeSign('TERMINAL GATE', 3.2, 0.5, '#0f172a', '#fde68a')

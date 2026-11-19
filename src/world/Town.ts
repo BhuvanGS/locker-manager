@@ -8,12 +8,13 @@ import { HARBOUR, LAKE, PARK, sandHeight, STREET } from './layout'
 import { animatePerson, makePerson, mat, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
 import { prop } from './props'
-import { grassMat, metreUVs, pavingMat, roadAsphalt, sandMat, woodMat, yardAsphalt } from './textures'
+import { grassMat, metreUVs, pavingMat, roadAsphalt, sandMat, wallMat, woodMat, yardAsphalt } from './textures'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { blockBeachHut, blockDeckChair, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
 import { blockBush } from './facade'
 import { tunnelPortal } from './Gates'
 import { Park } from './Park'
+import { buildBounds } from './Bounds'
 
 /**
  * The town round the shop, which lives on its own (no sim state): buildings across the street, street lamps and furniture, traffic
@@ -84,6 +85,7 @@ export class Town {
     this.buildLotEast()
     this.buildEastGate()
     this.buildPark()
+    for (const b of buildBounds(this.root)) this.solid(b.x, b.y, b.z, b.hx, b.hy, b.hz)
     this.buildDunes()
     this.buildFurniture()
     this.buildBeachLife()
@@ -396,12 +398,20 @@ export class Town {
     const depth = L.maxZ - L.minZ
     let x = L.minX
     for (const [name, w] of plan) {
+      if (x > L.minX) this.gapFill(x - 0.2, L.maxZ - depth / 2, 0.6, depth - 0.4)
       this.root.add(kenney('city', name, { x: x + w / 2, z: L.maxZ - depth / 2, length: w }))
       this.solid(x + w / 2, 4, L.maxZ - depth / 2, w / 2 - 0.2, 4, depth / 2 - 0.2)
       x += w + 0.4
     }
     // Paving in front of them, out to the street's pavement.
     this.deco(L.maxX - L.minX, 0.04, STREET.near.minZ - L.maxZ + 0.05, pavingMat(0xbdb8b0), (L.minX + L.maxX) / 2, 0, (L.maxZ + STREET.near.minZ) / 2)
+  }
+
+  /** A wall filling the gap between two blocks (so there is no alley to slip through), with its collider. */
+  private gapFill(x: number, z: number, w: number, d: number): void {
+    const h = 7
+    this.deco(w, h, d, wallMat(0x6b6f76), x, h / 2, z).castShadow = true
+    this.solid(x, h / 2, z, w / 2 + 0.05, h / 2, d / 2)
   }
 
   private hydrant(x: number, z: number): void {
@@ -436,11 +446,17 @@ export class Town {
     while (x + 8.6 < STREET.gateX) {
       const name = names[(i * 5 + 3) % names.length]!
       const width = 6.5 + ((i * 7) % 3)
+      if (i > 0) this.gapFill(x - 0.2, STREET.buildingZ + 3.4, 0.6, 6.4)
       this.root.add(kenney('city', name, { x: x + width / 2, z: STREET.buildingZ + 3.4, rotY: Math.PI, length: width }))
       this.solid(x + width / 2, 4, STREET.buildingZ + 3.4, width / 2 - 0.2, 4, 3.2)
       x += width + 0.4
       i++
     }
+    // A back street behind them (the plaza leads round into it): paving from the blocks' backs, with a kerb on the far side.
+    const back = STREET.buildingZ + 6.8
+    const bx0 = STREET.plaza.maxX
+    this.deco(STREET.gateX - bx0, 0.04, 4.2, pavingMat(0xbdb8b0), (STREET.gateX + bx0) / 2, 0, back + 2.1)
+    this.deco(STREET.gateX - bx0, 0.12, 0.2, mat(0x9ca3af, 0.8), (STREET.gateX + bx0) / 2, 0.04, back + 4.3)
     const tall = ['building-skyscraper-a', 'building-skyscraper-b', 'building-skyscraper-c', 'building-skyscraper-d', 'building-skyscraper-e']
     for (let k = 0; k < 12; k++) {
       const tx = -40 + k * 13 + ((k * 37) % 5)
@@ -539,6 +555,7 @@ export class Town {
     let k = 0
     for (let z = STREET.lot.minZ - 3; z > -100; ) {
       const w = 7.2 + (k % 3) * 0.8
+      if (k > 0) this.gapFill(PARK.borderX, z + 0.25, 6.4, 0.7)
       this.root.add(kenney('city', names[k % names.length]!, { x: PARK.borderX, z: z - w / 2, rotY: -Math.PI / 2, length: w }))
       this.solid(PARK.borderX, 4, z - w / 2, 3.2, 4, w / 2 - 0.2)
       z -= w + 0.5
@@ -567,12 +584,16 @@ export class Town {
     let i = 0
     while (x + 8.6 < STREET.gateX) {
       const w = 6.6 + ((i * 5) % 3) * 0.9
+      if (i > 0) this.gapFill(x - 0.25, front - depth / 2, 0.7, depth - 0.4)
       this.root.add(kenney('city', names[i % names.length]!, { x: x + w / 2, z: front - depth / 2, length: w }))
       this.solid(x + w / 2, 4, front - depth / 2, w / 2 - 0.2, 4, depth / 2 - 0.2)
       x += w + 0.5
       i++
     }
     this.deco(x - (STREET.service.maxX + 2), 0.04, STREET.near.minZ - front + 0.05, pavingMat(0xbdb8b0), (x + STREET.service.maxX + 2) / 2, 0, (front + STREET.near.minZ) / 2)
+    // A paved lane behind them, along the park's north hedge.
+    const backZ = front - depth
+    this.deco(x - (STREET.service.maxX + 1.5), 0.04, backZ - PARK.maxZ + 0.4, pavingMat(0xbdb8b0), (x + STREET.service.maxX + 1.5) / 2, 0, (backZ + PARK.maxZ) / 2)
   }
 
   /**

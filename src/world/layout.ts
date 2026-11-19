@@ -484,6 +484,8 @@ export const PARK = {
   centre: { x: 78, z: -24 },
   playground: { x: 91, z: -33 },
   borderX: 106,
+  /** An empty football pitch south of the park (the playing area), fenced 2 m out, its gate facing the park's south path. */
+  pitch: { minX: 67.5, maxX: 88.5, minZ: -84, maxZ: -46 },
 } as const
 
 /** The supplier catalogue desk, in the back-right corner of the staff area. */

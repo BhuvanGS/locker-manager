@@ -283,6 +283,11 @@ Rules:
 - **The park** (`world/Park.ts`, `PARK` in `layout.ts`): east of the service road, a hedged park with paths, a fountain plaza (benches with
   people), flower beds, a playground (swings animate in `Park.update`), trees and lamps; the Town builds it (`buildPark`) with a row of blocks at
   `PARK.borderX` and towers behind, which close the world off to the east from the street down to the warehouse district.
+- **Football pitch, back streets, bounds**: an empty fenced pitch (`PARK.pitch`, `Park.buildPitch`) south of the park, its gate on the park's
+  south path. The blocks along the main street have walls in the gaps between them (`Town.gapFill`) so there are no alleys, and a paved back
+  street runs behind the row across the road (and a lane behind the shops east of the junction). `world/Bounds.ts` closes the world cheaply:
+  rocky headlands at both ends of the beach, hills behind the town and past the port, and invisible walls (`BOUNDS`) round the playable area.
+  The port road's tunnel mouth sits on the south wall.
 - **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
   blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
   `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use

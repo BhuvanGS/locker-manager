@@ -4,9 +4,9 @@ import type { Box } from './Gates'
 import { tree } from './details'
 import { blockBush } from './facade'
 import { PARK } from './layout'
-import { animatePerson, makePerson, mat, type PersonRig } from './models'
+import { animatePerson, makePerson, makeSign, mat, type PersonRig } from './models'
 import { blockBench, blockBin } from './streetFurniture'
-import { metreUVs, pavingMat, waterMat } from './textures'
+import { metreUVs, pavingMat, waterMat, wireMesh } from './textures'
 import type { Appearance } from '../sim/types'
 
 /**
@@ -186,9 +186,106 @@ export class Park {
     // Lamps along the paths.
     for (const z of [P.minZ + 4, cz - P.plazaR - 3, cz + P.plazaR + 3, P.maxZ - 4]) this.lamps.push([cx + P.path / 2 + 0.4, z])
     for (const x of [P.entryX + 3, cx - P.plazaR - 3, cx + P.plazaR + 4, P.maxX - 4]) this.lamps.push([x, cz - P.path / 2 - 0.4])
+    this.buildPitch()
     // A few people strolling about (standing still on the paths).
     this.person(cx + 0.6, P.minZ + 6, 0, 'idle', 43)
     this.person(P.entryX + 8, cz + 0.5, -Math.PI / 2, 'idle', 47)
+  }
+
+  /** An empty football pitch: striped grass, white lines, two goals with nets, corner flags, a chain-link fence with a gate to the park. */
+  private buildPitch(): void {
+    const F = PARK.pitch
+    const cx = (F.minX + F.maxX) / 2
+    const cz = (F.minZ + F.maxZ) / 2
+    const W = F.maxX - F.minX
+    const L = F.maxZ - F.minZ
+    // Striped turf, a metre wider than the lines all round.
+    const greens = [mat(0x4f9a3a, 0.95), mat(0x5aa844, 0.95)]
+    const stripes = 8
+    const sl = (L + 4) / stripes
+    for (let i = 0; i < stripes; i++) this.flat(W + 4, 0.02, sl, greens[i % 2]!, cx, 0.0, F.minZ - 2 + sl * (i + 0.5))
+    const white = mat(0xf8fafc, 0.6)
+    const line = (w: number, d: number, x: number, z: number) => this.flat(w, 0.01, d, white, x, 0.016, z)
+    const t = 0.12
+    line(W, t, cx, F.minZ)
+    line(W, t, cx, F.maxZ)
+    line(t, L, F.minX, cz)
+    line(t, L, F.maxX, cz)
+    line(W, t, cx, cz)
+    const ring = new THREE.Mesh(new THREE.RingGeometry(4.5, 4.62, 48).rotateX(-Math.PI / 2), white)
+    ring.position.set(cx, 0.017, cz)
+    this.root.add(ring)
+    this.disc(0.15, white, cx, 0.017, cz)
+    // Penalty and goal areas at each end.
+    for (const [end, s] of [[F.minZ, 1], [F.maxZ, -1]] as const) {
+      for (const [bw, bd] of [[14, 6], [7, 2.2]] as const) {
+        line(bw, t, cx, end + s * bd)
+        line(t, bd, cx - bw / 2, end + (s * bd) / 2)
+        line(t, bd, cx + bw / 2, end + (s * bd) / 2)
+      }
+      this.disc(0.12, white, cx, 0.017, end + s * 4.5)
+      // The goal: posts, a crossbar, and a net (wire mesh) behind.
+      const gw = 5
+      const gh = 2
+      for (const dx of [-gw / 2, gw / 2]) {
+        this.block(0.12, gh, 0.12, white, cx + dx, gh / 2, end)
+        this.solids.push({ x: cx + dx, y: gh / 2, z: end, hx: 0.08, hy: gh / 2, hz: 0.08 })
+      }
+      this.block(gw + 0.12, 0.12, 0.12, white, cx, gh, end)
+      const net = wireMesh()
+      const back = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(gw, gh, 0.02)), net)
+      back.position.set(cx, gh / 2, end - s * 1.4)
+      this.root.add(back)
+      for (const dx of [-gw / 2, gw / 2]) {
+        const side = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(0.02, gh, 1.4)), net)
+        side.position.set(cx + dx, gh / 2, end - s * 0.7)
+        this.root.add(side)
+      }
+      const roof = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(gw, 0.02, 1.4)), net)
+      roof.position.set(cx, gh, end - s * 0.7)
+      this.root.add(roof)
+    }
+    // Corner flags.
+    const flag = mat(0xf97316, 0.7)
+    for (const x of [F.minX, F.maxX])
+      for (const z of [F.minZ, F.maxZ]) {
+        this.block(0.05, 1.5, 0.05, mat(0xe5e7eb, 0.5), x, 0.75, z)
+        this.block(0.03, 0.3, 0.4, flag, x, 1.35, z + 0.2)
+      }
+    // The fence, 2 m out, with a gate in the north side facing the park's south path, and a path from the park to it.
+    const m = 2
+    const fx0 = F.minX - m
+    const fx1 = F.maxX + m
+    const fz0 = F.minZ - m
+    const fz1 = F.maxZ + m
+    const gate = 1.6
+    const runs: [number, number, number, number][] = [
+      [fx0, fz0, fx1, fz0],
+      [fx0, fz0, fx0, fz1],
+      [fx1, fz0, fx1, fz1],
+      [fx0, fz1, cx - gate, fz1],
+      [cx + gate, fz1, fx1, fz1],
+    ]
+    const post = mat(0x374151, 0.5)
+    const H = 2.6
+    for (const [x0, z0, x1, z1] of runs) {
+      const len = Math.hypot(x1 - x0, z1 - z0)
+      const alongX = z0 === z1
+      const panel = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(alongX ? len : 0.03, H, alongX ? 0.03 : len)), wireMesh())
+      panel.position.set((x0 + x1) / 2, H / 2, (z0 + z1) / 2)
+      this.root.add(panel)
+      this.block(alongX ? len : 0.06, 0.06, alongX ? 0.06 : len, post, (x0 + x1) / 2, H, (z0 + z1) / 2)
+      const n = Math.max(1, Math.round(len / 3))
+      for (let i = 0; i <= n; i++) {
+        const k = i / n
+        this.block(0.08, H + 0.05, 0.08, post, x0 + (x1 - x0) * k, (H + 0.05) / 2, z0 + (z1 - z0) * k)
+      }
+      this.solids.push({ x: (x0 + x1) / 2, y: H / 2, z: (z0 + z1) / 2, hx: alongX ? len / 2 : 0.08, hy: H / 2, hz: alongX ? 0.08 : len / 2 })
+    }
+    this.flat(PARK.path, 0.04, PARK.minZ - fz1 + 0.4, pavingMat(0xc9c1b3), cx, 0, (PARK.minZ + fz1) / 2)
+    const sign = makeSign('FOOTBALL', 1.6, 0.36, '#14532d', '#f8fafc')
+    sign.position.set(cx, H + 0.4, fz1 + 0.05)
+    this.root.add(sign)
   }
 
   update(dt: number): void {
