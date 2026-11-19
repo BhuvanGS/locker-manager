@@ -1,9 +1,34 @@
+/*
+ * Locker Manager's HUD: a left-luggage office's paperwork. Stats are cloakroom tickets, the level is a luggage tag, the stage is a
+ * rubber stamp, the objective is a work order on a clip, toasts are receipt slips, controls are label-maker tape, and the panels are
+ * ruled ledger sheets. Lettering: Bungee (blocky signage, like the world) and Space Mono (typewriter-ish, for the paperwork).
+ */
+:root {
+  --paper: #f3e9d2;
+  --paper-2: #e8dbb9;
+  --paper-edge: #cdbb92;
+  --ink: #1f1b14;
+  --ink-soft: #5d5443;
+  --ink-faint: #8f846d;
+  --stamp: #c63b2d;
+  --brass: #e3a92b;
+  --brass-dark: #a87612;
+  --green: #2f7d4f;
+  --teal: #1f6f78;
+  --night: #15171d;
+  --night-2: #23262f;
+  --tape: #111214;
+  --display: 'Bungee', 'Arial Black', Impact, sans-serif;
+  --mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.28)) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.32));
+}
+
 .app-shell {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0b1220;
+  background: var(--night);
 }
 
 .game-canvas {
@@ -13,30 +38,45 @@
   outline: none;
 }
 
+/* Keys: chunky plastic key caps. */
 kbd {
   display: inline-block;
-  min-width: 1.4em;
-  padding: 0.05em 0.4em;
-  border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  border-bottom-width: 2px;
-  background: rgba(15, 23, 42, 0.75);
-  color: #f8fafc;
-  font: 600 0.78em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 1.55em;
+  padding: 0.12em 0.42em 0.08em;
+  border-radius: 5px;
+  background: linear-gradient(#fbf6ea, #e2d6b8);
+  color: var(--ink);
+  box-shadow: 0 2px 0 #9c8f70, 0 3px 4px rgba(0, 0, 0, 0.35);
+  font: 700 0.74em/1.35 var(--mono);
   text-align: center;
+  text-transform: uppercase;
 }
 
 .muted {
-  color: #94a3b8;
+  color: var(--ink-faint);
 }
 
 .eyebrow {
-  margin: 0 0 0.35rem;
-  color: #fbbf24;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  margin: 0 0 0.3rem;
+  color: var(--stamp);
+  font: 400 0.72rem/1.2 var(--display);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* A sheet of paper: cream with a faint fibre texture and a darker edge. */
+.paper,
+.objective,
+.toast,
+.dialogue,
+.catalogue,
+.menu-card,
+.banner-body {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.55), transparent 55%),
+    repeating-linear-gradient(115deg, rgba(120, 95, 50, 0.035) 0 2px, transparent 2px 5px),
+    var(--paper);
 }
 
 /* ------------------------------------------------------------------ menus */
@@ -48,17 +88,31 @@ kbd {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: radial-gradient(circle at 50% 30%, rgba(15, 23, 42, 0.55), rgba(2, 6, 23, 0.88));
+  background:
+    radial-gradient(circle at 50% 30%, rgba(21, 23, 29, 0.35), rgba(8, 9, 12, 0.88)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.02) 0 12px, transparent 12px 24px);
   backdrop-filter: blur(3px);
 }
 
 .menu-card {
+  position: relative;
   width: min(34rem, 100%);
-  padding: 1.8rem 1.9rem;
-  border-radius: 20px;
-  background: rgba(15, 23, 42, 0.94);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  padding: 2rem 2rem 1.7rem;
+  border-radius: 6px;
+  filter: var(--shadow);
+  /* Ticket notches either side. */
+  mask:
+    radial-gradient(circle at 0 50%, transparent 14px, #000 14.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 14px, #000 14.5px) right / 51% 100% no-repeat;
+}
+
+.menu-card::before {
+  content: '';
+  position: absolute;
+  inset: 0.7rem;
+  border: 2px dashed rgba(31, 27, 20, 0.22);
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 .menu-card.compact {
@@ -68,55 +122,66 @@ kbd {
 
 .menu-card h1 {
   margin: 0 0 0.6rem;
-  font-size: clamp(1.9rem, 5vw, 2.6rem);
-  line-height: 1.1;
-  color: #f8fafc;
+  font: 400 clamp(1.9rem, 5vw, 2.8rem) / 1.02 var(--display);
+  color: var(--ink);
+  letter-spacing: 0.01em;
 }
 
 .menu-card h2 {
   margin: 0 0 0.4rem;
-  color: #f8fafc;
+  font: 400 1.5rem/1.1 var(--display);
+  color: var(--ink);
 }
 
 .lede {
   margin: 0 0 1.3rem;
-  color: #cbd5e1;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.92rem;
 }
 
 .btn-primary,
 .btn-ghost {
-  padding: 0.75rem 1.3rem;
-  border-radius: 12px;
-  font: inherit;
-  font-weight: 700;
+  position: relative;
+  padding: 0.8rem 1.3rem 0.72rem;
+  border-radius: 6px;
+  font: 400 1rem/1 var(--display);
+  letter-spacing: 0.04em;
   cursor: pointer;
 }
 
 .btn-primary {
   width: 100%;
   border: none;
-  background: linear-gradient(180deg, #fbbf24, #f59e0b);
-  color: #1c1300;
+  background: linear-gradient(#f1bc3d, var(--brass));
+  color: var(--ink);
+  box-shadow: 0 4px 0 var(--brass-dark), 0 8px 14px rgba(0, 0, 0, 0.25);
+}
+
+.btn-primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--brass-dark);
 }
 
 .btn-ghost {
   width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 2px solid rgba(31, 27, 20, 0.35);
   background: transparent;
-  color: #e2e8f0;
+  color: var(--ink);
 }
 
 .btn-row {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.7rem;
   margin-top: 1rem;
 }
 
 .control-list {
   margin: 1.2rem 0 0;
   padding-left: 1.1rem;
-  color: #94a3b8;
-  font-size: 0.88rem;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.84rem;
   display: grid;
   gap: 0.35rem;
 }
@@ -128,7 +193,8 @@ kbd {
   inset: 0;
   z-index: 5;
   pointer-events: none;
-  color: #e2e8f0;
+  color: var(--paper);
+  font-family: var(--mono);
 }
 
 .hud-top {
@@ -144,213 +210,377 @@ kbd {
 
 .stat-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  flex-wrap: nowrap;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.5rem;
 }
 
-.stat {
+/* A cloakroom ticket: notched at both ends, a perforated stub on the right with an icon. */
+.ticket {
+  display: flex;
+  filter: var(--shadow);
+  transform: rotate(-1.2deg);
+}
+
+.ticket:nth-child(even) {
+  transform: rotate(0.9deg) translateY(2px);
+}
+
+.ticket-body,
+.ticket-stub {
+  mask:
+    radial-gradient(circle at 0 50%, transparent 6px, #000 6.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 6px, #000 6.5px) right / 51% 100% no-repeat;
+}
+
+.ticket-body {
   display: grid;
-  padding: 0.35rem 0.7rem;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  min-width: 4.6rem;
+  padding: 0.32rem 0.75rem 0.36rem 0.85rem;
+  min-width: 5.2rem;
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(115deg, rgba(120, 95, 50, 0.04) 0 2px, transparent 2px 5px),
+    var(--paper);
 }
 
-.stat-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.ticket-no {
+  font: 700 0.52rem/1 var(--mono);
+  letter-spacing: 0.12em;
+  color: var(--stamp);
+  opacity: 0.85;
+}
+
+.ticket-label {
+  margin-top: 0.12rem;
+  font: 700 0.58rem/1.1 var(--mono);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--ink-soft);
 }
 
-.stat-value {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #f8fafc;
+.ticket-value {
+  font: 400 1.32rem/1.05 var(--display);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
-.stat.level {
-  min-width: 7rem;
-  align-content: center;
-  gap: 0.3rem;
+.ticket-stub {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  margin-left: -1px;
+  color: var(--paper);
+  background: var(--teal);
+  border-left: 2px dashed rgba(243, 233, 210, 0.55);
 }
 
-.xp-bar {
+.ticket:nth-child(1) .ticket-stub {
+  background: var(--green);
+}
+
+.ticket:nth-child(4) .ticket-stub {
+  background: var(--stamp);
+}
+
+.ticket:nth-child(5) .ticket-stub {
+  background: var(--brass-dark);
+}
+
+/* The level: a brass luggage tag with an eyelet and a string, the XP as stamped squares. */
+.level-tag {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: end;
+  column-gap: 0.45rem;
+  padding: 0.38rem 0.8rem 0.42rem 1.65rem;
+  color: var(--ink);
+  background: linear-gradient(160deg, #f6c95b, var(--brass) 55%, #cf9420);
+  clip-path: polygon(0.9rem 0, 100% 0, 100% 100%, 0.9rem 100%, 0 70%, 0 30%);
+  filter: var(--shadow);
+  transform: rotate(1.6deg) translateY(3px);
+}
+
+.level-eyelet {
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-top: -0.3rem;
+  border-radius: 50%;
+  background: var(--night);
+  box-shadow: 0 0 0 2px #fff3cf;
+}
+
+.level-word {
+  grid-column: 1;
+  font: 700 0.56rem/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.level-number {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font: 400 1.85rem/0.9 var(--display);
+}
+
+.level-xp {
+  grid-column: 1;
+  display: flex;
+  gap: 2px;
+  margin-top: 0.22rem;
+}
+
+.level-xp i {
+  width: 5px;
+  height: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 1px;
+}
+
+.level-xp i.on {
+  background: var(--ink);
+}
+
+/* The stage: a rubber stamp in red ink, slightly crooked. */
+.stage-chip {
+  display: inline-block;
+  padding: 0.25rem;
+  border: 3px solid var(--stamp);
+  border-radius: 6px;
+  background: rgba(243, 233, 210, 0.9);
+  transform: rotate(-3deg);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.stage-chip > span {
   display: block;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.2);
-  overflow: hidden;
+  padding: 0.18rem 0.55rem 0.12rem;
+  border: 1.5px solid var(--stamp);
+  border-radius: 3px;
+  color: var(--stamp);
+  font: 400 0.78rem/1.2 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.xp-bar > span {
-  display: block;
-  height: 100%;
-  background: #fbbf24;
-  transition: width 0.3s ease;
-}
-
+/* The big event: hazard tape across the corner. */
 .event-chip {
   position: absolute;
-  top: 3.1rem;
+  top: 3.7rem;
   right: 0;
-  padding: 0.45rem 0.85rem;
-  border-radius: 999px;
-  background: rgba(127, 29, 29, 0.78);
-  border: 1px solid rgba(248, 113, 113, 0.7);
-  color: #fee2e2;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  box-shadow: 0 0 18px rgba(248, 113, 113, 0.35);
+  padding: 5px;
+  background: repeating-linear-gradient(-45deg, #f2c230 0 12px, #15171d 12px 24px);
+  transform: rotate(1.5deg);
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4));
   animation: event-pulse 2.4s ease-in-out infinite;
+}
+
+.event-chip > span {
+  display: block;
+  padding: 0.32rem 0.85rem 0.26rem;
+  background: var(--night);
+  color: #ffd35c;
+  font: 400 0.8rem/1.2 var(--display);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 @keyframes event-pulse {
   50% {
-    box-shadow: 0 0 28px rgba(248, 113, 113, 0.65);
+    filter: drop-shadow(0 6px 16px rgba(242, 194, 48, 0.6));
   }
 }
 
-.stage-chip {
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.14);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  color: #fde68a;
-  font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
+/* The objective: a work order on a brass clip. */
 .objective {
   position: absolute;
-  top: 4.4rem;
+  top: 5.3rem;
   left: 0.8rem;
-  max-width: min(26rem, calc(100% - 1.6rem));
+  max-width: min(25rem, calc(100% - 1.6rem));
   display: grid;
-  gap: 0.15rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.82);
-  border-left: 3px solid #fbbf24;
+  gap: 0.2rem;
+  padding: 0.95rem 1rem 0.75rem;
+  border-radius: 3px;
+  filter: var(--shadow);
+  transform: rotate(-0.6deg);
+  background-image:
+    repeating-linear-gradient(transparent 0 1.43rem, rgba(31, 111, 120, 0.14) 1.43rem 1.5rem),
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.55), transparent 55%);
+}
+
+.objective-clip {
+  position: absolute;
+  top: -0.55rem;
+  left: 1rem;
+  width: 3.4rem;
+  height: 1rem;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(#e8edf2, #9aa5b1);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25), 0 2px 3px rgba(0, 0, 0, 0.3);
 }
 
 .objective-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font: 400 0.68rem/1 var(--display);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #fbbf24;
+  color: var(--stamp);
 }
 
 .objective-text {
-  font-weight: 600;
-  color: #f8fafc;
+  font: 700 0.94rem/1.42 var(--mono);
+  color: var(--ink);
 }
 
 .reminders {
   list-style: none;
-  margin: 6px 0 0;
-  padding: 6px 0 0;
-  border-top: 1px solid rgba(248, 250, 252, 0.15);
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 2px dashed rgba(31, 27, 20, 0.2);
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 0.82em;
-  color: #fde68a;
+  font-size: 0.8em;
+  color: var(--ink-soft);
 }
 
 .reminders li::before {
   content: '!';
   display: inline-block;
-  width: 1.1em;
-  height: 1.1em;
+  width: 1.2em;
+  height: 1.2em;
   margin-right: 6px;
+  border: 1.5px solid var(--stamp);
   border-radius: 50%;
-  background: #f59e0b;
-  color: #0f172a;
-  font-weight: 800;
-  font-size: 0.8em;
-  line-height: 1.1em;
+  color: var(--stamp);
+  font: 400 0.75em/1.15em var(--display);
   text-align: center;
+  transform: rotate(-8deg);
 }
 
+/* Crosshair: a brass dot in a thin ring. */
 .crosshair {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 1.5px rgba(15, 23, 42, 0.7);
-  transition: transform 0.12s ease, background 0.12s ease;
+  background: #fff8e6;
+  box-shadow: 0 0 0 1.5px rgba(21, 23, 29, 0.75);
+  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 
 .crosshair.active {
-  background: #fbbf24;
-  transform: scale(1.6);
+  background: var(--brass);
+  transform: scale(1.5);
+  box-shadow: 0 0 0 1.5px var(--night), 0 0 0 4px rgba(227, 169, 43, 0.35);
 }
 
+/* The use prompt: a key tag. */
 .prompt {
   position: absolute;
-  top: calc(50% + 1.6rem);
+  top: calc(50% + 1.7rem);
   left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.32rem 0.85rem 0.32rem 0.5rem;
+  border-radius: 4px 999px 999px 4px;
   transform: translateX(-50%);
-  padding: 0.4rem 0.75rem;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.86);
-  color: #f8fafc;
-  font-weight: 600;
+  background: var(--night);
+  border: 2px solid var(--brass);
+  color: var(--paper);
+  font: 700 0.88rem/1.2 var(--mono);
   white-space: nowrap;
+  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.4));
+}
+
+.prompt .key-cap {
+  font-size: 0.82rem;
 }
 
 .prompt.hint {
-  color: #94a3b8;
-  font-weight: 500;
+  border-color: rgba(243, 233, 210, 0.35);
+  color: rgba(243, 233, 210, 0.75);
+  font-weight: 400;
 }
 
+/* What you are holding: a paper luggage tag in the bottom corner. */
 .holding {
   position: absolute;
-  right: 0.8rem;
-  bottom: 3.2rem;
-  padding: 0.45rem 0.8rem;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.82);
-  font-weight: 600;
+  right: 0.9rem;
+  bottom: 3.6rem;
+  display: grid;
+  padding: 0.4rem 0.9rem 0.42rem 1.6rem;
+  color: var(--ink);
+  background: var(--paper);
+  clip-path: polygon(0.8rem 0, 100% 0, 100% 100%, 0.8rem 100%, 0 70%, 0 30%);
+  filter: var(--shadow);
+  transform: rotate(-2deg);
+}
+
+.holding::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: -0.25rem;
+  border-radius: 50%;
+  background: var(--night);
+}
+
+.holding-label {
+  font: 700 0.56rem/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stamp);
+}
+
+.holding-item {
+  font: 400 0.92rem/1.25 var(--display);
   text-transform: capitalize;
 }
 
-.click-hint {
-  position: absolute;
-  top: calc(50% + 4.2rem);
-  left: 50%;
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.7);
-  color: #cbd5e1;
-  font-size: 0.85rem;
-}
-
+/* Label-maker tape: black with raised white letters. */
+.click-hint,
 .controls {
   position: absolute;
   left: 50%;
-  bottom: 0.7rem;
+  margin: 0;
+  padding: 0.32rem 0.9rem 0.28rem;
   transform: translateX(-50%);
-  padding: 0.35rem 0.8rem;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.7);
-  color: #94a3b8;
-  font-size: 0.78rem;
+  background: linear-gradient(#26282d, var(--tape));
+  color: #f4f4f4;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.18);
+  font: 700 0.74rem/1.3 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
+  border-radius: 2px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 50%, 100% 100%, 0 100%, 5px 50%);
+}
+
+.click-hint {
+  top: calc(50% + 4.4rem);
+}
+
+.controls {
+  bottom: 0.75rem;
+  color: #d9d9d9;
+  font-size: 0.68rem;
+}
+
+.controls kbd {
+  font-size: 0.86em;
 }
 
 /* ------------------------------------------------------------------ dialogue */
@@ -358,48 +588,55 @@ kbd {
 .dialogue {
   position: absolute;
   left: 50%;
-  bottom: 3.4rem;
-  transform: translateX(-50%);
-  width: min(32rem, calc(100% - 1.6rem));
-  padding: 0.9rem 1rem 0.8rem;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  bottom: 3.6rem;
+  width: min(33rem, calc(100% - 1.6rem));
+  padding: 1rem 1.1rem 0.8rem;
+  border-radius: 4px;
+  transform: translateX(-50%) rotate(-0.4deg);
+  filter: var(--shadow);
   pointer-events: auto;
 }
 
 .dialogue-speaker {
-  margin: 0 0 0.4rem;
-  color: #fbbf24;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  position: absolute;
+  top: -0.95rem;
+  left: 1rem;
+  margin: 0;
+  padding: 0.3rem 0.9rem 0.24rem 1.4rem;
+  background: var(--brass);
+  color: var(--ink);
+  font: 400 0.82rem/1.2 var(--display);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  clip-path: polygon(0.7rem 0, 100% 0, 100% 100%, 0.7rem 100%, 0 70%, 0 30%);
+  transform: rotate(-2deg);
 }
 
 .dialogue-lines {
   list-style: none;
-  margin: 0 0 0.6rem;
+  margin: 0.35rem 0 0.6rem;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
 }
 
 .dialogue-lines li {
   display: grid;
   grid-template-columns: 5.5rem 1fr;
   gap: 0.6rem;
-  line-height: 1.4;
+  line-height: 1.42;
+  font-size: 0.92rem;
 }
 
 .dialogue-lines li:not(:last-child) {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .dialogue-lines .who {
-  color: #94a3b8;
-  font-weight: 600;
+  color: var(--ink-faint);
+  font: 700 0.7rem/1.9 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -407,16 +644,16 @@ kbd {
 
 .dialogue-lines li.you,
 .dialogue-lines li.you .who {
-  color: #fde68a;
+  color: var(--teal);
 }
 
 .dialogue-options {
   list-style: none;
   margin: 0;
   padding: 0.55rem 0 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-top: 2px dashed rgba(31, 27, 20, 0.2);
   display: grid;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .dialogue-options button {
@@ -424,23 +661,27 @@ kbd {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.32rem 0.5rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 2px;
   background: transparent;
-  color: #f8fafc;
-  font: inherit;
+  color: var(--ink);
+  font: 400 0.9rem/1.35 var(--mono);
   text-align: left;
   cursor: pointer;
 }
 
-.dialogue-options button:hover:not(:disabled) {
-  background: rgba(251, 191, 36, 0.12);
+.dialogue-options button kbd {
+  font-size: 0.7rem;
 }
 
+.dialogue-options button:hover:not(:disabled) {
+  background: rgba(227, 169, 43, 0.18);
+}
+
+/* The chosen line: a highlighter swipe. */
 .dialogue-options button.selected {
-  background: rgba(251, 191, 36, 0.2);
-  box-shadow: inset 3px 0 0 #fbbf24;
+  background: linear-gradient(100deg, transparent 0.2rem, rgba(250, 214, 80, 0.75) 0.5rem, rgba(250, 214, 80, 0.6) 92%, transparent);
 }
 
 .dialogue-options button.selected .option-label {
@@ -449,103 +690,188 @@ kbd {
 
 .next-tag {
   margin-left: auto;
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.18);
-  color: #fde68a;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  padding: 0.06rem 0.45rem 0.02rem;
+  border: 1.5px solid var(--stamp);
+  border-radius: 3px;
+  color: var(--stamp);
+  font: 400 0.62rem/1.3 var(--display);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  transform: rotate(-4deg);
 }
 
 .dialogue-keys {
   margin: 0.55rem 0 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-  color: #94a3b8;
-  font-size: 0.76rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(31, 27, 20, 0.12);
+  color: var(--ink-faint);
+  font: 400 0.72rem/1.5 var(--mono);
 }
 
 .dialogue-options button:disabled {
-  color: #64748b;
+  color: var(--ink-faint);
   cursor: default;
 }
 
 .dialogue-options em {
   margin-left: auto;
-  font-size: 0.78rem;
-  color: #64748b;
+  font-size: 0.74rem;
+  color: var(--ink-faint);
 }
 
-/* ------------------------------------------------------------------ toasts & milestone */
+/* ------------------------------------------------------------------ toasts & banners */
 
 .toasts {
   position: absolute;
-  top: 4.4rem;
+  top: 6.6rem;
   right: 0.8rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
   justify-items: end;
 }
 
+/* A receipt slip: torn zig-zag at the bottom, a tone mark on the left. */
 .toast {
-  max-width: 20rem;
-  padding: 0.45rem 0.75rem;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.9);
-  border-left: 3px solid #60a5fa;
-  font-size: 0.88rem;
-  font-weight: 600;
-  animation: toast-in 0.18s ease-out;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  max-width: 21rem;
+  padding: 0.5rem 0.8rem 0.75rem 0.6rem;
+  font: 700 0.82rem/1.35 var(--mono);
+  /* (No drop-shadow filter here: with the mask it stops the slip being drawn at all in Chrome.) */
+  mask:
+    linear-gradient(#000, #000) top / 100% calc(100% - 6px) no-repeat,
+    conic-gradient(from -45deg at 50% 100%, #000 90deg, transparent 0) bottom / 10px 6px repeat-x;
+  animation: toast-in 0.22s ease-out;
 }
 
-.toast.good {
-  border-left-color: #4ade80;
-  color: #bbf7d0;
+.toast:nth-child(odd) {
+  transform: rotate(0.8deg);
+}
+
+.toast:nth-child(even) {
+  transform: rotate(-0.6deg);
+}
+
+.toast-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--teal);
+  color: var(--paper);
+  font: 400 0.75rem/1 var(--display);
+}
+
+.toast.good .toast-mark {
+  background: var(--green);
+}
+
+.toast.bad .toast-mark {
+  background: var(--stamp);
 }
 
 .toast.bad {
-  border-left-color: #f87171;
-  color: #fecaca;
+  color: #6f1d14;
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateX(14px) rotate(2deg);
   }
 }
 
+/* Banners: a big admission ticket in the middle of the screen. */
 .banner {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -170%);
-  width: min(26rem, calc(100% - 1.6rem));
+  display: flex;
+  width: min(30rem, calc(100% - 1.6rem));
+  transform: translate(-50%, -150%) rotate(-1deg);
+  animation: banner-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.banner-body,
+.banner-stub {
+  mask:
+    radial-gradient(circle at 0 50%, transparent 10px, #000 10.5px) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 10px, #000 10.5px) right / 51% 100% no-repeat;
+}
+
+.banner-body {
+  flex: 1;
+  padding: 1rem 1.3rem 0.9rem;
   text-align: center;
-  animation: toast-in 0.3s ease-out;
-  padding: 1rem 1.2rem;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(74, 222, 128, 0.45);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
 .banner h2 {
-  margin: 0 0 0.4rem;
-  color: #f8fafc;
+  margin: 0.1rem 0 0.35rem;
+  font: 400 1.75rem/1.05 var(--display);
+  color: var(--ink);
 }
 
 .banner p {
-  margin: 0 0 0.4rem;
-  font-size: 0.92rem;
+  margin: 0 0 0.3rem;
+  font: 400 0.86rem/1.4 var(--mono);
+  color: var(--ink-soft);
+}
+
+.banner .eyebrow {
+  color: var(--stamp);
+}
+
+.banner-stub {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  background: var(--stamp);
+  border-left: 2px dashed rgba(243, 233, 210, 0.6);
+}
+
+.banner-stub span {
+  color: var(--paper);
+  font: 400 0.7rem/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -120%) rotate(-6deg) scale(0.9);
+  }
+}
+
+/* Narrower windows: slimmer tickets (no stub or serial), so the row never wraps under the work order. */
+@media (max-width: 1150px) {
+  .ticket-stub,
+  .ticket-no {
+    display: none;
+  }
+
+  .ticket-body {
+    min-width: 0;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .ticket-value {
+    font-size: 1.12rem;
+  }
 }
 
 @media (max-width: 640px) {
-  .stat {
+  .ticket-body {
     min-width: 0;
-    padding: 0.3rem 0.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .ticket-stub {
+    display: none;
   }
 
   .stage-chip,
@@ -554,22 +880,24 @@ kbd {
   }
 }
 
-/* ------------------------------------------------------------------ supplier catalogue */
+/* ------------------------------------------------------------------ ledger sheets (catalogue, consoles, terminal, deals) */
 
 .catalogue {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(34rem, calc(100% - 1.6rem));
+  width: min(35rem, calc(100% - 1.6rem));
   max-height: calc(100% - 2rem);
   overflow-y: auto;
-  padding: 1rem 1.1rem 0.85rem;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  padding: 1.1rem 1.2rem 0.85rem 2.4rem;
+  border-radius: 3px;
+  transform: translate(-50%, -50%) rotate(0.3deg);
+  filter: var(--shadow);
   pointer-events: auto;
+  background-image:
+    linear-gradient(90deg, transparent 1.6rem, rgba(198, 59, 45, 0.45) 1.6rem 1.72rem, transparent 1.72rem),
+    repeating-linear-gradient(transparent 0 2.05rem, rgba(31, 111, 120, 0.16) 2.05rem 2.12rem),
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.55), transparent 55%);
 }
 
 .catalogue-head {
@@ -577,26 +905,30 @@ kbd {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 3px double rgba(31, 27, 20, 0.45);
 }
 
 .catalogue-title {
   margin: 0;
-  color: #fbbf24;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  color: var(--ink);
+  font: 400 1.05rem/1.15 var(--display);
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
 .catalogue-wallet {
   margin: 0;
-  color: #94a3b8;
-  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font: 400 0.8rem/1.3 var(--mono);
+  white-space: nowrap;
 }
 
 .catalogue-wallet strong {
-  color: #f8fafc;
+  color: var(--green);
+  font-family: var(--display);
+  font-weight: 400;
 }
 
 .catalogue-wallet .sep {
@@ -608,31 +940,31 @@ kbd {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.1rem;
 }
 
 .catalogue-row {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.42rem 0.5rem;
   border: none;
-  border-radius: 10px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #f8fafc;
-  font: inherit;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  font: 400 0.88rem/1.3 var(--mono);
   text-align: left;
   cursor: pointer;
 }
 
 .catalogue-row:hover {
-  background: rgba(251, 191, 36, 0.1);
+  background: rgba(227, 169, 43, 0.14);
 }
 
 .catalogue-row.selected {
-  background: rgba(251, 191, 36, 0.2);
-  box-shadow: inset 3px 0 0 #fbbf24;
+  background: linear-gradient(100deg, transparent 0.15rem, rgba(250, 214, 80, 0.75) 0.45rem, rgba(250, 214, 80, 0.6) 94%, transparent);
 }
 
 .catalogue-name {
@@ -641,79 +973,104 @@ kbd {
   min-width: 0;
 }
 
+.catalogue-name strong {
+  font: 400 0.92rem/1.25 var(--display);
+  letter-spacing: 0.01em;
+}
+
 .catalogue-name span {
-  color: #94a3b8;
-  font-size: 0.82rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
 }
 
 .catalogue-price {
   display: grid;
   justify-items: end;
-  font-weight: 700;
+  font: 700 0.92rem/1.3 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
 .catalogue-price em {
-  color: #94a3b8;
-  font-size: 0.74rem;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
   font-style: normal;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .catalogue-price em.buy {
-  color: #fde68a;
+  color: var(--stamp);
   font-weight: 700;
 }
 
+/* Bought: stamped across the row. */
 .catalogue-row.owned {
-  opacity: 0.55;
+  opacity: 0.6;
+}
+
+.catalogue-row.owned::after {
+  content: 'Owned';
+  position: absolute;
+  right: 5.5rem;
+  top: 50%;
+  padding: 0.02rem 0.45rem;
+  border: 2px solid var(--green);
+  border-radius: 3px;
+  color: var(--green);
+  font: 400 0.66rem/1.3 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateY(-50%) rotate(-6deg);
 }
 
 .catalogue-row.locked .catalogue-name strong,
 .catalogue-row.tooExpensive .catalogue-name strong {
-  color: #94a3b8;
+  color: var(--ink-faint);
 }
 
 .catalogue-row.available .catalogue-price {
-  color: #86efac;
+  color: var(--green);
 }
 
-/* ------------------------------------------------------------------ mod menu */
+/* ------------------------------------------------------------------ mod menu: a dark control box with tape labels */
 
 .mod-chip {
   position: absolute;
   right: 0.8rem;
-  bottom: 3.2rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.8);
-  color: #cbd5e1;
-  font: inherit;
-  font-size: 0.8rem;
+  bottom: 0.75rem;
+  padding: 0.3rem 0.75rem 0.26rem;
+  border: none;
+  border-radius: 2px;
+  background: linear-gradient(#5a3fb3, #3f2a8a);
+  color: #efe9ff;
+  font: 700 0.7rem/1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
   pointer-events: auto;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
 }
 
 .mod-chip:hover {
-  color: #fde68a;
-  border-color: rgba(251, 191, 36, 0.6);
+  filter: brightness(1.15);
 }
 
 .modmenu {
   position: absolute;
-  top: 4.4rem;
+  top: 6.6rem;
   right: 0.8rem;
   width: min(23rem, calc(100% - 1.6rem));
-  max-height: calc(100% - 5.4rem);
+  max-height: calc(100% - 7.6rem);
   overflow-y: auto;
   padding: 0.9rem 1rem 0.8rem;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(167, 139, 250, 0.5);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 4px),
+    linear-gradient(#2a2d36, #1b1d23);
+  border: 2px solid #3a3e49;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
-  font-size: 0.88rem;
+  color: #e8e6f0;
+  font: 400 0.84rem/1.4 var(--mono);
 }
 
 .modmenu-head {
@@ -726,30 +1083,32 @@ kbd {
 
 .modmenu-title {
   margin: 0;
-  color: #c4b5fd;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  display: inline-block;
+  padding: 0.15rem 0.6rem 0.1rem;
+  background: #6d4fd4;
+  color: #fff;
+  font: 400 0.8rem/1.3 var(--display);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .modmenu-sub {
-  margin: 0.15rem 0 0;
-  color: #94a3b8;
+  margin: 0.3rem 0 0;
+  color: #a7a3b8;
   font-variant-numeric: tabular-nums;
 }
 
 .mod-close {
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: #a7a3b8;
   font: inherit;
   cursor: pointer;
 }
 
 .modmenu section {
   padding: 0.55rem 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
 }
 
 .modmenu h3 {
@@ -757,14 +1116,15 @@ kbd {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  color: #e2e8f0;
-  font-size: 0.8rem;
-  font-weight: 700;
+  color: #fff;
+  font: 400 0.76rem/1.3 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .mod-count {
-  color: #94a3b8;
-  font-weight: 500;
+  color: #a7a3b8;
+  font: 400 0.76rem var(--mono);
 }
 
 .mod-row {
@@ -775,28 +1135,27 @@ kbd {
 }
 
 .mod-btn {
-  padding: 0.35rem 0.65rem;
-  border: 1px solid rgba(167, 139, 250, 0.45);
-  border-radius: 8px;
-  background: rgba(167, 139, 250, 0.12);
-  color: #ede9fe;
-  font: inherit;
+  padding: 0.32rem 0.65rem;
+  border: none;
+  border-radius: 4px;
+  background: linear-gradient(#4a4f5c, #383c47);
+  box-shadow: 0 2px 0 #20232a;
+  color: #f1eefb;
+  font: 700 0.76rem/1.3 var(--mono);
   cursor: pointer;
 }
 
 .mod-btn:hover {
-  background: rgba(167, 139, 250, 0.28);
+  background: linear-gradient(#6d4fd4, #5338b0);
 }
 
 .mod-btn.small {
   padding: 0.15rem 0.55rem;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
 }
 
 .mod-btn.danger {
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(248, 113, 113, 0.1);
-  color: #fecaca;
+  background: linear-gradient(#a23a30, #7f2a22);
 }
 
 .mod-upgrades {
@@ -816,7 +1175,7 @@ kbd {
 
 .mod-upgrades em {
   color: #86efac;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-style: normal;
 }
 
@@ -830,26 +1189,27 @@ kbd {
 
 .modmenu-foot {
   padding-top: 0.6rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
 }
+
+/* ------------------------------------------------------------------ panel extras */
 
 .terminal-empty {
   margin: 14px 4px;
-  color: #94a3b8;
-  font-size: 0.95rem;
+  color: var(--ink-soft);
+  font: 400 0.9rem/1.4 var(--mono);
 }
 
 .deal-title {
-  color: #94a3b8;
-  font-weight: 500;
-  font-size: 0.9em;
+  color: var(--ink-soft);
+  font: 400 0.8em var(--mono);
+  text-transform: none;
 }
 
 .deal-offer {
   margin: 10px 4px 12px;
-  color: #cbd5e1;
-  font-size: 0.95rem;
-  line-height: 1.45;
+  color: var(--ink);
+  font: 400 0.9rem/1.5 var(--mono);
 }
 
 .receiving-actions {
@@ -859,21 +1219,23 @@ kbd {
 }
 
 .receiving-actions button {
-  background: rgba(30, 41, 59, 0.9);
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 0.82rem;
+  padding: 6px 10px 5px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: 400 0.72rem/1.2 var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .receiving-actions button:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.95);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .receiving-actions button:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
 }

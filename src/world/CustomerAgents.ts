@@ -1,4 +1,5 @@
 import { isFemaleName } from '../sim/CustomerFactory'
+import { TAG_H, TAG_W, tagTexture } from './tags'
 import * as THREE from 'three'
 import type { GameManager } from '../sim/GameManager'
 import type { CustomerId, ItemId } from '../sim/types'
@@ -34,8 +35,8 @@ const BAR_WIDTH = 0.5
 /** Height of the name tag above the floor (above the patience bar), and its size. */
 const NAME_Y = 2.3
 const NAME_WIDTH = 1.0
-const NAME_W = 384
-const NAME_H = 64
+const NAME_W = TAG_W
+const NAME_H = TAG_H
 
 /**
  * The 3D side of customers: walking in and out, the counter spots and waiting line, carrying their
@@ -79,7 +80,7 @@ export class CustomerAgents {
     bar.visible = false
     this.bars.add(bar)
 
-    const nameTag = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTexture(customer.name), transparent: true, depthWrite: false }))
+    const nameTag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTexture(customer.name, customer.appearance.special ? 'brass' : 'paper'), transparent: true, depthWrite: false }))
     nameTag.scale.set(NAME_WIDTH, NAME_WIDTH * (NAME_H / NAME_W), 1)
     this.bars.add(nameTag)
 
@@ -344,30 +345,3 @@ function moodTexture(tier: number): THREE.CanvasTexture {
   return texture
 }
 
-const nameTextures = new Map<string, THREE.CanvasTexture>()
-
-/** A name on a dark pill (cached by name: customers with the same name share it). */
-function nameTexture(name: string): THREE.CanvasTexture {
-  let texture = nameTextures.get(name)
-  if (!texture) {
-    const canvas = document.createElement('canvas')
-    canvas.width = NAME_W
-    canvas.height = NAME_H
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)'
-      ctx.beginPath()
-      ctx.roundRect(4, 6, NAME_W - 8, NAME_H - 12, 22)
-      ctx.fill()
-      ctx.fillStyle = '#f8fafc'
-      ctx.font = '700 34px system-ui, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(name, NAME_W / 2, NAME_H / 2 + 2, NAME_W - 28)
-    }
-    texture = new THREE.CanvasTexture(canvas)
-    texture.colorSpace = THREE.SRGBColorSpace
-    nameTextures.set(name, texture)
-  }
-  return texture
-}

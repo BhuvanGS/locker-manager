@@ -1,12 +1,19 @@
 import * as THREE from 'three'
-import { textured } from './textures'
 
 /**
  * Cables and conduit, so the robotics look wired up: rubber cables are smooth tubes through points (`cable`, and `festoon` for
  * the looped cable that hangs along a gantry rail); conduit is straight grey pipe with bends (`conduit`) ending in a junction box.
  */
-/** Rubber cable sheathing: flat colour with the grain of a CC0 rubber (ambientCG Rubber004; there is no CC0 cable texture). */
-const sheath = (color: number): THREE.MeshStandardMaterial => textured('belt-rubber', { color, colorMap: false, roughness: 0.5, normalScale: 0.6 })
+/** Cable sheathing: flat colour, faceted (four-sided cables), to match the blocky world. */
+const sheaths = new Map<number, THREE.MeshStandardMaterial>()
+const sheath = (color: number): THREE.MeshStandardMaterial => {
+  let m = sheaths.get(color)
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.65, flatShading: true })
+    sheaths.set(color, m)
+  }
+  return m
+}
 const RUBBER = sheath(0x16191e)
 /** Cable colours in a bundle: mostly black and grey, with the odd blue, yellow and red. */
 const BUNDLE = [0x16191e, 0x3a4048, 0x1e40af, 0x16191e, 0xa16207, 0x2a2f36, 0x991b1b]
@@ -15,7 +22,7 @@ const BOX = new THREE.MeshStandardMaterial({ color: 0x9aa1a9, roughness: 0.5, me
 
 export function cable(points: THREE.Vector3[], radius = 0.016, material: THREE.Material = RUBBER): THREE.Mesh {
   const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal')
-  const geometry = new THREE.TubeGeometry(curve, Math.max(8, points.length * 6), radius, 6)
+  const geometry = new THREE.TubeGeometry(curve, Math.max(8, points.length * 6), radius * 1.15, 4)
   // The grain tiles every 5 cm along the cable instead of stretching once over its whole length.
   const along = curve.getLength() / 0.05
   const uv = geometry.getAttribute('uv')

@@ -610,9 +610,8 @@ export class Facility {
     ] as const)
       this.root.add(prop('korean_fire_extinguisher_01', { x, z, height: 0.6 }))
     // An electrical box on the storage side of the partition, its conduit up into the ceiling.
-    // (The model's door hangs open beside the box, so the box itself is ~0.12 m to one side of the model's centre.)
-    this.root.add(prop('power_box_01', { x: 5.0, y: 1.0, z: PARTITION.z - 0.34, rotY: Math.PI, height: 0.6 }))
-    this.root.add(conduit([new THREE.Vector3(4.88, 1.56, PARTITION.z - 0.34), new THREE.Vector3(4.88, ROOM.height - 0.05, PARTITION.z - 0.34)]))
+    this.root.add(prop('power_box_01', { x: 5.0, y: 1.0, z: PARTITION.z - 0.2, rotY: Math.PI, height: 0.6 }))
+    this.root.add(conduit([new THREE.Vector3(5.0, 1.56, PARTITION.z - 0.2), new THREE.Vector3(5.0, ROOM.height - 0.05, PARTITION.z - 0.2)]))
     // Rug and queue posts.
     this.deco(2.4, 0.01, 2.6, carpetFloor(0x7c2d12), 0, 0.02, 3.3)
     const price = this.sign('Storage $15 · pay on collection', 2.4, 0.4, '#1e293b', '#e2e8f0')

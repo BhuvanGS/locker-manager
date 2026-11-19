@@ -1,4 +1,5 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
+import { tagTexture } from './tags'
 import * as THREE from 'three'
 import { kenney } from './kenney'
 import { BOX_COLOURS, KEI_COLOURS, makeDeliveryTruck, makeKeiTruck, setBraking, type VehicleModel } from './vehicles'
@@ -1604,33 +1605,11 @@ function laneSegments(): [number, number, number, number][] {
 const easeOut = (x: number): number => 1 - (1 - Math.min(1, Math.max(0, x))) ** 2
 const easeIn = (x: number): number => Math.min(1, Math.max(0, x)) ** 2
 
-const nameTextures = new Map<string, THREE.CanvasTexture>()
-
-/** A label on a dark pill that always faces the camera. */
+/** A label that always faces the camera: a luggage tag (brass for owners, red for the police). */
 function makeNameSprite(text: string): THREE.Sprite {
-  let texture = nameTextures.get(text)
-  if (!texture) {
-    const canvas = document.createElement('canvas')
-    canvas.width = 640
-    canvas.height = 80
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)'
-      ctx.beginPath()
-      ctx.roundRect(4, 6, 632, 68, 26)
-      ctx.fill()
-      ctx.fillStyle = '#fbbf24'
-      ctx.font = '700 34px system-ui, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(text, 320, 42, 600)
-    }
-    texture = new THREE.CanvasTexture(canvas)
-    texture.colorSpace = THREE.SRGBColorSpace
-    nameTextures.set(text, texture)
-  }
+  const texture = tagTexture(text, text.startsWith('POLICE') ? 'red' : 'brass', 1024)
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }))
-  sprite.scale.set(3.2, 0.4, 1)
+  sprite.scale.set(3.6, 0.45, 1)
   return sprite
 }
 

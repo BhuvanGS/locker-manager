@@ -10,7 +10,7 @@ import { makeBag } from './bags'
 import { beltTexture, TEXTURE_TILE } from './belts'
 import { BAY, CONVEYOR, STATION } from './layout'
 import { makeSign, mat } from './models'
-import { armYellow, cylinderMetreUVs, ductSteel } from './textures'
+import { armYellow } from './textures'
 
 /** How far apart (z) two bags waiting at the same dock sit, one per arm. */
 const SPACING = 0.5
@@ -283,16 +283,28 @@ export class StationView {
     }
   }
 
-  /** A vertical duct from the ceiling down to `mouth`, with a flared end and a coloured band (green in, amber out). */
+  /**
+   * A vertical duct from the ceiling down to `mouth`, blocky like the rest of the world: a square galvanised duct in sections with
+   * flanges between them, a square hopper at the end, and a coloured band (green in, amber out).
+   */
   private duct(x: number, z: number, ceiling: number, mouth: number, band: number): void {
-    const steel = ductSteel()
-    const pipe = new THREE.Mesh(cylinderMetreUVs(new THREE.CylinderGeometry(0.15, 0.15, ceiling - mouth, 20)), steel)
+    const steel = mat(0xaab3bd, 0.45, 0.35)
+    const flange = mat(0x8a939e, 0.5, 0.35)
+    const len = ceiling - mouth
+    const pipe = new THREE.Mesh(new THREE.BoxGeometry(0.3, len, 0.3), steel)
     pipe.position.set(x, (ceiling + mouth) / 2, z)
+    pipe.castShadow = true
     this.root.add(pipe)
-    const flare = new THREE.Mesh(cylinderMetreUVs(new THREE.CylinderGeometry(0.15, 0.24, 0.12, 20)), steel)
-    flare.position.set(x, mouth - 0.06, z)
-    this.root.add(flare)
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 14), mat(band, 0.5))
+    for (let y = mouth + 0.3; y < ceiling - 0.1; y += 0.6) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 0.36), flange)
+      f.position.set(x, y, z)
+      this.root.add(f)
+    }
+    const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.34, 0.16, 4, 1), steel)
+    hopper.rotation.y = Math.PI / 4
+    hopper.position.set(x, mouth - 0.08, z)
+    this.root.add(hopper)
+    const ring = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.1, 0.33), mat(band, 0.5))
     ring.position.set(x, mouth + 0.2, z)
     this.root.add(ring)
   }

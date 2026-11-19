@@ -203,9 +203,10 @@ Rules:
   (`average`) so a surface keeps its old flat colour. Scripts that call `__game.advance` block image loading: wait a moment before a screenshot.
   Box faces stretch a texture, so boxes with tiled textures use `metreUVs(geometry)` (the buildings' `solid()`/`deco()` already do).
   Never put a texture on a material from `mat()`'s cache: it is shared by everything of that colour.
-- **3D props** (`world/props.ts`, `public/models/<name>/model.gltf`, `CREDITS.md`): `prop(name, { x, y, z, rotY, height, glow })` returns a group
-  that fills with a clone once the glTF loads (stands on `y`, scaled to `height`). Decoration only: add a collider yourself, and keep props out of
-  `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Props are drawn opaque and double-sided.
+- **3D props** (`world/props.ts`, `world/blockyProps.ts`): `prop(name, { x, y, z, rotY, height, glow })` returns the game's own blocky model
+  (soft-edged blocks, flat colours; the photo-real glTF models are no longer used), standing on `y` and scaled to `height`. Decoration only: add a
+  collider yourself, and keep props out of `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Walls (`wallMat`) are flat
+  paint, cables are flat four-sided cords, and the hall ducts are square galvanised sections: keep new things blocky, not photo-textured.
 - **Cables** (`world/cables.ts`): `floorBundle` (several cables side by side along the floor, then up the wall into a power box), `festoon`
   (looped cable along a gantry rail, first rail of each station only), `cable` and `conduit` (pipe to a ceiling junction box). Every room with
   robotics has an electrical box (`power_box_01`) as its supply: arm consoles run a bundle to it (`POWER_FEEDS` in `layout.ts`; the console
@@ -313,6 +314,12 @@ Rules:
   the same functions.
 
 ### UI (`src/ui`, `src/store`)
+
+- **The look** (`styles/app.css`): left-luggage paperwork. Stats are cloakroom tickets (`Ticket` in `HUD.tsx`, notched with CSS masks), the level a
+  brass luggage tag, the stage a rubber stamp, the meteor countdown hazard tape, the objective a clipped work order, toasts receipt slips, controls
+  label-maker tape, and the panels ruled ledger sheets with a highlighter on the selected row. Fonts are bundled (`@fontsource/bungee`, `space-mono`).
+  Do not put a `filter` on an element that also has a `mask` (Chrome then draws nothing); shadow the parent instead. 3D name labels are luggage tags
+  too (`world/tags.ts`: `tagTexture(text, tone, width)`, redrawn once Bungee has loaded).
 
 - React only reads the store. The Engine `patch()`es it every frame with primitives, or objects that keep their
   identity while unchanged (the dialogue view is cached by signature). Components must select fields with

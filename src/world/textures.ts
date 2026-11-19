@@ -177,8 +177,16 @@ export function cylinderMetreUVs(geometry: THREE.CylinderGeometry): THREE.Cylind
 export const armYellow = (): THREE.MeshStandardMaterial => textured('arm-paint', { color: 0xe5a50a, metalness: 0.2, normalScale: 0.8, repeat: 0.5, colorMap: false })
 
 /** Painted plaster in a wall's own colour, tiled every 2 m. Use it on boxes whose UVs are in metres (`metreUVs`). */
-export const wallMat = (color: number): THREE.MeshStandardMaterial =>
-  textured('wall-plaster', { color, gain: 3.1, repeat: 0.5, normalScale: 0.8, soften: { amount: 0.6, grey: 'rgb(155,154,150)' } })
+/** Painted walls: flat colour (the world is blocky; the old photo plaster texture is gone). Own material per colour. */
+const walls = new Map<number, THREE.MeshStandardMaterial>()
+export const wallMat = (color: number): THREE.MeshStandardMaterial => {
+  let m = walls.get(color)
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.92 })
+    walls.set(color, m)
+  }
+  return m
+}
 
 /**
  * Rewrites a box's UVs in metres, so a texture keeps its size on every face of every box (a long wall and a short pier match)
