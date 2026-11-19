@@ -268,6 +268,13 @@ Rules:
   in front of the warehouse. Street furniture is our own blocky set (`world/streetFurniture.ts`: bench, bin, hydrant, picnic table, chair, café table,
   stop sign, kiosk, beach hut, palm). Footpaths use `pavingMat` (`textures.ts`: drawn slabs, or `'brick'` pavers) on boxes with `metreUVs`;
   `Town.deco` applies `metreUVs` itself. Keep road, pavement and paint at different heights: never two flat surfaces at the same y.
+- **Beach top and roof blast**: the beach runs from `grassX` to `shoreX` (13 m); `sandHeight(x)` in `layout.ts` is the one sand profile (flat,
+  a wading shelf, then steeper so the ships float). `LAKE.coast.parasols` places the parasols (Lake) and their deck chairs and sitters (Town,
+  `blockDeckChair`). `Town.buildDunes` puts walkable low dunes (instanced, with colliders), beach grass and sand drifts along the grass edge, clear of
+  the plaza, the channel and the basin. Shops line our side of the street east of the junction (`buildLotEast`). When the strike's shockwave reaches
+  the lobby (`Lake.blastSince`), `RoofBlast` punches a rough round hole (`holeEdge`, inside `LOBBY_HOLE` in `Facility.ts`) in its roof: the
+  ceiling and deck are a frame round it plus six wedge chunks (`Facility.lobbyRoof`) that fly up and away from the crater, leaving charred bits
+  round the rim (`lobbyScars`); no strike (a new game) mends it.
 - **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
   blocks, canvas decals for grilles, yellow plates, the box truck's swoosh and box logo, roll door). Noses face −z; each returns
   `wheels` (spin about x), `rearWheels` (for effects) and a `tail` material (`setBraking`). The warehouse trucks and most traffic use

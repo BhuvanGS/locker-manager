@@ -21,6 +21,13 @@ const SHADOW_HALF = 16
 /** How far the walkable world reaches from the middle (metres, east, north and south); a wall stands at the edge. */
 export const WORLD_EDGE = 220
 
+/** The patch of the lobby's roof the meteor's shockwave blows out (between the light panels). */
+const LOBBY_HOLE = { minX: -1.6, maxX: 1.7, minZ: 2.2, maxZ: 5.2 }
+/** The hole's radius at angle `a`: about 1.15 m, wobbling so it is round but not a perfect circle. */
+function holeEdge(a: number): number {
+  return 1.15 * (1 + 0.1 * Math.sin(3 * a + 1) + 0.06 * Math.sin(7 * a + 2) + 0.03 * Math.sin(13 * a))
+}
+
 export class Facility {
   readonly root = new THREE.Group()
   /** The sun. Its shadow covers a square around the player (`followSun`), so the far rooms, halls and the warehouse get shadows too. */
@@ -47,6 +54,9 @@ export class Facility {
   private doorOpen = 0
   /** The removable wall panel at each annex doorway, and the unit-next-door block that an annex replaces. */
   private readonly plugs = new Map<'west' | 'east' | 'office', THREE.Mesh>()
+  /** The chunks of the lobby's ceiling and roof the meteor blows out, and the charred edges of the hole they leave (`RoofBlast`). */
+  readonly lobbyRoof: THREE.Object3D[] = []
+  readonly lobbyScars: THREE.Object3D[] = []
   /** The front half of the unit east of the lobby (the deal office is built inside it), and the office's door frame. */
   private neighbourFront: THREE.Mesh | null = null
   private officeFrame: THREE.Group | null = null
@@ -409,17 +419,83 @@ export class Facility {
     const { minX, maxX, minZ, maxZ, height } = ROOM
     const t = 0.2
     const width = maxX - minX
-    const depth = maxZ - minZ
-    const cz = (minZ + maxZ) / 2
 
     // Floors: warm tiles in the lobby, grey vinyl behind the counter and in storage.
     this.deco(width, 0.02, maxZ - COUNTER.z, tileFloor(0xcdbfa8), 0, 0.005, (maxZ + COUNTER.z) / 2)
     this.deco(width, 0.02, COUNTER.z - minZ, concreteFloor(0x8f949a), 0, 0.005, (COUNTER.z + minZ) / 2)
-    const ceiling = this.deco(width, 0.1, depth, ceilingMat(0xf4f2ee), 0, height + 0.05, cz)
-    ceiling.receiveShadow = false
-
-    // The flat roof: gravel inside a parapet (no parapet at the back, where the halls rise), two air-handling units.
-    this.root.add(flatRoof(minX - t, maxX + t, minZ - t, maxZ + t, height + 0.1, mat(0x2f3e4f, 0.6, 0.2), roofGravel(0x9a9a95), 's'))
+    // The ceiling and the flat roof (gravel inside a parapet, none at the back where the halls rise, two air-handling units). Both are
+    // laid round a patch over the middle of the lobby (`LOBBY_HOLE`) that is in chunks of their own, `lobbyRoof`: the meteor's shockwave
+    // blows those out (`RoofBlast`), leaving a rough round hole with charred edges (`lobbyScars`, shown once it has gone).
+    const ceil = ceilingMat(0xf4f2ee)
+    const gravel = roofGravel(0x9a9a95)
+    const roof = flatRoof(minX - t, maxX + t, minZ - t, maxZ + t, height + 0.1, mat(0x2f3e4f, 0.6, 0.2), gravel, 's')
+    roof.remove(roof.children[0]!) // its one-piece deck: laid below with the hole
+    this.root.add(roof)
+    const H = LOBBY_HOLE
+    const layers = [
+      { m: ceil, y: height + 0.05, h: 0.1, x0: minX, x1: maxX, z0: minZ, z1: maxZ },
+      { m: gravel, y: height + 0.13, h: 0.06, x0: minX - t + 0.01, x1: maxX + t - 0.01, z0: minZ - t + 0.01, z1: maxZ + t - 0.01 },
+    ]
+    for (const L of layers) {
+      for (const r of aroundHole(L.x0, L.x1, L.z0, L.z1, H)) {
+        if (r.maxX - r.minX < 0.01 || r.maxZ - r.minZ < 0.01) continue
+        this.deco(r.maxX - r.minX, L.h, r.maxZ - r.minZ, L.m, (r.minX + r.maxX) / 2, L.y, (r.minZ + r.maxZ) / 2).receiveShadow = L.m !== ceil
+      }
+    }
+    // The hole itself is roughly round: its outline wobbles (`holeEdge`). The square patch round it is a frame with that hole cut out,
+    // and the hole is filled with six wedge-shaped chunks (a piece of ceiling with its bit of deck on top) until the blast.
+    const hcx = (H.minX + H.maxX) / 2
+    const hcz = (H.minZ + H.maxZ) / 2
+    const N = 48
+    const edge: [number, number][] = []
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2
+      const r = holeEdge(a)
+      edge.push([hcx + Math.cos(a) * r, hcz + Math.sin(a) * r])
+    }
+    // Shapes are drawn in (x, −z) and extruded up by the layer's thickness once laid flat.
+    const v = ([x, z]: [number, number]) => new THREE.Vector2(x, -z)
+    const holeSlab = (shape: THREE.Shape, L: (typeof layers)[number], m: THREE.Material): THREE.Mesh => {
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: L.h, bevelEnabled: false }).rotateX(-Math.PI / 2)
+      geo.translate(0, L.y - L.h / 2, 0)
+      const mesh = new THREE.Mesh(geo, m)
+      mesh.receiveShadow = L.m !== ceil
+      mesh.castShadow = true
+      return mesh
+    }
+    for (const L of layers) {
+      const frame = new THREE.Shape([v([H.minX, H.minZ]), v([H.maxX, H.minZ]), v([H.maxX, H.maxZ]), v([H.minX, H.maxZ])])
+      frame.holes.push(new THREE.Path(edge.map(v).reverse()))
+      this.root.add(holeSlab(frame, L, L.m))
+    }
+    const wedges = 6
+    for (let w = 0; w < wedges; w++) {
+      const pts: [number, number][] = [[hcx, hcz]]
+      for (let i = (w * N) / wedges; i <= ((w + 1) * N) / wedges; i++) pts.push(edge[i % N]!)
+      const mx = pts.reduce((t, p) => t + p[0], 0) / pts.length
+      const mz = pts.reduce((t, p) => t + p[1], 0) / pts.length
+      const chunk = new THREE.Group()
+      chunk.position.set(mx, 0, mz)
+      for (const L of layers) {
+        const mesh = holeSlab(new THREE.Shape(pts.map(v)), L, L.m)
+        mesh.geometry.translate(-mx, 0, -mz)
+        chunk.add(mesh)
+      }
+      this.root.add(chunk)
+      this.lobbyRoof.push(chunk)
+    }
+    // Broken, scorched bits round the rim, sticking into the hole (shown once the chunks have gone).
+    const char = mat(0x2a2622, 0.95)
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2 + Math.sin(i * 4.1) * 0.08
+      const r = holeEdge(a)
+      const len = 0.14 + Math.abs(Math.sin(i * 7.3)) * 0.22
+      const wide = 0.22 + Math.abs(Math.sin(i * 3.7)) * 0.22
+      const bit = this.deco(len, 0.15, wide, char, hcx + Math.cos(a) * (r - len * 0.3), height + 0.09, hcz + Math.sin(a) * (r - len * 0.3))
+      bit.rotation.y = -a + Math.sin(i * 2.3) * 0.3
+      bit.visible = false
+      this.lobbyScars.push(bit)
+    }
     this.root.add(rooftopUnit(-3.2, height + 0.16, 1.5, 0.2))
     this.root.add(rooftopUnit(3.4, height + 0.16, -3.5, -0.1))
 

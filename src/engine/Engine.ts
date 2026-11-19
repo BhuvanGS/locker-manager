@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { RoofBlast } from '../world/RoofBlast'
 import { setStreetLampsNight, Town } from '../world/Town'
 import { Sky } from '../world/Sky'
 import { FirstPersonCamera } from '../player/FirstPersonCamera'
@@ -56,6 +57,9 @@ import { setGlassEnvironment } from '../world/textures'
 /** Seconds to climb the vault ladder from one end to the other. */
 const CLIMB_SECONDS = 2.2
 
+/** The lobby's middle (where the meteor's shockwave is timed for its roof). */
+const LOBBY_CENTRE = { x: 0, z: 3.6 }
+
 export class Engine {
   private readonly canvas: HTMLCanvasElement
   private readonly renderer: THREE.WebGLRenderer
@@ -91,6 +95,7 @@ export class Engine {
   private counterArm: CounterArm | null = null
   /** The meteor's crater and lake (built at start; it draws itself from `game.meteor`). */
   private lake: Lake | null = null
+  private roofBlast: RoofBlast | null = null
   /** The VIP's car in the street (turns up with each offer). */
   private vipCar: VipCar | null = null
   private town: Town | null = null
@@ -160,6 +165,7 @@ export class Engine {
     this.facility = new Facility(this.physics)
     this.scene.add(this.facility.root, this.agents.root, this.held.root)
     this.lake = new Lake(this.physics)
+    this.roofBlast = new RoofBlast(this.facility.lobbyRoof, this.facility.lobbyScars)
     this.scene.add(this.lake.root)
     this.town = new Town(this.physics)
     this.scene.add(this.town.root, this.sky.root)
@@ -619,6 +625,7 @@ export class Engine {
       player.syncFromPhysics()
     }
     this.cameraRig.quake = this.lake ? Math.min(1, this.lake.shake(this.game, player.getEyePosition())) : 0
+    this.roofBlast?.update(dt, this.lake ? this.lake.blastSince(this.game, LOBBY_CENTRE) : null)
     this.cameraRig.update(player.getEyePosition(), playing ? dt : 0, player.isGrounded(), playing && !talking && input.sprint)
     const camera = this.cameraRig.camera
     const playerPos = player.getPosition()

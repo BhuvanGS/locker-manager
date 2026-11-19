@@ -242,3 +242,31 @@ function signTexture(text: string, bg: string, fg: string, octagon = false): THR
   t.colorSpace = THREE.SRGBColorSpace
   return t
 }
+
+/**
+ * A beach deck chair (front at +z): a wooden frame with a striped canvas sling, seat at sitting height (the sit pose puts the hips
+ * 0.45 m up), a reclined back and armrests. Someone sitting in it stands at its origin moved 0.1 m forward.
+ */
+export function blockDeckChair(color: number): THREE.Group {
+  const g = new THREE.Group()
+  const wood = m(0xc89a62, 0.8)
+  const cloth = m(color, 0.85)
+  const white = m(0xf8fafc, 0.85)
+  for (const x of [-0.29, 0.29]) {
+    block(g, 0.05, 0.45, 0.05, wood, x, 0.22, 0.22)
+    block(g, 0.05, 0.4, 0.05, wood, x, 0.2, -0.22)
+    block(g, 0.06, 0.05, 0.6, wood, x, 0.58, -0.02)
+    block(g, 0.05, 0.15, 0.05, wood, x, 0.5, 0.24)
+    const rail = block(g, 0.05, 0.75, 0.05, wood, x, 0.72, -0.33)
+    rail.rotation.x = -0.35
+  }
+  // Seat and back slings, in stripes.
+  for (let i = 0; i < 4; i++) {
+    const x = -0.21 + i * 0.14
+    const c = i % 2 === 0 ? cloth : white
+    block(g, 0.14, 0.04, 0.5, c, x, 0.42, 0)
+    const back = block(g, 0.14, 0.62, 0.04, c, x, 0.75, -0.33)
+    back.rotation.x = -0.35
+  }
+  return g
+}

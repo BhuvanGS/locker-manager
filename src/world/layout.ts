@@ -330,8 +330,26 @@ export const LAKE = {
    * The coast west of town: grass to `grassX`, a flat beach to `shoreX`, then sand shelving into the sea (at `seaY`). The meteor's
    * crater breaks through to it: a channel `channel.halfWidth` either side of `channel.z` runs from the lake to the sea.
    */
-  coast: { grassX: -56, shoreX: -62, wadeX: -66.5, seaY: -0.3, channel: { z: -24, halfWidth: 5 } },
+  coast: {
+    grassX: -56,
+    shoreX: -69,
+    wadeX: -73.5,
+    seaY: -0.3,
+    channel: { z: -24, halfWidth: 5 },
+    /** Beach parasols (x, z): each has a deck chair beside it (x + 1.2, facing the sea) and a towel. */
+    parasols: [[-63.6, 22], [-63.2, 28.5], [-63.8, 35], [-63.4, 42], [-63.5, -42], [-63.2, -49], [-63.7, -56], [-64.2, 0.5]] as [number, number][],
+    /** Low dunes with beach grass along the top of the beach (between `grassX` and here). */
+    duneX: -60,
+  },
 } as const
+
+/** The sand's height at x: flat beach, a gentle shelf you can wade on, then steeper into deep water (deep enough for the ships). */
+export function sandHeight(x: number): number {
+  const { shoreX } = LAKE.coast
+  if (x >= shoreX) return -0.02
+  const d = shoreX - x
+  return Math.max(-5, -0.02 - d * 0.12 - Math.max(0, d - 8) * 0.15)
+}
 
 /**
  * The crater and its channel to the sea seen from above, as world (x, z) points: from the channel's north bank at the grass edge, round

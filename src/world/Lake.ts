@@ -4,7 +4,7 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { GameManager } from '../sim/GameManager'
 import type { HarbourManager } from '../sim/HarbourManager'
 import { Harbour } from './Harbour'
-import { craterNotch, FLOOR_Y, HARBOUR, LAKE } from './layout'
+import { craterNotch, FLOOR_Y, HARBOUR, LAKE, sandHeight } from './layout'
 import { makeSign, mat } from './models'
 import { grassMat, metreUVs, paintedSteel, sandMat, waterMat, waterRipples } from './textures'
 
@@ -65,7 +65,7 @@ function foamTexture(): THREE.Texture {
   return foamTex
 }
 
-const sandY = (x: number): number => (x >= COAST.shoreX ? -0.02 : Math.max(-4, -0.02 - (COAST.shoreX - x) * 0.12))
+const sandY = sandHeight
 const BASIN = HARBOUR.basin
 const JETTY = HARBOUR.jetty
 
@@ -277,6 +277,14 @@ export class Lake {
     const arrive = (Math.hypot(at.x - C.x, at.z - C.z) / WAVE_R) ** (1 / 0.55) * WAVE_T
     if (since < arrive) return 0.05 * near
     return Math.exp(-(since - arrive) * 1.1) * near
+  }
+
+  /** Seconds since the strike's shockwave reached `at` (negative while it is on its way), or null with no strike. */
+  blastSince(game: GameManager, at: { x: number; z: number }): number | null {
+    const m = game.meteor
+    if (!m.struck || m.impactAt === null) return null
+    const arrive = (Math.hypot(at.x - C.x, at.z - C.z) / WAVE_R) ** (1 / 0.55) * WAVE_T
+    return game.now - m.impactAt - arrive
   }
 
   /** The crater: a rough bowl, a raised rim of thrown-up earth, boulders, a scorch mark, and the meteorite itself at the bottom. */
@@ -630,21 +638,16 @@ export class Lake {
   /** A bit of seaside: umbrellas and sun loungers on the sand either side of the channel, and a sign at the end of the street. */
   private buildBeach(): void {
     const cloth = [0xef4444, 0x2563eb, 0xf59e0b, 0x10b981]
-    const spots: [number, number][] = [[-59.6, 22], [-59.2, 28.5], [-59.8, 35], [-59.4, 42], [-59.5, -42], [-59.2, -49], [-59.7, -56]]
-    spots.forEach(([x, z], i) => {
+    // (The deck chairs beside them, and the people in them, are the Town's.)
+    COAST.parasols.forEach(([x, z], i) => {
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 6), mat(0xe5e7eb, 0.5))
       pole.position.set(x, 1.15, z)
       const shade = new THREE.Mesh(new THREE.ConeGeometry(1.25, 0.5, 8, 1, true), new THREE.MeshStandardMaterial({ color: cloth[i % cloth.length], roughness: 0.8, side: THREE.DoubleSide }))
       shade.position.set(x, 2.25, z)
       shade.castShadow = true
-      const lounger = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.12, 1.8), mat(0xf8fafc, 0.6))
-      lounger.position.set(x + 1.2, 0.3, z + 0.3)
-      const back = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.7), mat(0xf8fafc, 0.6))
-      back.position.set(x + 1.2, 0.5, z + 1.05)
-      back.rotation.x = -0.7
       const towel = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.01, 1.7), mat(cloth[(i + 1) % cloth.length]!, 0.9))
       towel.position.set(x - 1.2, 0.0, z + 0.4)
-      this.root.add(pole, shade, lounger, back, towel)
+      this.root.add(pole, shade, towel)
     })
     const sign = makeSign('BEACH', 1.2, 0.32, '#0f172a', '#fde68a')
     sign.position.set(COAST.grassX + 0.6, 2.0, 10.6)

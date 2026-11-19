@@ -4,12 +4,13 @@ import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { Appearance, Special } from '../sim/types'
 import { kenney, loadKenney } from './kenney'
 import { BOX_COLOURS, CAR_COLOURS, KEI_COLOURS, makeCar, makeDeliveryTruck, makeKeiTruck, setBraking, type VehicleModel } from './vehicles'
-import { LAKE, STREET } from './layout'
+import { HARBOUR, LAKE, sandHeight, STREET } from './layout'
 import { animatePerson, makePerson, mat, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
 import { prop } from './props'
-import { grassMat, metreUVs, pavingMat, roadAsphalt, woodMat, yardAsphalt } from './textures'
-import { blockBeachHut, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
+import { grassMat, metreUVs, pavingMat, roadAsphalt, sandMat, woodMat, yardAsphalt } from './textures'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { blockBeachHut, blockDeckChair, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
 import { blockBush } from './facade'
 
 /**
@@ -50,9 +51,6 @@ type Walker = {
 
 type Bench = { x: number; z: number; yaw: number; taken: boolean }
 
-/** How far a sitting person's feet are below the seat they sit on (the sit clips put the hips ~0.45 m up): a lounger is 0.36 m high. */
-const LOUNGER_SEAT = -0.12
-
 const SPECIALS: Special[] = ['fighter', 'ninja', 'swordsman', 'caped']
 
 const LANE_EAST = STREET.lanes.east
@@ -81,6 +79,8 @@ export class Town {
     this.buildSeafront()
     this.buildBuildings()
     this.buildLot()
+    this.buildLotEast()
+    this.buildDunes()
     this.buildFurniture()
     this.buildBeachLife()
     for (let i = 0; i < WALKERS; i++) this.addWalker(i)
@@ -497,26 +497,129 @@ export class Town {
     this.solid(x, 2.6, z, 0.12, 2.6, 0.12)
   }
 
-  /** People on the beach: sunbathing on towels, sitting under the parasols, standing at the water's edge. */
+  /** People on the beach: in deck chairs under the parasols, looking out to sea, and standing at the water's edge. */
   private buildBeachLife(): void {
-    // Sitters sit on the loungers by the parasols (Lake.buildBeach: a lounger at x + 1.2, back towards +z), facing −z.
-    const spots: [number, number, number, 'sit' | 'idle'][] = [
-      [-59.6 + 1.2, 22.1, Math.PI, 'sit'],
-      [-59.2 + 1.2, 28.6, Math.PI, 'sit'],
-      [-59.8 + 1.2, 34.8, Math.PI, 'sit'],
-      [-63.8, 31, -Math.PI / 2, 'idle'],
-      [-64.0, 39, -Math.PI / 2, 'idle'],
-      [-59.2 + 1.2, -49.2, Math.PI, 'sit'],
-      [-63.6, -52, -Math.PI / 2, 'idle'],
-    ]
-    spots.forEach(([x, z, yaw, pose], i) => {
-      const rig = makePerson(randomLook(i * 7 + 3), { female: i % 2 === 0 })
-      rig.root.position.set(x, pose === 'sit' ? LOUNGER_SEAT : sandHeight(x), z)
-      rig.root.rotation.y = yaw
-      rig.root.userData.pose = pose
+    const chairColours = [0x2563eb, 0xef4444, 0x10b981, 0xf59e0b]
+    LAKE.coast.parasols.forEach(([px, pz], i) => {
+      // A deck chair beside each parasol, facing the sea (−x); most have someone in it.
+      const cx = px + 1.2
+      const cz = pz + 0.3
+      const chair = blockDeckChair(chairColours[i % chairColours.length]!)
+      chair.position.set(cx, sandHeight(cx), cz)
+      chair.rotation.y = -Math.PI / 2
+      this.root.add(chair)
+      this.solid(cx, 0.4, cz, 0.35, 0.4, 0.35)
+      if (i % 4 !== 3) this.sitter(cx - 0.1, cz, -Math.PI / 2, i * 7 + 3)
+    })
+    const edge = LAKE.coast.shoreX - 1.2
+    for (const [z, k] of [[31, 1], [39, 2], [-52, 3], [8, 4]] as const) {
+      const rig = makePerson(randomLook(k * 11 + 5), { female: k % 2 === 0 })
+      rig.root.position.set(edge, sandHeight(edge), z)
+      rig.root.rotation.y = -Math.PI / 2
+      rig.root.userData.pose = 'idle'
       this.root.add(rig.root)
       this.loungers.push(rig)
+    }
+  }
+
+  /** More shops along our side of the street east of the service road, facing it. */
+  private buildLotEast(): void {
+    const names = ['building-d', 'building-f', 'building-a', 'building-j', 'building-m', 'building-e', 'building-l', 'building-b', 'building-i']
+    const front = STREET.lot.maxZ
+    const depth = 6.8
+    let x = STREET.service.maxX + STREET.junction.cornerR + 2.2
+    let i = 0
+    while (x < STREET.eastX - 8) {
+      const w = 6.6 + ((i * 5) % 3) * 0.9
+      this.root.add(kenney('city', names[i % names.length]!, { x: x + w / 2, z: front - depth / 2, length: w }))
+      this.solid(x + w / 2, 4, front - depth / 2, w / 2 - 0.2, 4, depth / 2 - 0.2)
+      x += w + 0.5
+      i++
+    }
+    this.deco(x - (STREET.service.maxX + 2), 0.04, STREET.near.minZ - front + 0.05, pavingMat(0xbdb8b0), (x + STREET.service.maxX + 2) / 2, 0, (front + STREET.near.minZ) / 2)
+  }
+
+  /**
+   * The top of the beach, so the grass does not just stop at a line: low dunes on the sand (you can walk over them), clumps of beach
+   * grass on and around them and on the grass edge, and drifts of sand blown onto the grass. Not in front of the plaza, nor where
+   * the crater's channel and the dock will be.
+   */
+  private buildDunes(): void {
+    const { grassX, duneX, channel } = LAKE.coast
+    const rand = (k: number) => Math.abs(Math.sin(k * 12.9898 + 78.233) * 43758.5453) % 1
+    const P = STREET.plaza
+    const B = HARBOUR.basin
+    const clear = (z: number, pad: number) =>
+      (z < P.minZ - pad || z > P.maxZ + pad) && Math.abs(z - channel.z) > channel.halfWidth + 2 + pad && (z < B.minZ - 2 - pad || z > B.maxZ + 2 + pad)
+    const sand = sandMat(0xdcc8a0).clone()
+    sand.flatShading = true
+    const duneGeo = new THREE.IcosahedronGeometry(1, 1)
+    const dunes: THREE.Matrix4[] = []
+    const tufts: THREE.Matrix4[] = []
+    const q = new THREE.Quaternion()
+    const up = new THREE.Vector3(0, 1, 0)
+    const tuft = (x: number, y: number, z: number, k: number, s = 1) =>
+      tufts.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(up, rand(k) * 6.28).clone(), new THREE.Vector3(s, s * (0.7 + rand(k + 1) * 0.6), s)))
+    let k = 0
+    for (let z = -150; z < 150; z += 4.5 + rand(z) * 3) {
+      k++
+      if (!clear(z, 1)) continue
+      const w = 1.2 + rand(k * 3) * 1.0
+      const d = 1.8 + rand(k * 5) * 1.6
+      const h = 0.26 + rand(k * 7) * 0.16
+      const x = (grassX + duneX) / 2 + (rand(k * 11) - 0.5) * 1.2
+      dunes.push(new THREE.Matrix4().compose(new THREE.Vector3(x, -0.06, z), new THREE.Quaternion(), new THREE.Vector3(w, h + 0.06, d)))
+      this.solid(x, h * 0.35, z, w * 0.6, h * 0.35, d * 0.6)
+      for (let t = 0; t < 7; t++) tuft(x + (rand(k * 13 + t) - 0.5) * w * 1.3, h * 0.7, z + (rand(k * 17 + t) - 0.5) * d * 1.3, k * 19 + t, 0.8 + rand(t + k) * 0.6)
+    }
+    // Clumps along the edge itself, on both sides of it.
+    for (let z = -150; z < 150; z += 0.9) {
+      k++
+      if (!clear(z, 0) || rand(k * 23) < 0.35) continue
+      const x = grassX + (rand(k * 29) - 0.65) * 3.5
+      tuft(x, -0.01, z + rand(k * 31) * 0.6, k * 37, 0.6 + rand(k * 41) * 0.7)
+    }
+    const duneMesh = new THREE.InstancedMesh(duneGeo, sand, dunes.length)
+    dunes.forEach((m, i) => duneMesh.setMatrixAt(i, m))
+    duneMesh.receiveShadow = true
+    duneMesh.castShadow = true
+    this.root.add(duneMesh)
+
+    // A tuft: a fan of thin blades.
+    const blades: THREE.BufferGeometry[] = []
+    for (let b = 0; b < 7; b++) {
+      const blade = new THREE.BoxGeometry(0.03, 0.5, 0.015).translate(0, 0.25, 0)
+      blade.rotateZ((b - 3) * 0.16).rotateY(b * 0.9)
+      blades.push(blade)
+    }
+    const tuftGeo = mergeGeometries(blades)
+    const tuftMesh = new THREE.InstancedMesh(tuftGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), tufts.length)
+    const c = new THREE.Color()
+    tufts.forEach((m, i) => {
+      tuftMesh.setMatrixAt(i, m)
+      tuftMesh.setColorAt(i, c.setHex(0x9caa55).lerp(new THREE.Color(0xcdbb72), rand(i * 3)))
     })
+    tuftMesh.castShadow = true
+    this.root.add(tuftMesh)
+
+    // Sand blown onto the grass: overlapping soft patches, thinning out away from the beach.
+    const drift = sandMat(0xd8c49c).clone()
+    drift.polygonOffset = true
+    drift.polygonOffsetFactor = -1
+    drift.polygonOffsetUnits = -1
+    const patches: THREE.Matrix4[] = []
+    for (let z = -150; z < 150; z += 0.7) {
+      k++
+      if (!clear(z, 0)) continue
+      const reach = rand(k * 43) ** 2 * 4
+      const s = 0.4 + rand(k * 47) * 1.1 * (1 - reach / 5)
+      patches.push(new THREE.Matrix4().compose(new THREE.Vector3(grassX + reach, -0.012, z), q.setFromAxisAngle(up, rand(k) * 6.28).clone(), new THREE.Vector3(s * 1.6, 1, s)))
+    }
+    const patchGeo = new THREE.CircleGeometry(1, 9).rotateX(-Math.PI / 2)
+    const patchMesh = new THREE.InstancedMesh(patchGeo, drift, patches.length)
+    patches.forEach((m, i) => patchMesh.setMatrixAt(i, m))
+    patchMesh.receiveShadow = true
+    this.root.add(patchMesh)
   }
 
   private readonly loungers: PersonRig[] = []
@@ -814,11 +917,6 @@ function plateFor(k: number): string {
   return `${['LM', 'KT', 'DL', 'SW'][k % 4]}-${String(1000 + ((k * 7919) % 9000)).slice(0, 4)}`
 }
 
-/** The beach's height at x (matches the Lake's sand). */
-function sandHeight(x: number): number {
-  const { shoreX } = LAKE.coast
-  return x >= shoreX ? -0.02 : Math.max(-4, -0.02 - (shoreX - x) * 0.12)
-}
 
 /** A square road sign with one big white letter. */
 function letterTexture(letter: string, bg: string): THREE.CanvasTexture | null {
