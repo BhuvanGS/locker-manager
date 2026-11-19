@@ -361,13 +361,13 @@ export function craterNotch(): [number, number][] {
 export const HARBOUR = {
   basin: { minX: -56, maxX: -14, minZ: -42, maxZ: -10.6, floorY: -4.3 },
   /** The jetty's root (on the shore) and how far it runs west; the marina adds `marinaLength` more. Berths are on its north side. */
-  jetty: { z: -31.5, basinZ: -18, halfWidth: 1.1, lakeRootX: -25.0, basinRootX: -14, length: 11.5, marinaLength: 9.5 },
+  jetty: { z: -31.5, basinZ: -17, halfWidth: 1.1, lakeRootX: -25.0, basinRootX: -14, length: 11.5, marinaLength: 9.5 },
   /** Where along the jetty (metres west of its root) each berth is: row and sail boats, then motorboats on the marina. */
   jettyBerths: [3.4, 8.9],
   marinaBerths: [14.2, 19.2],
   /** Boats come in along this line, then turn into their berth (in the dock: north of the jetty, clear of the ships to the south). */
   boatLane: -27.2,
-  boatLaneBasin: -13.2,
+  boatLaneBasin: -12.3,
   /** The harbour office (north of the hard-standing). */
   office: { minX: -41, maxX: -37.8, minZ: -2, maxZ: 0.8 },
   /** The quay cranes' rails (x range they travel) and their geometry. */

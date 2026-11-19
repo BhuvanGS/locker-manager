@@ -18,6 +18,9 @@ import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel,
 const SUN_OFFSET = new THREE.Vector3(-8, 14, 16)
 const SHADOW_HALF = 16
 
+/** How far the walkable world reaches from the middle (metres, east, north and south); a wall stands at the edge. */
+export const WORLD_EDGE = 220
+
 export class Facility {
   readonly root = new THREE.Group()
   /** The sun. Its shadow covers a square around the player (`followSun`), so the far rooms, halls and the warehouse get shadows too. */
@@ -314,7 +317,8 @@ export class Facility {
     // where nothing has been dug yet).
     const B = HARBOUR.basin
     const notch: [number, number][] = [[LAKE.coast.grassX, B.maxZ], [B.maxX, B.maxZ], [B.maxX, B.minZ], [LAKE.coast.grassX, B.minZ]]
-    const outline: [number, number][] = [[100, -100], [100, 100], [LAKE.coast.grassX, 100], ...notch, [LAKE.coast.grassX, -100]]
+    const W = WORLD_EDGE + 20
+    const outline: [number, number][] = [[W, -W], [W, W], [LAKE.coast.grassX, W], ...notch, [LAKE.coast.grassX, -W]]
     const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, -z)))
     // Shape y becomes −z once the plane is laid flat.
     const cut = new THREE.Path()
@@ -329,9 +333,16 @@ export class Facility {
     ground.position.y = FLOOR_Y - 0.02
     ground.receiveShadow = true
     this.root.add(ground)
-    for (const r of aroundHole(LAKE.coast.shoreX, 60, -60, 60, hole)) {
+    // The ground you walk on, out to the edge of the world (the harbour terminal and its road reach far south), and a wall round it
+    // (the sea has its own fence at the wading line), so you can never walk off the map.
+    const E = WORLD_EDGE
+    for (const r of aroundHole(LAKE.coast.shoreX, E, -E, E, hole)) {
       this.physics.addStaticBox(new THREE.Vector3((r.minX + r.maxX) / 2, -0.5, (r.minZ + r.maxZ) / 2), new THREE.Vector3((r.maxX - r.minX) / 2, 0.48, (r.maxZ - r.minZ) / 2))
     }
+    const wallH = 6
+    const sea = LAKE.coast.wadeX - 1
+    this.physics.addStaticBox(new THREE.Vector3(E + 0.5, wallH / 2, 0), new THREE.Vector3(0.5, wallH, E + 1))
+    for (const z of [-E - 0.5, E + 0.5]) this.physics.addStaticBox(new THREE.Vector3((sea + E) / 2, wallH / 2, z), new THREE.Vector3((E - sea) / 2 + 1, wallH, 0.5))
     const plug = new THREE.Mesh(new THREE.BoxGeometry(hole.maxX - hole.minX, 0.96, hole.maxZ - hole.minZ), new THREE.MeshBasicMaterial({ visible: false }))
     plug.position.set((hole.minX + hole.maxX) / 2, -0.5, (hole.minZ + hole.maxZ) / 2)
     plug.userData.half = new THREE.Vector3((hole.maxX - hole.minX) / 2, 0.48, (hole.maxZ - hole.minZ) / 2)
