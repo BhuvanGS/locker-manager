@@ -439,7 +439,11 @@ export class Facility {
     for (const L of layers) {
       for (const r of aroundHole(L.x0, L.x1, L.z0, L.z1, H)) {
         if (r.maxX - r.minX < 0.01 || r.maxZ - r.minZ < 0.01) continue
-        this.deco(r.maxX - r.minX, L.h, r.maxZ - r.minZ, L.m, (r.minX + r.maxX) / 2, L.y, (r.minZ + r.maxZ) / 2).receiveShadow = L.m !== ceil
+        // The ceiling is solid (you cannot jump off a table through it onto the roof); the deck above is decoration.
+        const make = L.m === ceil ? this.solid.bind(this) : this.deco.bind(this)
+        const piece = make(r.maxX - r.minX, L.h, r.maxZ - r.minZ, L.m, (r.minX + r.maxX) / 2, L.y, (r.minZ + r.maxZ) / 2)
+        piece.receiveShadow = L.m !== ceil
+        if (L.m === ceil) piece.castShadow = false // lit as before: only the collider is new
       }
     }
     // The hole itself is roughly round: its outline wobbles (`holeEdge`). The square patch round it is a frame with that hole cut out,

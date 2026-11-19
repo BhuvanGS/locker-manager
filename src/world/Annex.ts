@@ -44,6 +44,8 @@ export class Annex {
     // Floor, ceiling and the roof slab seen from outside.
     this.deco(w, 0.02, maxZ - minZ, concreteFloor(0x8f949a), cx, 0.005, (minZ + maxZ) / 2)
     this.deco(w, 0.1, depth, ceilingMat(0xf4f2ee), cx, h + 0.05, cz)
+    // A collider in the ceiling, so you cannot jump through it onto the roof.
+    this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(cx, h + 0.05, cz), new THREE.Vector3(w / 2, 0.05, depth / 2)))
     this.deco(w + 0.6, 0.18, depth + 0.5, mat(0x59544e, 0.9), cx, h + 0.19, cz)
     this.root.add(flatRoof(a.minX - 0.3, a.maxX + 0.3, ANNEX_ZONE.minZ - 0.25, ANNEX_ZONE.maxZ + 0.05, h + 0.28, outer, roofGravel(0x9a9a95), side === 'east' ? 'w' : 'e'))
     this.root.add(rooftopUnit(cx + (side === 'east' ? 1.5 : -1.5), h + 0.34, cz, 0.3))

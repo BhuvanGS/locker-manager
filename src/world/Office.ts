@@ -41,6 +41,8 @@ export class Office {
     // Floor (carpet), ceiling and roof.
     this.deco(w, 0.03, d, carpetFloor(0x3b4a5c), cx, 0.016, cz)
     this.deco(w + 0.4, 0.1, d + 0.4, ceilingMat(0xf4f2ee), cx, h + 0.05, cz)
+    // A collider in the ceiling, so you cannot jump through it onto the roof.
+    this.bodies.push(this.physics.addStaticBox(new THREE.Vector3(cx, h + 0.05, cz), new THREE.Vector3((w + 0.4) / 2, 0.05, (d + 0.4) / 2)))
     this.deco(w + 0.6, 0.18, d + 0.6, mat(0x59544e, 0.9), cx, h + 0.19, cz)
     this.root.add(flatRoof(minX - 0.3, maxX + 0.3, minZ - 0.3, maxZ + 0.3, h + 0.28, outside, roofGravel(0x9a9a95), 'w'))
     this.root.add(rooftopUnit(cx + 1, h + 0.34, cz - 1, -0.4))
