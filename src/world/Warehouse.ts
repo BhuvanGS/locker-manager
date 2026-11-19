@@ -709,12 +709,11 @@ export class Warehouse {
     const asphalt = roadAsphalt(0x3a3d43)
     const lineYellow = mat(0xf2d16b, 0.6)
     const paint = mat(0xf8fafc, 0.6)
-    // The service road, and the main street carried on east to meet it.
-    this.decoYard(road.maxX - road.minX, 0.03, road.maxZ - road.minZ, asphalt, (road.minX + road.maxX) / 2, 0.005, (road.minZ + road.maxZ) / 2)
-    for (let z = road.maxZ - 1; z > road.minZ; z -= 3.6) this.decoYard(0.15, 0.012, 1.6, lineYellow, (road.minX + road.maxX) / 2, 0.025, z)
-    this.decoYard(36, 0.03, 8, asphalt, 48, -0.005, 14.2)
-    for (let x = 31; x < 66; x += 4) this.decoYard(2, 0.01, 0.15, lineYellow, x, 0.012, 14.2)
-    this.decoYard(36, 0.04, 4, mat(0xbdb8b0, 0.95), 48, 0, 8.2)
+    // The service road, up to the main street's pavement (the Town draws the junction itself).
+    const top = 6.2
+    this.decoYard(road.maxX - road.minX, 0.03, top - road.minZ, asphalt, (road.minX + road.maxX) / 2, 0.005, (top + road.minZ) / 2)
+    for (let z = top - 1; z > road.minZ; z -= 3.6) this.decoYard(0.15, 0.012, 1.6, lineYellow, (road.minX + road.maxX) / 2, 0.025, z)
+    // (The main street and its pavements here are the Town's, with the junction: none of them doubled up.)
     // The truck yard: concrete from the docks to the road, with bay lines, dock bumpers and the drive lane.
     // The truck yard (the parking lot for the docks) is asphalt, a shade lighter than the road.
     const concrete = yardAsphalt(0x6e7177)

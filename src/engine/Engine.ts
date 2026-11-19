@@ -252,6 +252,7 @@ export class Engine {
     if (animate) warehouse.appear()
     this.warehouse = warehouse
     this.scene.add(warehouse.root, warehouse.yard)
+    this.town?.setJunctionOpen(true)
     this.interactionTargets.push(warehouse.root, warehouse.yard)
     this.addConsole('warehouse', CONSOLES.warehouse.x, 0, CONSOLES.warehouse.z, CONSOLES.warehouse.rotY, 'warehouse')
   }
@@ -478,6 +479,7 @@ export class Engine {
       this.discard(this.warehouse.yard)
       this.warehouse.dispose()
       this.warehouse = null
+      this.town?.setJunctionOpen(false)
     }
     if (this.vipCar) {
       this.vipCar.dispose()

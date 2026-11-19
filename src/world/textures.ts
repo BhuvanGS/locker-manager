@@ -377,3 +377,82 @@ export function withImage(name: string, draw: (img: HTMLImageElement) => void): 
   if (entry.img.complete && entry.img.naturalWidth > 0) draw(entry.img)
   else entry.waiting.push(draw)
 }
+
+/**
+ * Paving slabs for the footpaths, drawn here: square slabs (`slab` m) with dark joints, a slightly different shade per slab and fine
+ * speckle, on boxes with `metreUVs`. `style: 'brick'` lays small herringbone-ish block pavers instead (the seafront plaza). Its own
+ * material per colour and style (never `mat()`'s shared cache).
+ */
+const pavings = new Map<string, THREE.MeshStandardMaterial>()
+export function pavingMat(color: number, style: 'slab' | 'brick' = 'slab'): THREE.MeshStandardMaterial {
+  const key = `${color}-${style}`
+  let m = pavings.get(key)
+  if (m) return m
+  // One tile of texture covers 2.4 m: 4 × 4 slabs of 0.6 m, or 12 × 24 pavers of 0.2 × 0.1 m.
+  const SPAN = 2.4
+  let map: THREE.CanvasTexture | null = null
+  if (typeof document !== 'undefined') {
+    const S = 512
+    const c = document.createElement('canvas')
+    c.width = c.height = S
+    const g = c.getContext('2d')
+    if (g) {
+      const rand = (k: number) => Math.abs(Math.sin(k * 12.9898 + 4.1) * 43758.5453) % 1
+      g.fillStyle = '#6f6c66'
+      g.fillRect(0, 0, S, S)
+      const shade = (k: number, base: number) => {
+        const v = Math.round(base + (rand(k) - 0.5) * 22)
+        return `rgb(${v + 4},${v + 2},${v - 2})`
+      }
+      if (style === 'slab') {
+        const n = 4
+        const p = S / n
+        for (let i = 0; i < n; i++)
+          for (let j = 0; j < n; j++) {
+            g.fillStyle = shade(i * 7 + j * 13, 196)
+            g.fillRect(i * p + 3, j * p + 3, p - 6, p - 6)
+            // A soft bevel: lighter top-left edge, darker bottom-right.
+            g.fillStyle = 'rgba(255,255,255,0.10)'
+            g.fillRect(i * p + 3, j * p + 3, p - 6, 3)
+            g.fillStyle = 'rgba(0,0,0,0.10)'
+            g.fillRect(i * p + 3, j * p + p - 6, p - 6, 3)
+          }
+      } else {
+        // Stretcher-bond pavers in alternating directions per 0.4 m block (a basket weave): reads as block paving from eye height.
+        const b = S / 6
+        for (let i = 0; i < 6; i++)
+          for (let j = 0; j < 6; j++) {
+            const along = (i + j) % 2 === 0
+            for (let k = 0; k < 2; k++) {
+              g.fillStyle = shade(i * 31 + j * 17 + k * 5, 184)
+              if (along) g.fillRect(i * b + 2, j * b + k * (b / 2) + 2, b - 4, b / 2 - 4)
+              else g.fillRect(i * b + k * (b / 2) + 2, j * b + 2, b / 2 - 4, b - 4)
+            }
+          }
+      }
+      // Speckle and a few stains.
+      for (let k = 0; k < 2600; k++) {
+        const v = rand(k + 99) > 0.5 ? 255 : 0
+        g.fillStyle = `rgba(${v},${v},${v},${0.04 + rand(k + 7) * 0.06})`
+        g.fillRect(rand(k * 3 + 1) * S, rand(k * 5 + 2) * S, 1.5, 1.5)
+      }
+      for (let k = 0; k < 6; k++) {
+        const grad = g.createRadialGradient(rand(k + 300) * S, rand(k + 400) * S, 0, rand(k + 300) * S, rand(k + 400) * S, 30 + rand(k) * 40)
+        grad.addColorStop(0, 'rgba(60,55,50,0.12)')
+        grad.addColorStop(1, 'rgba(60,55,50,0)')
+        g.fillStyle = grad
+        g.fillRect(0, 0, S, S)
+      }
+    }
+    map = new THREE.CanvasTexture(c)
+    map.colorSpace = THREE.SRGBColorSpace
+    map.wrapS = map.wrapT = THREE.RepeatWrapping
+    map.repeat.setScalar(1 / SPAN)
+    map.anisotropy = 8
+  }
+  // The canvas averages about 0.75 of white (sRGB ~190), so lift the tint to keep the surface near `color`.
+  const tint = new THREE.Color(color).multiplyScalar(map ? 1.9 : 1)
+  m = new THREE.MeshStandardMaterial({ color: tint, map, roughness: 0.92 })
+  pavings.set(key, m)
+  return m
+}

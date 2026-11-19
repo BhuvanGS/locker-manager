@@ -422,8 +422,22 @@ export const STREET = {
   lanes: { east: 13.3, west: 16.6 },
   near: { minZ: 6.2, maxZ: 10.2, walkZ: [8.5, 9.3] },
   far: { minZ: 18.2, maxZ: 20.0, walkZ: [18.8, 19.5] },
-  /** Where traffic turns round (just short of the beach) and where it comes from / goes to. */
-  turnX: -50,
+  /** Where traffic turns round (the roundabout's centre, at the beach end) and where it comes from / goes to. */
+  turnX: -48,
+  /**
+   * The seafront at the street's west end: a roundabout (asphalt disc `r`, a planted island `island`, traffic driving round it at
+   * `lane`), a paved plaza from the main street to the beach (`plaza`) with a car park on its south side (`parking`), a low sea wall
+   * along `wallX` with boardwalks down to the sand at `boardwalkZ`, an ice-cream kiosk and beach huts.
+   */
+  roundabout: { x: -48, z: 14.95, r: 6.5, island: 2.6, lane: 4.6 },
+  plaza: { minX: -56, maxX: -41, minZ: -3, maxZ: 25 },
+  parking: { minX: -55, maxX: -45, minZ: -2.6, maxZ: 5.8 },
+  wallX: -56.05,
+  boardwalkZ: [4, 17.5],
+  /** Shops on the lot in front of the warehouse (south of the main street, between the east annex and the service road). */
+  lot: { minX: 17, maxX: 40.6, minZ: -1.6, maxZ: 6.0 },
+  /** The junction with the service road: the pavement's corners are rounded (`cornerR`). */
+  junction: { cornerR: 1.5 },
   eastX: 120,
   service: { minX: 42, maxX: 48 },
   crossingX: -16,

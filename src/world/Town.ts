@@ -8,7 +8,9 @@ import { LAKE, STREET } from './layout'
 import { animatePerson, makePerson, mat, type PersonRig } from './models'
 import { Leg, rounded } from './paths'
 import { prop } from './props'
-import { concreteFloor, roadAsphalt } from './textures'
+import { grassMat, metreUVs, pavingMat, roadAsphalt, woodMat, yardAsphalt } from './textures'
+import { blockBeachHut, blockBench, blockBin, blockCafeTable, blockChair, blockHydrant, blockKiosk, blockPalm, blockPicnicTable, blockStopSign } from './streetFurniture'
+import { blockBush } from './facade'
 
 /**
  * The town round the shop, which lives on its own (no sim state): buildings across the street, street lamps and furniture, traffic
@@ -68,18 +70,17 @@ export class Town {
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
-    this.loop = rounded(
-      [
-        [STREET.eastX, LANE_WEST],
-        [STREET.turnX, LANE_WEST],
-        [STREET.turnX - 1.4, (LANE_WEST + LANE_EAST) / 2],
-        [STREET.turnX, LANE_EAST],
-        [STREET.eastX, LANE_EAST],
-      ],
-      1.5,
-    )
+    // West along the far lane, round the roundabout's island (north side, west, south side), and back east.
+    const R = STREET.roundabout
+    const ring: [number, number][] = []
+    for (let deg = 70; deg <= 290; deg += 20) ring.push([R.x + R.lane * Math.cos((deg * Math.PI) / 180), R.z + R.lane * Math.sin((deg * Math.PI) / 180)])
+    this.loop = rounded([[STREET.eastX, LANE_WEST], [R.x + 6, LANE_WEST], ...ring, [R.x + 6, LANE_EAST], [STREET.eastX, LANE_EAST]], 1.5)
     this.buildStreet()
+    this.buildJunction()
+    for (const x of [STREET.service.minX - STREET.junction.cornerR - 0.6, STREET.service.maxX + STREET.junction.cornerR + 0.6]) this.hydrant(x, STREET.near.maxZ - 0.45)
+    this.buildSeafront()
     this.buildBuildings()
+    this.buildLot()
     this.buildFurniture()
     this.buildBeachLife()
     for (let i = 0; i < WALKERS; i++) this.addWalker(i)
@@ -90,11 +91,53 @@ export class Town {
   // ------------------------------------------------------------------ static
 
   private deco(w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
+    const mesh = new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w, h, d)), m)
     mesh.position.set(x, y, z)
     mesh.receiveShadow = true
     this.root.add(mesh)
     return mesh
+  }
+
+  /** A flat disc lying at height y (texture in metres, so it tiles like the boxes round it). */
+  private disc(r: number, m: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
+    const geo = new THREE.CircleGeometry(r, 72).rotateX(-Math.PI / 2)
+    const pos = geo.getAttribute('position')
+    const uv = geo.getAttribute('uv')
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) + x, -(pos.getZ(i) + z))
+    const mesh = new THREE.Mesh(geo, m)
+    mesh.position.set(x, y, z)
+    mesh.receiveShadow = true
+    this.root.add(mesh)
+    return mesh
+  }
+
+  /**
+   * A slab of pavement (`x0…x1` × `z0…z1`, `h` thick, centred on y = 0) with one corner rounded off (radius `r`): the kerb line
+   * curving round a junction. `corner` names the rounded corner.
+   */
+  private cornerSlab(x0: number, x1: number, z0: number, z1: number, corner: 'maxX-maxZ' | 'minX-maxZ', r: number, h: number, m: THREE.Material): void {
+    const pts: [number, number][] = []
+    const arc = (cx: number, cz: number, a0: number, a1: number) => {
+      for (let k = 0; k <= 10; k++) {
+        const a = a0 + ((a1 - a0) * k) / 10
+        pts.push([cx + r * Math.cos(a), cz + r * Math.sin(a)])
+      }
+    }
+    if (corner === 'maxX-maxZ') {
+      pts.push([x0, z0], [x1, z0])
+      arc(x1 - r, z1 - r, 0, Math.PI / 2)
+      pts.push([x0, z1])
+    } else {
+      pts.push([x0, z0], [x1, z0], [x1, z1])
+      arc(x0 + r, z1 - r, Math.PI / 2, Math.PI)
+    }
+    // Shape space is (x, -z); extruded up by h once turned flat.
+    const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)))
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }).rotateX(-Math.PI / 2)
+    const mesh = new THREE.Mesh(geo, m)
+    mesh.position.y = -h / 2
+    mesh.receiveShadow = true
+    this.root.add(mesh)
   }
 
   private solid(x: number, y: number, z: number, hx: number, hy: number, hz: number): void {
@@ -103,19 +146,20 @@ export class Town {
 
   private buildStreet(): void {
     const asphalt = roadAsphalt(0x3a3d43)
-    const kerb = mat(0xbdb8b0, 0.95)
+    const kerb = pavingMat(0xbdb8b0)
+    const j = STREET.junction.cornerR
     const line = mat(0xf2d16b, 0.6)
     // The road and our pavement carry on east (the shop's part, x −30…30, is the Facility's), with a gap for the service road.
     this.deco(STREET.eastX - 30, 0.03, STREET.road.maxZ - STREET.road.minZ, asphalt, (STREET.eastX + 30) / 2, -0.009, 14.2)
     for (let x = 31; x < STREET.eastX; x += 4) this.deco(2, 0.01, 0.15, line, x, 0.012, 14.2)
     const near = STREET.near
-    for (const [a, b] of [[30, STREET.service.minX], [STREET.service.maxX, STREET.eastX]] as const)
+    for (const [a, b] of [[30, STREET.service.minX - j], [STREET.service.maxX + j, STREET.eastX]] as const)
       this.deco(b - a, 0.04, near.maxZ - near.minZ, kerb, (a + b) / 2, 0.0, (near.minZ + near.maxZ) / 2)
-    this.deco(STREET.service.maxX - STREET.service.minX, 0.03, near.maxZ - near.minZ, asphalt, (STREET.service.minX + STREET.service.maxX) / 2, -0.004, (near.minZ + near.maxZ) / 2)
+
     // The far pavement, with a concrete kerb along the road.
     const far = STREET.far
-    const west = LAKE.coast.grassX
-    this.deco(STREET.eastX - west, 0.08, far.maxZ - far.minZ, concreteFloor(0xc4beb4), (STREET.eastX + west) / 2, 0.02, (far.minZ + far.maxZ) / 2)
+    const west = STREET.plaza.maxX
+    this.deco(STREET.eastX - west, 0.08, far.maxZ - far.minZ, pavingMat(0xc4beb4), (STREET.eastX + west) / 2, 0.02, (far.minZ + far.maxZ) / 2)
     this.deco(STREET.eastX - west, 0.12, 0.2, mat(0x9ca3af, 0.8), (STREET.eastX + west) / 2, 0.04, far.minZ + 0.1)
     // A zebra crossing, and its yellow-topped beacons.
     for (let z = STREET.road.minZ + 0.5; z < STREET.road.maxZ - 0.3; z += 0.9) this.deco(3, 0.012, 0.5, mat(0xf1f5f9, 0.6), STREET.crossingX, 0.014, z)
@@ -129,10 +173,261 @@ export class Town {
     }
   }
 
+  /**
+   * The junction with the warehouse's service road: the pavement curves round both corners, a zebra over the side road's mouth with
+   * beacons, a stop line and a stop sign for traffic coming out, a give-way line going in, a centre line, and hydrants on the corners.
+   */
+  private buildJunction(): void {
+    const first = this.root.children.length
+    this.junctionParts()
+    for (const o of this.root.children.slice(first)) this.junction.add(o)
+    this.junction.visible = false
+    // Until the service road is built, the pavement runs straight across where its mouth will be.
+    const j = STREET.junction.cornerR
+    const n = STREET.near
+    this.junctionClosed = this.deco(STREET.service.maxX - STREET.service.minX + 2 * j, 0.04, n.maxZ - n.minZ, pavingMat(0xbdb8b0), (STREET.service.minX + STREET.service.maxX) / 2, 0, (n.minZ + n.maxZ) / 2)
+    this.root.add(this.junction)
+  }
+
+  private readonly junction = new THREE.Group()
+  private junctionClosed: THREE.Mesh | null = null
+  private junctionSolids: [number, number, number, number, number, number][] = []
+  private junctionBodies: RAPIER.RigidBody[] = []
+
+  /** The junction with the service road appears with the warehouse (`open`), and goes again on a new game. */
+  setJunctionOpen(open: boolean): void {
+    this.junction.visible = open
+    if (this.junctionClosed) this.junctionClosed.visible = !open
+    if (open && this.junctionBodies.length === 0)
+      this.junctionBodies = this.junctionSolids.map(([x, y, z, hx, hy, hz]) => this.physics.addStaticBox(new THREE.Vector3(x, y, z), new THREE.Vector3(hx, hy, hz)))
+    if (!open) {
+      for (const b of this.junctionBodies) this.physics.removeBody(b)
+      this.junctionBodies = []
+    }
+  }
+
+  private junctionParts(): void {
+    const { minX, maxX } = STREET.service
+    const near = STREET.near
+    const j = STREET.junction.cornerR
+    const kerb = pavingMat(0xbdb8b0)
+    // The mouth: asphalt under the pavement's rounded corners.
+    this.deco(maxX - minX + 2 * j, 0.03, near.maxZ - near.minZ, roadAsphalt(0x3a3d43), (minX + maxX) / 2, -0.004, (near.minZ + near.maxZ) / 2)
+    this.cornerSlab(minX - j, minX, near.minZ, near.maxZ, 'maxX-maxZ', j, 0.04, kerb)
+    this.cornerSlab(maxX, maxX + j, near.minZ, near.maxZ, 'minX-maxZ', j, 0.04, kerb)
+    const white = mat(0xf1f5f9, 0.6)
+    for (let x = minX + 0.35; x < maxX - 0.2; x += 0.9) this.deco(0.5, 0.01, 2.2, white, x, 0.016, 8.4)
+    const mid = (minX + maxX) / 2
+    this.deco(maxX - mid - 0.2, 0.01, 0.3, white, (mid + maxX) / 2, 0.016, 6.85)
+    for (let x = minX + 0.2; x < mid - 0.3; x += 0.7) this.deco(0.4, 0.01, 0.2, white, x + 0.2, 0.016, 9.95)
+    for (let z = 6.6; z < 7.2; z += 1.2) this.deco(0.12, 0.01, 0.6, mat(0xf2d16b, 0.6), mid, 0.017, z)
+    for (const x of [minX - 0.45, maxX + 0.45]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), mat(0x111827, 0.5))
+      pole.position.set(x, 1.3, 7.2)
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 1.2 }))
+      globe.position.set(x, 2.7, 7.2)
+      this.root.add(pole, globe)
+      this.junctionSolids.push([x, 1.3, 7.2, 0.08, 1.3, 0.08])
+    }
+    const stop = blockStopSign()
+    stop.position.set(maxX + 0.5, 0, 6.5)
+    stop.rotation.y = Math.PI
+    this.root.add(stop)
+    this.junctionSolids.push([maxX + 0.5, 1.15, 6.5, 0.06, 1.15, 0.06])
+  }
+
+  /**
+   * The seafront where the main street meets the beach: a roundabout with a planted island, a paved plaza from the end of the street
+   * to a low sea wall with a railing, boardwalks onto the sand, a small car park, an ice-cream kiosk with café tables, benches
+   * looking out to sea, beach huts and lamps.
+   */
+  private buildSeafront(): void {
+    const P = STREET.plaza
+    const R = STREET.roundabout
+    const road = STREET.road
+    const brick = pavingMat(0xc9b9a3, 'brick')
+    this.deco(P.maxX - P.minX, 0.04, road.minZ - P.minZ, brick, (P.minX + P.maxX) / 2, 0, (P.minZ + road.minZ) / 2)
+    this.deco(P.maxX - P.minX, 0.04, P.maxZ - road.maxZ, brick, (P.minX + P.maxX) / 2, 0, (road.maxZ + P.maxZ) / 2)
+    this.deco(R.x + 4 - P.minX, 0.04, road.maxZ - road.minZ, brick, (P.minX + R.x + 4) / 2, 0, (road.minZ + road.maxZ) / 2)
+
+    // The roundabout: an asphalt disc a little above the plaza (its own material, nudged forward so it never flickers), a kerb ring
+    // round it (open where the street comes in), and the island.
+    const disc = roadAsphalt(0x3a3d43).clone()
+    disc.polygonOffset = true
+    disc.polygonOffsetFactor = -2
+    disc.polygonOffsetUnits = -2
+    this.disc(R.r, disc, R.x, 0.035, R.z)
+    const lo = Math.asin((road.maxZ - R.z) / R.r)
+    const hi = 2 * Math.PI + Math.asin((road.minZ - R.z) / R.r)
+    const kerbRing = new THREE.Mesh(new THREE.TorusGeometry(R.r, 0.12, 6, 64, hi - lo).rotateX(Math.PI / 2), mat(0xa8a29e, 0.85))
+    kerbRing.scale.y = 0.6
+    kerbRing.position.set(R.x, 0.04, R.z)
+    kerbRing.rotation.y = -lo
+    kerbRing.receiveShadow = true
+    this.root.add(kerbRing)
+    for (let z = R.z + 0.4; z < road.maxZ - 0.3; z += 0.7) this.deco(0.4, 0.01, 0.35, mat(0xf1f5f9, 0.6), R.x + Math.sqrt(R.r * R.r - (z - R.z) ** 2) - 0.6, 0.05, z)
+    for (let k = 0; k < 32; k += 2) {
+      const a = (k / 32) * Math.PI * 2
+      const dash = this.deco(0.9, 0.01, 0.12, mat(0xf1f5f9, 0.6), R.x + (R.island + 0.6) * Math.cos(a), 0.05, R.z + (R.island + 0.6) * Math.sin(a))
+      dash.rotation.y = -a - Math.PI / 2
+    }
+    const island = new THREE.Mesh(new THREE.CylinderGeometry(R.island, R.island + 0.05, 0.2, 48), mat(0xbdb8b0, 0.9))
+    island.position.set(R.x, 0.1, R.z)
+    island.receiveShadow = true
+    this.root.add(island)
+    this.disc(R.island - 0.15, grassMat(0x6f9c4a), R.x, 0.205, R.z)
+    const palm = blockPalm(4.6, 2)
+    palm.position.set(R.x, 0.2, R.z)
+    this.root.add(palm)
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2 + 0.3
+      this.root.add(blockBush(R.x + 1.5 * Math.cos(a), 0.2, R.z + 1.5 * Math.sin(a), 0.75, k + 4))
+    }
+    this.solid(R.x, 0.6, R.z, R.island * 0.72, 0.6, R.island * 0.72)
+
+    // The car park on the south side, with a drive up to the roundabout.
+    const K = STREET.parking
+    const lot = yardAsphalt(0x4b4f56)
+    this.deco(K.maxX - K.minX, 0.03, K.maxZ - K.minZ, lot, (K.minX + K.maxX) / 2, 0.02, (K.minZ + K.maxZ) / 2)
+    this.deco(4, 0.03, R.z - R.r + 1.2 - K.maxZ, lot, R.x + 0.5, 0.02, (K.maxZ + R.z - R.r + 1.2) / 2)
+    const paint = mat(0xf1f5f9, 0.6)
+    for (let x = K.minX; x <= K.maxX + 0.01; x += 2.5) this.deco(0.12, 0.01, 4.8, paint, x, 0.04, K.minZ + 2.6)
+    this.deco(K.maxX - K.minX, 0.01, 0.12, paint, (K.minX + K.maxX) / 2, 0.04, K.minZ + 0.2)
+    const parkedColours = [0x2563eb, 0xf2f2f2, 0xd9480f]
+    ;[0, 1, 3].forEach((bay, i) => {
+      const car = makeCar(parkedColours[i]!, { plate: plateFor(40 + i) })
+      const x = K.minX + 1.25 + bay * 2.5
+      car.group.position.set(x, 0.03, K.minZ + 2.5)
+      this.root.add(car.group)
+      this.solid(x, 0.8, K.minZ + 2.5, car.width / 2, 0.8, car.length / 2)
+    })
+    const pSign = new THREE.Group()
+    const pPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8), mat(0x9ca3af, 0.5))
+    pPost.position.y = 1.2
+    const pFace = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.04), new THREE.MeshStandardMaterial({ map: letterTexture('P', '#1d4ed8'), roughness: 0.6 }))
+    pFace.position.set(0, 2.2, 0.03)
+    pSign.add(pPost, pFace)
+    pSign.position.set(R.x + 3, 0, K.maxZ + 0.2)
+    this.root.add(pSign)
+    this.solid(R.x + 3, 1.2, K.maxZ + 0.2, 0.06, 1.2, 0.06)
+
+    // The sea wall with a railing, and openings onto boardwalks over the sand.
+    const stone = mat(0xd6cbb6, 0.9)
+    const steel = mat(0xcbd5e1, 0.4)
+    const gaps = STREET.boardwalkZ.map((z) => [z - 1.3, z + 1.3] as const)
+    let z0: number = P.minZ
+    for (const [g0, g1] of [...gaps, [P.maxZ, P.maxZ] as const]) {
+      if (g0 > z0) {
+        const len = g0 - z0
+        const mid = (z0 + g0) / 2
+        this.deco(0.34, 0.45, len, stone, STREET.wallX, 0.225, mid).castShadow = true
+        this.deco(0.42, 0.06, len, mat(0xe7dfcf, 0.85), STREET.wallX, 0.48, mid)
+        for (let z = z0 + 0.2; z <= g0 - 0.15; z += 1.6) this.deco(0.05, 0.55, 0.05, steel, STREET.wallX, 0.78, z)
+        this.deco(0.06, 0.06, len, steel, STREET.wallX, 1.06, mid)
+        this.deco(0.04, 0.04, len, steel, STREET.wallX, 0.8, mid)
+        this.solid(STREET.wallX, 0.55, mid, 0.17, 0.55, len / 2)
+      }
+      z0 = g1
+    }
+    const deck = woodMat(0xb08b5e)
+    const rope = mat(0xe8d8b0, 0.9)
+    for (const bz of STREET.boardwalkZ) {
+      const x0 = STREET.wallX - 0.2
+      const x1 = LAKE.coast.shoreX + 1
+      this.deco(x0 - x1, 0.1, 2.4, deck, (x0 + x1) / 2, 0.04, bz).castShadow = true
+      for (let x = x0 - 0.3; x > x1; x -= 1.6)
+        for (const s of [-1, 1]) this.deco(0.1, 0.8, 0.1, mat(0x8a6a48, 0.9), x, 0.4, bz + s * 1.15)
+      for (const s of [-1, 1]) this.deco(x0 - x1, 0.04, 0.04, rope, (x0 + x1) / 2, 0.72, bz + s * 1.15)
+    }
+
+    // Beach huts on the sand between the boardwalks, facing the land.
+    const hutColours = [0x38bdf8, 0xfacc15, 0xf472b6, 0x4ade80]
+    hutColours.forEach((c, i) => {
+      const hz = 6.6 + i * 2.4
+      const hut = blockBeachHut(c)
+      hut.position.set(-59.3, -0.02, hz)
+      hut.rotation.y = Math.PI / 2
+      this.root.add(hut)
+      this.solid(-59.3, 1.3, hz, 1.1, 1.3, 1.0)
+    })
+
+    // The ice-cream kiosk, its café tables, and benches along the wall looking out to sea.
+    const kiosk = blockKiosk()
+    kiosk.position.set(-54.1, 0.02, 22.2)
+    kiosk.rotation.y = Math.PI / 2
+    this.root.add(kiosk)
+    this.solid(-54.1, 1.3, 22.2, 1.1, 1.3, 1.3)
+    const canopies = [0xf5c542, 0x38bdf8, 0xf472b6]
+    ;[-50.6, -47.6, -44.6].forEach((tx, i) => {
+      const tz = 23.4
+      const table = blockCafeTable(canopies[i]!)
+      table.position.set(tx, 0.02, tz)
+      this.root.add(table)
+      this.solid(tx, 0.4, tz, 0.4, 0.4, 0.4)
+      for (const s of [-1, 1]) {
+        const chair = blockChair(i % 2 ? 0x3aa6b9 : 0xe85d3f)
+        chair.position.set(tx + s * 0.7, 0.02, tz)
+        chair.rotation.y = -s * (Math.PI / 2)
+        this.root.add(chair)
+        if ((i + s + 3) % 2 === 0) this.sitter(tx + s * 0.58, tz, chair.rotation.y, 10 + i * 2 + s)
+      }
+    })
+    for (const bz of [8.0, 12.3]) {
+      const bench = blockBench()
+      bench.position.set(-55.25, 0.02, bz)
+      bench.rotation.y = -Math.PI / 2
+      this.root.add(bench)
+      this.solid(-55.25, 0.42, bz, 0.3, 0.42, 0.85)
+      this.bin(-55.3, bz + 1.35)
+    }
+    this.sitter(-55.37, 8.0, -Math.PI / 2, 21)
+    for (const lz of [P.minZ + 1.5, 10.6, 20.0]) this.lamp(-55.5, lz, -Math.PI / 2)
+    this.lamp(R.x + 3, P.maxZ - 0.6, 0)
+  }
+
+  /** Shops on the lot in front of the warehouse, facing the street (the same city blocks as across the road). */
+  private buildLot(): void {
+    const L = STREET.lot
+    const plan: [string, number][] = [['building-c', 7.2], ['building-h', 7.8], ['building-k', 6.4]]
+    const depth = L.maxZ - L.minZ
+    let x = L.minX
+    for (const [name, w] of plan) {
+      this.root.add(kenney('city', name, { x: x + w / 2, z: L.maxZ - depth / 2, length: w }))
+      this.solid(x + w / 2, 4, L.maxZ - depth / 2, w / 2 - 0.2, 4, depth / 2 - 0.2)
+      x += w + 0.4
+    }
+    // Paving in front of them, out to the street's pavement.
+    this.deco(L.maxX - L.minX, 0.04, STREET.near.minZ - L.maxZ + 0.05, pavingMat(0xbdb8b0), (L.minX + L.maxX) / 2, 0, (L.maxZ + STREET.near.minZ) / 2)
+  }
+
+  private hydrant(x: number, z: number): void {
+    const h = blockHydrant()
+    h.position.set(x, 0.02, z)
+    this.root.add(h)
+    this.solid(x, 0.37, z, 0.18, 0.37, 0.18)
+  }
+
+  private bin(x: number, z: number): void {
+    const b = blockBin()
+    b.position.set(x, 0.02, z)
+    this.root.add(b)
+    this.solid(x, 0.45, z, 0.28, 0.45, 0.28)
+  }
+
+  /** Someone sitting still on a seat at (x, z), facing `yaw`. */
+  private sitter(x: number, z: number, yaw: number, seed: number): void {
+    const rig = makePerson(randomLook(seed), { female: seed % 2 === 0 })
+    rig.root.position.set(x, 0.02, z)
+    rig.root.rotation.y = yaw
+    rig.root.userData.pose = 'sit'
+    this.root.add(rig.root)
+    this.loungers.push(rig)
+  }
+
   private buildBuildings(): void {
     // Shops and offices across the street (fronts on `buildingZ`, facing the road), then taller blocks behind them.
     const names = 'abcdefghijklmn'.split('').map((c) => `building-${c}`)
-    let x = LAKE.coast.grassX + 6
+    let x = STREET.plaza.maxX + 1
     let i = 0
     while (x < STREET.eastX - 4) {
       const name = names[(i * 5 + 3) % names.length]!
@@ -157,25 +452,27 @@ export class Town {
       if (Math.abs(nx) > 2.5 && (nx < STREET.service.minX - 1 || nx > STREET.service.maxX + 1)) lampAt.push([nx, STREET.near.maxZ - 0.3, Math.PI])
       lampAt.push([x + 9.5, STREET.far.minZ + 0.35, 0])
     }
-    for (const [lx, lz, yaw] of lampAt) this.lamp(lx, lz, yaw)
+    for (const [lx, lz, yaw] of lampAt) if (lx > STREET.plaza.maxX + 1) this.lamp(lx, lz, yaw)
 
     // Benches facing the road, bins beside them, and hydrants at the kerb.
     for (const [bx, side] of [[-9, 'near'], [5.5, 'near'], [20, 'near'], [-26, 'near'], [-4, 'far'], [14, 'far'], [32, 'far'], [-30, 'far']] as const) {
       const z = side === 'near' ? STREET.near.minZ + 1.0 : STREET.far.maxZ - 0.45
       const yaw = side === 'near' ? 0 : Math.PI
-      this.root.add(prop('painted_wooden_bench', { x: bx, z, rotY: yaw, height: 0.85 }))
+      const bench = blockBench()
+      bench.position.set(bx, side === 'near' ? 0.02 : 0.06, z)
+      bench.rotation.y = yaw
+      this.root.add(bench)
       this.solid(bx, 0.42, z, 0.85, 0.42, 0.3)
       this.benches.push({ x: bx, z: z + (side === 'near' ? 0.12 : -0.12), yaw, taken: false })
-      this.root.add(prop('metal_trash_can', { x: bx + 1.35, z, height: 0.95 }))
-      this.solid(bx + 1.35, 0.47, z, 0.28, 0.47, 0.28)
+      this.bin(bx + 1.35, z)
     }
-    for (const [hx, hz] of [[-12.5, STREET.near.maxZ - 0.45], [26, STREET.near.maxZ - 0.45], [8, STREET.far.minZ + 0.5], [-34, STREET.far.minZ + 0.5]] as const) {
-      this.root.add(prop('fire_hydrant', { x: hx, z: hz, height: 0.75 }))
-      this.solid(hx, 0.37, hz, 0.18, 0.37, 0.18)
-    }
-    // Picnic tables on the grass by the beach.
-    for (const [px, pz] of [[LAKE.coast.grassX + 4, 2], [LAKE.coast.grassX + 4, 27], [LAKE.coast.grassX + 5, 34]] as const) {
-      this.root.add(prop('wooden_picnic_table', { x: px, z: pz, rotY: Math.PI / 2, height: 0.8 }))
+    for (const [hx, hz] of [[-12.5, STREET.near.maxZ - 0.45], [26, STREET.near.maxZ - 0.45], [8, STREET.far.minZ + 0.5], [-34, STREET.far.minZ + 0.5]] as const) this.hydrant(hx, hz)
+    // Picnic tables on the grass by the beach, north of the plaza.
+    for (const [px, pz] of [[LAKE.coast.grassX + 4, 28], [LAKE.coast.grassX + 5, 34]] as const) {
+      const t = blockPicnicTable()
+      t.position.set(px, 0, pz)
+      t.rotation.y = Math.PI / 2
+      this.root.add(t)
       this.solid(px, 0.4, pz, 0.85, 0.4, 1.0)
     }
     // Buoys offshore.
@@ -330,7 +627,7 @@ export class Town {
     const look = randomLook(i)
     if (Math.random() < 0.05) look.special = SPECIALS[Math.floor(Math.random() * SPECIALS.length)]
     const rig = makePerson(look, { female: !look.special && i % 2 === 1 })
-    const x = -45 + ((i * 37) % 80)
+    const x = -38 + ((i * 37) % 76)
     rig.root.position.set(x, 0, this.laneZ(side, i))
     this.root.add(rig.root)
     const w: Walker = {
@@ -355,7 +652,7 @@ export class Town {
   private plan(w: Walker): void {
     const p = w.rig.root.position
     const roll = Math.random()
-    const minX = w.side === 'near' ? -52 : LAKE.coast.grassX + 2
+    const minX = STREET.plaza.maxX + 1
     const maxX = w.side === 'near' ? STREET.service.minX - 2 : 70
     if (roll < 0.18) {
       // Cross: to the zebra on this side, over the road, then on along the other pavement.
@@ -521,4 +818,27 @@ function plateFor(k: number): string {
 function sandHeight(x: number): number {
   const { shoreX } = LAKE.coast
   return x >= shoreX ? -0.02 : Math.max(-4, -0.02 - (shoreX - x) * 0.12)
+}
+
+/** A square road sign with one big white letter. */
+function letterTexture(letter: string, bg: string): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  if (g) {
+    g.fillStyle = bg
+    g.fillRect(0, 0, 128, 128)
+    g.strokeStyle = '#ffffff'
+    g.lineWidth = 6
+    g.strokeRect(8, 8, 112, 112)
+    g.fillStyle = '#ffffff'
+    g.font = 'bold 84px sans-serif'
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.fillText(letter, 64, 70)
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }

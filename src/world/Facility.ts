@@ -4,11 +4,11 @@ import { conduit } from './cables'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import { markBlocker, tag } from './interactables'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, HARBOUR } from './layout'
+import { ANNEX_DOOR, CATALOGUE_DESK, CONVEYOR, COUNTER, ENTRANCE, FLOOR_Y, KEY_BOARD, OFFICE_DOOR, PARTITION, ROOM, SOUTH, UNDERGROUND, LAKE, HARBOUR, STREET } from './layout'
 import { mat } from './models'
 import { prop } from './props'
 import { blockBush, bollard, downlight, hazardStripes, shopSign, wallPanelDark } from './facade'
-import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
+import { carpetFloor, ceilingMat, concreteFloor, glassMat, grassMat, lightPanel, metreUVs, pavingMat, roadAsphalt, roofGravel, textured, tileFloor, wallMat, woodMat } from './textures'
 
 /**
  * The static building: street outside, shop front, lobby, counter, staff area, partition and storage
@@ -33,7 +33,7 @@ export class Facility {
   setDaylight(d: { lightDir: THREE.Vector3; lightIntensity: number; lightColour: THREE.Color; hemiSky: THREE.Color; hemiGround: THREE.Color; hemiIntensity: number }): void {
     // Keep it a little above the horizon so shadows never stretch for ever.
     const dir = d.lightDir.clone()
-    dir.y = Math.max(dir.y, 0.18)
+    dir.y = Math.max(dir.y, 0.34)
     this.sunOffset.copy(dir.normalize().multiplyScalar(SUN_OFFSET.length()))
     this.sun.intensity = d.lightIntensity
     this.sun.color.copy(d.lightColour)
@@ -377,13 +377,14 @@ export class Facility {
     const foundation = concreteFloor(0x9a9ea3)
     for (const r of aroundHole(-6.3, 24.3, -31.5, 6.25, hole)) this.deco(r.maxX - r.minX, 0.01, r.maxZ - r.minZ, foundation, (r.minX + r.maxX) / 2, -0.006, (r.minZ + r.maxZ) / 2)
     this.vaultCap = this.deco(hole.maxX - hole.minX, 0.01, hole.maxZ - hole.minZ, foundation, (hole.minX + hole.maxX) / 2, -0.006, (hole.minZ + hole.maxZ) / 2)
-    this.deco(60, 0.04, 4, mat(0xbdb8b0, 0.95), 0, 0.0, 8.2)
+    this.deco(60, 0.04, 4, pavingMat(0xbdb8b0), 0, 0.0, 8.2)
     this.deco(60, 0.03, 8, roadAsphalt(0x3a3d43), 0, -0.005, 14.2)
     // The main street carries on west to the beach, where it ends.
-    const extX = (LAKE.coast.grassX - 30) / 2 // the middle of x -30…grassX
-    this.deco(-30 - LAKE.coast.grassX, 0.03, 8, roadAsphalt(0x3a3d43), extX, -0.005, 14.2)
-    this.deco(-30 - LAKE.coast.grassX, 0.04, 4, mat(0xbdb8b0, 0.95), extX, 0.0, 8.2)
-    for (let x = -32; x > LAKE.coast.grassX + 2; x -= 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
+    // (to the roundabout, under its disc; the pavement stops at the seafront plaza, both the Town's).
+    const roadEnd = STREET.roundabout.x + 4
+    this.deco(-30 - roadEnd, 0.03, 8, roadAsphalt(0x3a3d43), (roadEnd - 30) / 2, -0.005, 14.2)
+    this.deco(-30 - STREET.plaza.maxX, 0.04, 4, pavingMat(0xbdb8b0), (STREET.plaza.maxX - 30) / 2, 0.0, 8.2)
+    for (let x = -32; x > STREET.plaza.maxX; x -= 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
     for (let x = -28; x < 30; x += 4) this.deco(2, 0.01, 0.15, mat(0xf2d16b, 0.6), x, 0.012, 14.2)
 
     // The buildings across the street, the lamps, benches, traffic and passers-by are the Town's (world/Town.ts).
@@ -670,8 +671,8 @@ export class Facility {
     sun.shadow.camera.bottom = -SHADOW_HALF
     sun.shadow.camera.near = 1
     sun.shadow.camera.far = 60
-    sun.shadow.bias = -0.0004
-    sun.shadow.normalBias = 0.03
+    sun.shadow.bias = -0.0006
+    sun.shadow.normalBias = 0.06
     this.root.add(sun, sun.target)
 
     const panel = lightPanel(0xfff8e7, 1.2)
