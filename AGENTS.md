@@ -234,7 +234,7 @@ Rules:
   jetty's north side (`jettyBerths`, `marinaBerths`) and come in along `boatLane`, south of the ship. `grantUpgrade('lake-…')` grants the whole chain,
   the contract included.
 - **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is the game's own blocky figure: soft-edged boxes
-  (`RoundedBoxGeometry`), a big square head with a drawn face on a canvas texture (heavy-lidded eyes, thick brows; five expressions,
+  (`RoundedBoxGeometry`), a big square head with a drawn face on a canvas texture (one shared warm skin tone, heavy-lidded eyes, thick brows; five expressions,
   `setPersonExpression`, plus blinking), messy block hair, and an outfit by archetype from a hash of the `Appearance` (student hoodie +
   backpack, office shirt + tie + lanyard, traveller/tourist print + sun hat + shades + camera, local tank top + chain, business suit, casual
   open jacket; cargo or wide pants, sneakers, caps, beanies, headphones, glasses, earrings). `CustomerAgents.updateMood` sets the face:

@@ -614,7 +614,7 @@ export class Engine {
       this.physics.step(dt)
       player.syncFromPhysics()
     }
-    this.cameraRig.update(player.getEyePosition())
+    this.cameraRig.update(player.getEyePosition(), playing ? dt : 0, player.isGrounded(), playing && !talking && input.sprint)
     const camera = this.cameraRig.camera
     const playerPos = player.getPosition()
 
@@ -893,7 +893,7 @@ export class Engine {
     useGameStore.getState().pushToast(result.message, result.ok ? 'info' : 'bad')
   }
 
-  private syncHud(dt: number, aim: { action: string | null; hint: string | null } | null = null): void {
+  private syncHud(dt: number, aim: { action: string | null; hint: string | null; target?: { kind: string } } | null = null): void {
     const game = this.game
     const level = game.economy.level
     const hands = game.hands
@@ -1034,6 +1034,7 @@ export class Engine {
       activeDeposits: game.activeDeposits(),
       queue: game.queue().length,
       objective: game.objective(),
+      aimPerson: aim?.target?.kind === 'customer' || aim?.target?.kind === 'contact',
       reminders: game.reminders().join('\n'),
       stageLabel: `${game.facilityLabel()} · ${game.scheduler.stage.title}`,
       bigEvent: game.meteorStatus(),

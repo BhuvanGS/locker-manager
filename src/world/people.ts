@@ -472,6 +472,8 @@ function specialOutfit(o: Outfit, s: Special): void {
 // ------------------------------------------------------------------ the figure
 
 const HEAD = { w: 0.46, h: 0.44, d: 0.42 }
+/** Everyone has the same warm skin tone (the house style); people differ by face, hair and clothes. */
+const SKIN = 0xe3a872
 
 export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
   const h = hashOf(a)
@@ -481,7 +483,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
   const o = outfitFor(a, opts, female, h)
   if (special) specialOutfit(o, special)
 
-  const skinM = m(a.skin, 0.7)
+  const skinM = m(SKIN, 0.7)
   const topM = o.top === 'print' ? printMat(o.topColor) : m(o.topColor, 0.85)
   const innerM = m(o.inner, 0.85)
   const pantsM = m(o.pantsColor, 0.88)
@@ -580,7 +582,7 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
   part(head, 0.14, 0.08, 0.14, skinM, 0, 0.02, 0, 0.03) // neck
   part(head, HEAD.w, HEAD.h, HEAD.d, skinM, 0, 0.06 + HEAD.h / 2, 0, 0.07)
   for (const s of [-1, 1]) part(head, 0.05, 0.1, 0.08, skinM, s * (HEAD.w / 2 + 0.01), 0.06 + HEAD.h * 0.46, -0.01, 0.02)
-  const look: FaceLook = { skin: a.skin, female, goatee: !female && !special && bit(25, 4) === 0, lashes: female, special }
+  const look: FaceLook = { skin: SKIN, female, goatee: !female && !special && bit(25, 4) === 0, lashes: female, special }
   const face = new THREE.Mesh(new THREE.PlaneGeometry(HEAD.w * 0.92, HEAD.h * 0.92), faceMaterial(look, 'neutral', false))
   face.position.set(0, 0.06 + HEAD.h / 2, HEAD.d / 2 + 0.004)
   head.add(face)

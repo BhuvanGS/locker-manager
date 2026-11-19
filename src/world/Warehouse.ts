@@ -11,7 +11,7 @@ import { CONTACT_SPOT, FLOOR_HEIGHT, UNDERGROUND, WAREHOUSE } from './layout'
 import { animatePerson, makePerson, makeSign, mat, type PersonRig } from './models'
 import { prop } from './props'
 import { aroundHole } from './Facility'
-import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, wireMesh, woodMat, yardAsphalt } from './textures'
+import { cardboardMat, carpetFloor, concreteFloor, diamondPlate, lightPanel, metreUVs, paintedSteel, roadAsphalt, shedCladding, shedRoof, textured, wireMesh, woodMat, yardAsphalt } from './textures'
 import { Route, rounded, type Pose } from './paths'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
 
@@ -538,21 +538,43 @@ export class Warehouse {
       group.add(mesh)
       return mesh
     }
-    const glass = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1, metalness: 0.5 })
-    const tyre = mat(0x111827, 0.9)
+    // Textured parts (box faces get UVs in metres so the textures tile instead of stretching).
+    const box = (w: number, h: number, d: number) => metreUVs(new THREE.BoxGeometry(w, h, d))
+    const glass = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.08, metalness: 0.6 })
+    const tyre = textured('belt-rubber', { color: 0x2a2a2e, repeat: 0.6 })
+    const hub = textured('locker-door', { color: 0xc0c7cf, metalness: 0.6, repeat: 0.3 })
+    const head = new THREE.MeshStandardMaterial({ color: 0xfffbe8, emissive: 0xfff3c4, emissiveIntensity: 0.9 })
+    const tail = new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0x7f1d1d, emissiveIntensity: 0.6 })
+    const black = textured('till-plastic', { color: 0x2b2f36, repeat: 0.5 })
     const wheel = (x: number, z: number, r: number) => {
-      const m = add(new THREE.CylinderGeometry(r, r, 0.24, 14), tyre, x, r, z)
-      m.rotation.z = Math.PI / 2
+      const t = add(new THREE.CylinderGeometry(r, r, 0.26, 18), tyre, x, r, z)
+      t.rotation.z = Math.PI / 2
+      const h = add(new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.28, 12), hub, x, r, z)
+      h.rotation.z = Math.PI / 2
+    }
+    // A cab facing −z: painted body, windscreen and side windows, grille, headlights, bumper, mirrors.
+    const cab = (w: number, h: number, d: number, y0: number, z: number, paint: THREE.Material) => {
+      add(box(w, h, d), paint, 0, y0 + h / 2, z)
+      add(box(w * 0.9, h * 0.42, 0.04), glass, 0, y0 + h * 0.72, z - d / 2 - 0.005)
+      for (const sx of [-1, 1]) {
+        add(box(0.04, h * 0.36, d * 0.55), glass, sx * (w / 2 + 0.005), y0 + h * 0.72, z - d * 0.12)
+        add(box(0.06, 0.22, 0.12), black, sx * (w / 2 + 0.12), y0 + h * 0.7, z - d / 2 + 0.1)
+        add(box(0.24, 0.14, 0.03), head, sx * (w / 2 - 0.22), y0 + h * 0.2, z - d / 2 - 0.01)
+      }
+      add(box(w * 0.5, h * 0.22, 0.03), black, 0, y0 + h * 0.22, z - d / 2 - 0.01)
+      add(box(w + 0.06, 0.16, 0.16), black, 0, y0 - 0.02, z - d / 2 - 0.04)
     }
     const crates: THREE.Mesh[] = []
     if (t.kind === 'kei') {
-      const body = mat(0xe5e7eb, 0.5, 0.2)
-      add(new THREE.BoxGeometry(1.4, 0.18, 3.5), mat(0x374151, 0.6), 0, 0.6, 0.35)
-      add(new THREE.BoxGeometry(1.4, 1.15, 1.3), body, 0, 1.25, -1.15)
-      add(new THREE.BoxGeometry(1.3, 0.5, 0.05), glass, 0, 1.5, -1.8)
-      add(new THREE.BoxGeometry(1.42, 0.05, 1.1), mat(0xdc2626, 0.5), 0, 1.5, -1.15)
-      for (const x of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.05, 0.3, 2.1), body, x, 0.8, 0.9)
-      add(new THREE.BoxGeometry(1.4, 0.3, 0.05), body, 0, 0.8, 1.95)
+      const paint = paintedSteel([0xf1f5f9, 0xfacc15, 0x60a5fa][t.id % 3]!)
+      add(box(1.4, 0.18, 3.5), black, 0, 0.6, 0.35)
+      cab(1.4, 1.15, 1.3, 0.68, -1.15, paint)
+      add(box(1.42, 0.05, 1.1), mat(0xdc2626, 0.5), 0, 1.84, -1.15)
+      // The bed: diamond-plate floor, drop sides and tailgate.
+      add(box(1.36, 0.04, 2.15), diamondPlate(0xa8b0ba), 0, 0.71, 0.9)
+      for (const x of [-0.7, 0.7]) add(box(0.05, 0.3, 2.1), paint, x, 0.86, 0.9)
+      add(box(1.4, 0.3, 0.05), paint, 0, 0.86, 1.95)
+      for (const sx of [-1, 1]) add(box(0.16, 0.08, 0.03), tail, sx * 0.55, 0.86, 1.98)
       for (const x of [-0.7, 0.7]) for (const z of [-1.2, 1.3]) wheel(x, z, 0.3)
       const cardboard = cardboardMat(CARGO_COLOUR[t.declared])
       for (const [x, z] of [[-0.33, 0.1], [0.33, 0.1], [-0.33, 0.95], [0.33, 0.95], [-0.33, 1.7], [0.33, 1.7]] as const) {
@@ -561,12 +583,23 @@ export class Warehouse {
         crates.push(crate)
       }
     } else {
-      const navy = mat(0x1e3a8a, 0.5, 0.3)
-      add(new THREE.BoxGeometry(2.0, 0.22, 6.2), mat(0x374151, 0.6), 0, 0.62, 0.5)
-      add(new THREE.BoxGeometry(2.0, 1.5, 1.7), mat(0xf1f5f9, 0.5), 0, 1.45, -2.2)
-      add(new THREE.BoxGeometry(1.9, 0.6, 0.05), glass, 0, 1.75, -3.07)
-      add(new THREE.BoxGeometry(2.2, 2.4, 4.2), navy, 0, 1.95, 1.0)
-      add(new THREE.BoxGeometry(2.22, 0.18, 4.22), mat(0xfbbf24, 0.5, 0.4), 0, 2.2, 1.0)
+      const colours = [0x1e3a8a, 0x7f1d1d, 0x14532d, 0x3f3f46]
+      const c = colours[t.id % colours.length]!
+      add(box(2.0, 0.22, 6.2), black, 0, 0.62, 0.5)
+      cab(2.0, 1.5, 1.7, 0.73, -2.2, paintedSteel(0xf1f5f9))
+      // The cargo box: corrugated steel, a painted band and the firm's name on both sides, rear doors with handles and lights.
+      add(box(2.2, 2.4, 4.2), shedCladding(c), 0, 1.95, 1.0)
+      add(box(2.22, 0.18, 4.22), paintedSteel(0xfbbf24), 0, 2.2, 1.0)
+      for (const sx of [-1, 1]) {
+        const logo = truckLogo(['SWIFT FREIGHT', 'HARBOUR LINES', 'GREEN GROCERS', 'METRO MOVERS'][t.id % 4]!)
+        logo.position.set(sx * 1.115, 1.6, 1.0)
+        logo.rotation.y = sx * Math.PI / 2
+        group.add(logo)
+        add(box(0.03, 2.2, 0.04), black, sx * 0.0 + sx * 0.02, 1.9, 3.11)
+        add(box(0.04, 0.3, 0.04), hub, sx * 0.3, 1.6, 3.13)
+        add(box(0.2, 0.12, 0.03), tail, sx * 0.9, 0.9, 3.12)
+        add(box(0.5, 0.4, 0.03), black, sx * 0.85, 0.5, 2.9)
+      }
       for (const x of [-1.0, 1.0]) for (const z of [-2.3, 0.9, 2.3]) wheel(x, z, 0.4)
     }
     // What you aim at: the whole truck.
@@ -1471,6 +1504,37 @@ const easeIn = (x: number): number => Math.min(1, Math.max(0, x)) ** 2
 const nameTextures = new Map<string, THREE.CanvasTexture>()
 
 /** A label on a dark pill that always faces the camera. */
+const logos = new Map<string, THREE.MeshStandardMaterial>()
+/** A firm's name painted on a truck's cargo box (a canvas decal, facing +z). */
+function truckLogo(text: string): THREE.Mesh {
+  let material = logos.get(text)
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 })
+    if (typeof document !== 'undefined') {
+      const c = document.createElement('canvas')
+      c.width = 512
+      c.height = 128
+      const g = c.getContext('2d')
+      if (g) {
+        g.fillStyle = 'rgba(248,250,252,0.92)'
+        g.beginPath()
+        g.roundRect(6, 14, 500, 100, 22)
+        g.fill()
+        g.fillStyle = '#0f172a'
+        g.font = '800 58px system-ui, sans-serif'
+        g.textAlign = 'center'
+        g.textBaseline = 'middle'
+        g.fillText(text, 256, 66)
+      }
+      const tex = new THREE.CanvasTexture(c)
+      tex.colorSpace = THREE.SRGBColorSpace
+      material.map = tex
+    }
+    logos.set(text, material)
+  }
+  return new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.85), material)
+}
+
 function makeNameSprite(text: string): THREE.Sprite {
   let texture = nameTextures.get(text)
   if (!texture) {

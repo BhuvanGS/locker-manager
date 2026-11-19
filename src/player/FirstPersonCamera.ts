@@ -20,13 +20,58 @@ export class FirstPersonCamera {
     this.pitch = THREE.MathUtils.clamp(this.pitch, this.minPitch, this.maxPitch)
   }
 
-  update(eyePosition: THREE.Vector3): void {
+  /**
+   * Follow the eye, with motion on top: a head bob and sway while you walk (bigger, with a little shake and a wider view while you
+   * sprint), and a dip when you land from a jump or a drop. `eye` itself stays exact (aiming and the debug handle use it).
+   */
+  update(eyePosition: THREE.Vector3, dt = 0, grounded = true, sprint = false): void {
+    const dx = eyePosition.x - this.eye.x
+    const dz = eyePosition.z - this.eye.z
+    const dy = eyePosition.y - this.eye.y
+    const step = Math.hypot(dx, dz)
+    // A teleport or a climb is not walking.
+    const speed = dt > 0 && step < 1 ? step / dt : 0
+    if (dt > 0) {
+      const target = grounded ? Math.min(1, speed / 3.4) : 0
+      this.moving += (target - this.moving) * Math.min(1, dt * 8)
+      this.bobPhase += dt * (speed > 0.2 && grounded ? 2.2 + speed * 1.55 : 0)
+      // Landing: falling fast and now on the ground → a quick dip that springs back.
+      if (grounded && !this.wasGrounded && this.fall < -2.5) this.dipVel -= Math.min(2.2, -this.fall * 0.22)
+      this.fall = dt > 0 ? dy / dt : 0
+      this.wasGrounded = grounded
+      this.dipVel += (-this.dip * 90 - this.dipVel * 14) * dt
+      this.dip += this.dipVel * dt
+      const sprinting = sprint && speed > 4
+      this.sprint += ((sprinting ? 1 : 0) - this.sprint) * Math.min(1, dt * 5)
+      const fov = 65 + this.sprint * 6
+      if (Math.abs(this.camera.fov - fov) > 0.01) {
+        this.camera.fov = fov
+        this.camera.updateProjectionMatrix()
+      }
+    }
     this.eye.copy(eyePosition)
-    this.camera.position.copy(this.eye)
+    const amp = this.moving * (0.035 + this.sprint * 0.03)
+    const bobY = Math.abs(Math.sin(this.bobPhase)) * amp * 1.4 - amp * 0.7
+    const sway = Math.sin(this.bobPhase) * amp * 0.6
+    const t = performance.now() / 1000
+    const shake = this.sprint * this.moving * 0.004
+    this.camera.position.set(
+      this.eye.x + Math.cos(this.yaw) * sway + Math.sin(t * 37) * shake,
+      this.eye.y + bobY + this.dip + Math.sin(t * 41 + 1) * shake,
+      this.eye.z - Math.sin(this.yaw) * sway,
+    )
     this.camera.rotation.y = this.yaw
-    this.camera.rotation.x = this.pitch
-    this.camera.rotation.z = 0
+    this.camera.rotation.x = this.pitch + this.dip * 0.25
+    this.camera.rotation.z = Math.sin(this.bobPhase) * this.moving * (0.006 + this.sprint * 0.008)
   }
+
+  private moving = 0
+  private bobPhase = 0
+  private sprint = 0
+  private dip = 0
+  private dipVel = 0
+  private fall = 0
+  private wasGrounded = true
 
   /** Face the point (x, z) from (fromX, fromZ). The camera looks down its local −z axis. */
   lookToward(x: number, z: number, fromX = 0, fromZ = 0): void {

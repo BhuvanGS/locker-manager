@@ -76,6 +76,8 @@ export type GameStoreState = {
   /** The late-game event in words (the meteor countdown, the filling lake), or null. */
   bigEvent: string | null
   objective: string
+  /** Looking at a person: the aiming dot hides so it does not sit on their neck. */
+  aimPerson: boolean
   /** Reminders under the objective, one per line ('' for none): a primitive, so the HUD only redraws when one changes. */
   reminders: string
   /** Big announcement (e.g. a new traffic stage); the HUD hides it after a few seconds. */
@@ -155,6 +157,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   stageLabel: 'Basic facility · Opening day',
   bigEvent: null,
   objective: '',
+  aimPerson: false,
   reminders: '',
   banner: null,
   prompt: null,

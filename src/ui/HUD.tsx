@@ -29,6 +29,7 @@ export function HUD() {
       stageLabel: st.stageLabel,
       bigEvent: st.bigEvent,
       objective: st.objective,
+      aimPerson: st.aimPerson,
       reminders: st.reminders,
       prompt: st.prompt,
       promptHint: st.promptHint,
@@ -78,7 +79,7 @@ export function HUD() {
         )}
       </div>
 
-      <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />
+      {!s.aimPerson && <div className={`crosshair${s.prompt ? ' active' : ''}`} aria-hidden="true" />}
 
       {(s.prompt || s.promptHint) && !s.dialogue && !s.catalogue && !s.terminal && !s.console && !s.deal && !s.receiving && (
         <div className={`prompt${s.prompt ? '' : ' hint'}`}>

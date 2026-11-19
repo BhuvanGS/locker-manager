@@ -120,6 +120,11 @@ export class PlayerController {
     return this.crouching
   }
 
+  /** On the ground (not jumping or falling). */
+  isGrounded(): boolean {
+    return this.grounded
+  }
+
   getEyePosition(target = new THREE.Vector3()): THREE.Vector3 {
     const drop = this.crouching ? CROUCH_EYE_DROP : 0
     return target.set(
