@@ -520,9 +520,10 @@ export class Town {
     }
     for (const [hx, hz] of [[-12.5, STREET.near.maxZ - 0.45], [26, STREET.near.maxZ - 0.45], [8, STREET.far.minZ + 0.5], [-34, STREET.far.minZ + 0.5]] as const) this.hydrant(hx, hz)
     // Picnic tables on the grass by the beach, north of the plaza.
-    // A block on the corner where the back street meets the plaza.
-    this.root.add(kenney('city', 'building-j', { x: -47.6, z: 30.6, rotY: Math.PI, length: 8 }))
-    this.solid(-47.6, 4, 30.6, 3.8, 4, 3.3)
+    // A block across the back street's west end, so it cannot be walked into from the plaza (a wall fills the sliver beside it).
+    this.root.add(kenney('city', 'building-j', { x: -44.2, z: 30.6, rotY: Math.PI, length: 8 }))
+    this.solid(-44.2, 4, 30.6, 3.8, 4, 3.3)
+    this.gapFill(-40.15, 30.6, 0.7, 6.6)
     for (const [px, pz] of [[LAKE.coast.grassX + 4, 39], [LAKE.coast.grassX + 9, 41]] as const) {
       const t = blockPicnicTable()
       t.position.set(px, 0, pz)

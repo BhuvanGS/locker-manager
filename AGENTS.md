@@ -288,7 +288,7 @@ Rules:
   `PARK.borderX` and towers behind, which close the world off to the east from the street down to the warehouse district.
 - **Football pitch, back streets, bounds**: an empty fenced pitch (`PARK.pitch`, `Park.buildPitch`) south of the park, its gate on the park's
   south path. The blocks along the main street have walls in the gaps between them (`Town.gapFill`) so there are no alleys, and a paved back
-  street runs behind the row across the road (and a lane behind the shops east of the junction). `world/Bounds.ts` closes the world cheaply:
+  street runs behind the row across the road, closed off at the plaza end by a block (and a lane behind the shops east of the junction). `world/Bounds.ts` closes the world cheaply:
   rocky headlands at both ends of the beach, hills behind the town and past the port, and invisible walls (`BOUNDS`) round the playable area.
   The port road's tunnel mouth sits on the south wall.
 - **Vehicles** (`world/vehicles.ts`): the game's own kei truck, delivery truck and hatchback, built to the blueprint sheets (soft-edged
