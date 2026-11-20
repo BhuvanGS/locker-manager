@@ -287,8 +287,15 @@ export const WAREHOUSE = {
     [21.4, -36.2],
     [22.9, -36.2],
   ] as [number, number][],
+  /** Where the automated forklifts park: a short spur off the north end of the dock lane, by the receiving desk. */
+  forkliftHomes: [
+    [21.0, -10.25],
+    [22.0, -10.25],
+  ] as [number, number][],
   /** The receiving desk, by the docks. */
   desk: { x: 19.8, z: -11.4 },
+  /** The quality assurance station (`wh-qa`): a panel on the north wall above a sampling bench. */
+  qa: { x: 15.6, z: -9.4 },
 }
 
 /**
@@ -338,7 +345,8 @@ export const LAKE = {
     shoreX: -69,
     wadeX: -73.5,
     seaY: -0.3,
-    channel: { z: -24, halfWidth: 5 },
+    // 18 m wide: room for the biggest ship (9.6 m beam) with metres to spare either side, and the boats beside it.
+    channel: { z: -24, halfWidth: 9 },
     /** Beach parasols (x, z): each has a deck chair beside it (x + 1.2, facing the sea) and a towel. */
     parasols: [[-63.6, 22], [-63.2, 28.5], [-63.8, 35], [-63.4, 42], [-63.5, -42], [-63.2, -49], [-63.7, -56], [-64.2, 0.5]] as [number, number][],
     /** Low dunes with beach grass along the top of the beach (between `grassX` and here). */

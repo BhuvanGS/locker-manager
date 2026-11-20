@@ -50,7 +50,20 @@ const lerpAngle = (a: number, b: number, k: number): number => {
 }
 const blendPose = (a: Pose, b: Pose, k: number): Pose => ({ x: lerp(a.x, b.x, k), z: lerp(a.z, b.z, k), yaw: lerpAngle(a.yaw, b.yaw, k) })
 /** How far off its berth a ship stops before the tugs push it alongside. */
-const OFF_BERTH = 4
+/**
+ * The line ships sail in and out on: straight from the sea, up the middle of the channel's south half and into the dock, with no turns (a
+ * ship is 25–37 m long; turning one in the channel or the dock would sweep it into the banks). Off its berth on this line the tugs push it
+ * sideways onto the quay. North of the line, west of the jetty, is room for the tugs; boats keep to the channel's north side.
+ */
+const SHIP_LINE = CH.z - 1
+const BOAT_LINE = CH.z + 6.5
+/** The tugs work and wait west of the jetty (its west end, with the marina), where there is room north of the ship. */
+const TUG_EAST = -37.6
+/** Where the tugs wait, end to end along x between the boats' way north (x = −54.4) and the jetty's west end. */
+const TUG_WAIT = [
+  { x: TUG_EAST - 2.2, z: -16.4, yaw: Math.PI / 2 },
+  { x: TUG_EAST - 10.4, z: -16.4, yaw: Math.PI / 2 },
+]
 
 // ------------------------------------------------------------------ ship slots
 
@@ -726,7 +739,7 @@ export class Harbour {
     }
     // In the dock: up the channel, then round the west end of the jetty (and marina) and along north of it.
     const lane = H.boatLaneBasin
-    return [[SEA_X, CH.z], [-62, CH.z], [-52, CH.z], [-46, lane], [b.x - 7, lane]]
+    return [[SEA_X, BOAT_LINE], [-62, BOAT_LINE], [-54.4, BOAT_LINE], [-54.4, lane], [b.x - 7, lane]]
   }
 
   /** In along the lane and into the berth; out: back off, turn round on the spot, and away the way it came. */
@@ -761,19 +774,24 @@ export class Harbour {
     return { x: H.berthX.basin, z: QUAY_Z + 0.45 + def.beam / 2 }
   }
 
-  /** The way in: up the channel, into the dock, and along to a point `OFF_BERTH` off the berth (from where the tugs push it alongside). */
+  /** The way in: straight along `SHIP_LINE` from the sea, through the channel and into the dock, to just off its berth. */
   private shipWay(size: number): [number, number][] {
     const b = this.shipBerth(size)
-    return [[SEA_X, CH.z], [-66, CH.z], [-54, CH.z], [b.x - 13, b.z + OFF_BERTH], [b.x, b.z + OFF_BERTH]]
+    return [[SEA_X, SHIP_LINE], [b.x, SHIP_LINE]]
   }
 
   private shipState(s: ShipVisit, now: number): ShipState {
     const b = this.shipBerth(s.size)
-    const off = { x: b.x, z: b.z + OFF_BERTH }
+    const off = { x: b.x, z: SHIP_LINE }
     const east = -Math.PI / 2
     if (now < s.mooredAt) {
       const q = (now - s.spawnAt) / (s.mooredAt - s.spawnAt)
-      if (q < 0.8) return { pose: rounded(this.shipWay(s.size), 8).at(1 - (1 - Math.max(0, q / 0.8)) ** 2), phase: 'in', q }
+      if (q < 0.8) {
+        // Straight in, slowing to a stop off the berth (heading east the whole way).
+        const [from, to] = this.shipWay(s.size)
+        const k = 1 - (1 - Math.max(0, q / 0.8)) ** 2
+        return { pose: { x: lerp(from![0], to![0], k), z: SHIP_LINE, yaw: east }, phase: 'in', q }
+      }
       // It holds off the berth while the tugs come alongside (0.8…0.88), then they push it in.
       const k = smooth((q - 0.88) / 0.12)
       return { pose: { x: off.x, z: lerp(off.z, b.z, k), yaw: east + Math.sin(k * Math.PI) * 0.015 }, phase: 'crabIn', q }
@@ -781,26 +799,24 @@ export class Harbour {
     if (now < s.leaveAt) return { pose: { x: b.x, z: b.z, yaw: east }, phase: 'moored', q: 0 }
     const q = Math.min(1, (now - s.leaveAt) / (s.goneAt - s.leaveAt))
     if (q < 0.14) return { pose: { x: b.x, z: lerp(b.z, off.z, smooth(q / 0.14)), yaw: east }, phase: 'crabOut', q }
-    const turnX = -96
-    if (q < 0.6) {
-      const leg = rounded([...this.shipWay(s.size)].reverse().slice(0, -1).concat([[turnX, CH.z]]), 8, true)
-      return { pose: leg.at(smooth((q - 0.14) / 0.46)), phase: 'astern', q }
-    }
-    if (q < 0.72) return { pose: { x: turnX, z: CH.z, yaw: east + Math.PI * smooth((q - 0.6) / 0.12) }, phase: 'pivot', q }
+    // Astern, straight back down the line and out of the channel, until it is well clear of the beach to turn round.
+    const turnX = LAKE.coast.wadeX - CONFIG.harbour.ships[s.size]!.length / 2 - 12
+    if (q < 0.6) return { pose: { x: lerp(b.x, turnX, smooth((q - 0.14) / 0.46)), z: SHIP_LINE, yaw: east }, phase: 'astern', q }
+    if (q < 0.72) return { pose: { x: turnX, z: SHIP_LINE, yaw: east + Math.PI * smooth((q - 0.6) / 0.12) }, phase: 'pivot', q }
     const k = (q - 0.72) / 0.28
-    return { pose: { x: lerp(turnX, SEA_X, k * k), z: CH.z, yaw: Math.PI / 2 }, phase: 'out', q }
+    return { pose: { x: lerp(turnX, SEA_X, k * k), z: SHIP_LINE, yaw: Math.PI / 2 }, phase: 'out', q }
   }
 
   private updateShip(s: ShipVisit | null, now: number): void {
     for (const m of this.ships) m.group.visible = false
     for (const l of this.lines) l.visible = false
     if (!s) {
-      // Between ships the tugs wait in the dock, south of the jetty.
-      const z = J.basinZ - J.halfWidth - 4.5
+      // Between ships the tugs wait in the dock, west of the jetty, clear of the ships' line and the boats' way in.
       this.tugs.forEach((t, i) => {
+        const w = TUG_WAIT[i]!
         t.visible = this.basinMode && this.built !== ''
-        t.position.set(i === 0 ? B.maxX - 4.5 : B.maxX - 13, BASIN_Y + Math.sin(now * 1.4 + i) * 0.05, z)
-        t.rotation.set(0, Math.PI / 2, Math.sin(now * 1.1 + i * 2) * 0.03)
+        t.position.set(w.x, BASIN_Y + Math.sin(now * 1.4 + i) * 0.05, w.z)
+        t.rotation.set(0, w.yaw, Math.sin(now * 1.1 + i * 2) * 0.03)
       })
       this.idleCranes()
       return
@@ -880,22 +896,20 @@ export class Harbour {
    */
   private updateTugs(s: ShipVisit, state: ShipState, now: number): void {
     const def = CONFIG.harbour.ships[s.size]!
-    const jettySouth = J.basinZ - J.halfWidth
-    const wait = [
-      { x: B.maxX - 4.5, z: jettySouth - 4.5, yaw: Math.PI / 2 },
-      { x: B.maxX - 13, z: jettySouth - 4.5, yaw: Math.PI / 2 },
-    ]
-    // Alongside the north side, bows against the hull (a tug is 7.5 m long), following the ship while it moves sideways.
+    const wait = TUG_WAIT
+    // Alongside the north side of the ship's after half, west of the jetty, bows against the hull (a tug is 7.5 m long), following the
+    // ship while it moves sideways.
     const pushAt = (p: Pose) => {
-      const z = Math.min(p.z + def.beam / 2 + 3.9, jettySouth - 4.1)
+      const z = Math.min(p.z + def.beam / 2 + 3.9, B.maxZ - 4)
+      const aft = p.x - def.length / 2 + 4.5
       return [
-        { x: p.x + def.length / 4, z, yaw: 0 },
-        { x: p.x - def.length / 4, z, yaw: 0 },
+        { x: Math.min(aft + 8, TUG_EAST), z, yaw: 0 },
+        { x: Math.min(aft, TUG_EAST - 4), z, yaw: 0 },
       ]
     }
     const b = this.shipBerth(s.size)
     const push = pushAt(state.pose)
-    const pushOff = pushAt({ x: b.x, z: b.z + OFF_BERTH, yaw: 0 })
+    const pushOff = pushAt({ x: b.x, z: SHIP_LINE, yaw: 0 })
     let poses = wait
     if (state.phase === 'crabIn') poses = state.q < 0.88 ? wait.map((w, i) => blendPose(w, pushOff[i]!, span(state.q, 0.8, 0.87))) : push
     else if (state.phase === 'moored') {

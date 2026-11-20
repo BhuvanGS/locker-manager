@@ -243,6 +243,9 @@ export const WAREHOUSE_UPGRADES: readonly WarehouseUpgradeDef[] = [
   { id: 'wh-auto-1', title: 'Receiving robots', description: 'A warehouse robot with a big clamp carries crates for you: off parked trucks to where they look like they belong, and out to collection trucks (20 s a crate)', cost: 2500, level: 10, requires: 'wh-cap-1' },
   { id: 'wh-auto-2', title: 'Second robot', description: 'A second robot, and both work faster (14 s a crate). They never touch contraband', cost: 3500, level: 11, requires: 'wh-auto-1' },
   { id: 'wh-auto-3', title: 'Third robot', description: 'A third warehouse robot (charging in the level 3 hall), and all of them faster: 12 s a crate', cost: 5000, level: 12, requires: 'wh-auto-2', needs: 'wh-expand-1' },
+  { id: 'wh-forklift-1', title: 'Automated forklift', description: 'A self-driving forklift that shares the robots\' lanes and moves 2 crates of a load at a time', cost: 6500, level: 12, requires: 'wh-auto-2' },
+  { id: 'wh-forklift-2', title: 'Second forklift', description: 'A second automated forklift, and both now lift 3 crates at a time', cost: 9500, level: 13, requires: 'wh-forklift-1' },
+  { id: 'wh-qa', title: 'Quality assurance', description: 'An inspection team and cold-chain monitoring for every load: from now on nothing in the warehouse spoils (food and cold-chain goods stay fresh wherever they are)', cost: 15000, level: 13, requires: 'wh-cold' },
   { id: 'wh-auto-4', title: 'Fourth robot', description: 'A fourth warehouse robot, and all of them faster again: 10 s a crate', cost: 7000, level: 13, requires: 'wh-auto-3' },
 ]
 
@@ -709,6 +712,8 @@ export const CONFIG = {
      * ONE crate: it drives to the truck (or rack), picks the crate up at `grabAt` of the job, and puts it down at the end.
      */
     robots: { count: [0, 1, 2, 3, 4] as number[], seconds: [0, 20, 14, 12, 10] as number[], grabAt: 0.45, stagger: 0.4 },
+    /** Automated forklifts (`wh-forklift-1/2`): how many, how many crates of one load each lifts, and seconds a job (by level). */
+    forklifts: { count: [0, 1, 2] as number[], crates: [0, 2, 3] as number[], seconds: [0, 22, 20] as number[] },
     /**
      * The police. They only start to check once the warehouse holds `minCrates` crates (you have grown big), and then rarely.
      * Contraband in the open is always found; hidden contraband is found with the `hiddenFind` chance by hidden level (0, 1, 2).
@@ -735,6 +740,12 @@ export const CONFIG = {
    * waits people mostly came back in the order they left (~80 %). To break that, a new return time is
    * sometimes set to land just before someone who is already stored.
    */
+  /**
+   * Longer stays in a bigger building, so its lockers are actually used: in the open-ended stage each new deposit's return time is
+   * stretched by `1 + (lockers / 6 − 1) × gain × room`, where `room` is how far the lockers are below `targetFill` (1 when empty, 0 at the
+   * target). The building settles a little under `targetFill` however large it is; the six-locker shop is unchanged.
+   */
+  stays: { targetFill: 0.75, gain: 2 },
   returns: {
     /** Chance that a new return time undercuts one of the customers already stored (when there is one). */
     overtakeChance: 0.8,

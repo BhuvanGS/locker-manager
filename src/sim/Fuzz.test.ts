@@ -21,6 +21,8 @@ export const SETUPS: string[][] = [
   ['warehouse', 'wh-cap-1', 'wh-cold', 'wh-vault', 'wh-hidden-1', 'wh-scanner', 'office'],
   ['warehouse', 'wh-auto-2', 'wh-hidden-2', 'wh-permit', 'office'],
   ['warehouse', 'wh-expand-2', 'wh-auto-2', 'wh-cold', 'wh-hidden-1'],
+  ['warehouse', 'wh-forklift-2', 'wh-cap-2', 'wh-cold', 'wh-vault', 'wh-qa'],
+  ['warehouse', 'wh-forklift-1', 'wh-auto-2', 'wh-expand-1', 'wh-auto-3'],
 ]
 
 function check(g: GameManager): void {
@@ -41,7 +43,7 @@ function check(g: GameManager): void {
   if (wh.contact) expect(wh.contact.handed, 'the contact handed over more than he brought').toBeLessThanOrEqual(Math.max(wh.contact.crates, wh.contact.handed))
   if (wh.contact?.job === 'drop') expect(wh.contact.handed).toBeLessThanOrEqual(wh.contact.crates)
   for (const c of wh.consignments) if (c.section === 'hidden') expect(c.cargo, 'only contraband goes down to the underground vault').toBe('illegal')
-  for (const job of wh.robots) {
+  for (const job of wh.jobs()) {
     if (!job) continue
     expect(job.section, 'a robot went to the underground vault').not.toBe('hidden')
     expect(job.crate?.kind, 'a robot touched the contact\'s crate').not.toBe('contra')

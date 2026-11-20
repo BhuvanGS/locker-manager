@@ -64,6 +64,9 @@ Rules:
 - **Crowd cap** (`CONFIG.crowd`, `GameManager.crowdCap`, `customersInside`): at most a small crowd in the shop at once (6, +1 every 3 levels, max 10),
   however many lockers you own. New arrivals wait outside at the cap; a return due while the shop is `returnHeadroom` over it is put back by
   `arrivalRetry`. The old `stage.maxActive` + extra lockers cap (everyone with business here, stored bags included) still applies on top.
+- **Longer stays in a big building** (`CONFIG.stays`, `GameManager.stayFactor`): in the open-ended stage each deposit's return time is stretched by
+  `1 + (lockers / 6 − 1) × gain × room` (`room`: how far below `targetFill` the lockers are), so a large building settles around 70–75 % full while the
+  crowd stays small. Other customers' return times are shrunk back into the stage window before `returnDelay` reorders them. Early stages are unchanged.
 - **Earning more per level**: `depositFee()` is the base fee + `feeBonusPerLevel` per level (set on each new customer), and the level-up bonus is
   `levelUpBonus × level`.
 - **Saving** (`sim/snapshot.ts`, `GameManager.toSave` / `fromSave`, `engine/saveGame.ts`): the whole sim is saved as an object graph (shared
@@ -148,6 +151,10 @@ Rules:
   `wh-hidden-1` is bought: a sliding hatch with a floor-coloured mat (opens when you are near or below), a ladder (tag `ladder`, the Engine's `startClimb`
   / `updateClimb` moves you along it), a rack, a work table with a lamp, a storage room and caged bulbs. The ground has a shaft cut out
   (`Facility.setVaultOpen` removes its plug; `aroundHole` splits floors round it). The hatch opens only with E (`game.vaultHatchOpen`, tag `hatch`); climbing up opens it.
+- **Forklifts and quality assurance** (`wh-forklift-1/2`, `wh-qa`; `CONFIG.warehouse.forklifts`): forklifts are a second fleet (`WarehouseManager.forklifts`)
+  running the robots' job code; a `RobotJob` has `count` crates of one load (`crate` stands for each), reserved up front, taken at the grab and put down
+  together. `jobs()` is every job of both fleets: use it, not `robots`, when you count what is coming or held. The view is `WarehouseForklift` (parked on
+  `WAREHOUSE.forkliftHomes`, a spur off the dock lane). Quality assurance (`qa`) stops all spoiling; its station is `buildQa` at `WAREHOUSE.qa`.
 - **Warehouse levels 3 and 4** (`wh-expand-1/2`, +48 slots each): halls south of the shed (`WAREHOUSE.halls`, `hallDoor`), each through a doorway in
   the wall to its north (`southWall` keeps a removable plug), built by `buildHall` with its own pitched roof. `WAREHOUSE.shelves` lists every rack in
   buying order (`startRacks` at the start); the west robot lane runs down through the doorways and along each hall (`laneSegments`), and the painted
@@ -194,6 +201,9 @@ Rules:
   W/S/arrows/wheel move (`nextEnabled`), 1–6 pick by slot, Q = goodbye, and movement is frozen during a conversation.
 - **Patience** (`GameManager.updatePatience`) drains only for customers waiting to be served, and is paused while
   you talk to them. Only customers still holding their bag can walk out. The tutorial customer never runs out.
+- **Objective under automation**: with the counter arm, `generalObjective` drops what the belt and arm do by themselves (waiting customers, the return
+  tray, the terminal) and says what they cannot do (a bag out of the arms' reach, the arms' lockers full), then `nextUpgradeHint()`: the cheapest
+  affordable upgrade anywhere (catalogue, hub, arm consoles, warehouse console) and where to buy it, else the next to save up for.
 - **The objective is derived from state** (`GameManager.objective()`), never stored, so it can't drift.
 - Seeded randomness only (`mulberry32` from `lib/random.ts`, seed from `?seed=`). Ids come from the factory instance.
 
@@ -266,8 +276,9 @@ Rules:
   gantry, three lorry bays, lanes, a gate and an access road from the south, the port warehouse, floodlights and a fence → `lake-ships` (bigger ships) →
   `lake-harbour` (a second quay crane, the biggest ships). A `ShipVisit` unloads its imports into the yard (`stock`), then loads the yard's exports
   (`exports`, planned on arrival); each crane's jobs (`craneTasks`: imports top tier first, then exports bottom tier first; two cranes split the
-  columns) follow `unloadSeconds`, and the view runs `craneJob` backwards for an export. Ships come in with two tugs (`updateTugs`), are pushed
-  sideways onto the berth, and back out to sea before turning (`shipState`). `LorryVisit`s (1–`lorry.atOnce` at a time, in random bursts, one per bay)
+  columns) follow `unloadSeconds`, and the view runs `craneJob` backwards for an export. Ships sail straight in and out along `SHIP_LINE` (no turns in the
+  18 m channel or the dock; a ship is up to 37 m long), the two tugs (`updateTugs`, waiting at `TUG_WAIT`) push them sideways onto the berth from west
+  of the jetty, and they back out to sea and turn there, clear of the beach (`shipState`). Boats keep to the channel's north side (`BOAT_LINE`). `LorryVisit`s (1–`lorry.atOnce` at a time, in random bursts, one per bay)
   collect an import or deliver an export; the gantry handles one lorry at a time (`handleAt`…`handledAt`, never overlapping) and each pays a
   handling fee. Containers are 6 × 2.6 × 2.45 m (`BOX` in `terminal.ts`) and everything is scaled to them.
 - **People** (`world/people.ts`): everyone (customers, VIPs, the contact, passers-by) is the game's own blocky figure: soft-edged boxes

@@ -5,6 +5,7 @@ import {
   CONFIG,
   WAREHOUSE_UPGRADES,
   ZONE_TITLES,
+  AUTO_ZONES,
   type ArrivalStage,
   type CargoType,
   type AutoZone,
@@ -447,10 +448,12 @@ export class GameManager {
    */
   private finishDeposit(c: Customer): void {
     if (c.state === 'waiting') this.customers.transition(c.id, 'depositing')
+    // Return times are drawn in the stage's window and then stretched (`stayFactor`), so the others' are shrunk back into it first.
+    const stretch = this.stayFactor()
     const stored = this.customers
       .all()
-      .flatMap((other) => (other.state === 'stored' && other.expectedReturnAt !== null ? [other.expectedReturnAt] : []))
-    const delay = this.scheduler.returnDelay(this.now, stored)
+      .flatMap((other) => (other.state === 'stored' && other.expectedReturnAt !== null ? [this.now + (other.expectedReturnAt - this.now) / stretch] : []))
+    const delay = this.scheduler.returnDelay(this.now, stored) * stretch
     c.depositedAt = this.now
     c.expectedReturnAt = this.now + delay
     this.customers.transition(c.id, 'stored')
@@ -507,6 +510,17 @@ export class GameManager {
   crowdCap(): number {
     const { base, levelsPerExtra, max } = CONFIG.crowd
     return Math.min(max, base + Math.floor((this.economy.level.level - 1) / levelsPerExtra))
+  }
+
+  /** How much longer than the stage's window a new deposit stays (`CONFIG.stays`): more in a big, empty building, never in the early stages. */
+  stayFactor(): number {
+    if (this.scheduler.stage.customers !== null) return 1
+    const { targetFill, gain } = CONFIG.stays
+    const total = this.lockers.total
+    const start = CONFIG.facility.lockerRows * CONFIG.facility.lockerCols
+    const used = this.lockers.all().filter((l) => l.itemId !== null).length / Math.max(1, total)
+    const room = Math.max(0, (targetFill - used) / targetFill)
+    return 1 + Math.max(0, total / start - 1) * gain * room
   }
 
   /** What a new customer pays to leave a bag: the base fee, a little more for every level you have earned. */
@@ -1916,10 +1930,23 @@ export class GameManager {
     const lockers = this.lockers.all()
     if (lockers.some((l) => l.doorOpen && l.itemId)) return 'Close the open locker.'
     if (!this.isDigital && lockers.some((l) => l.itemId && !l.locked)) return 'An occupied locker is unlocked — take its key.'
-    if (this.conveyor.readyCount > 0) return 'A bag has arrived on the return belt. Pick it up.'
+    // With the counter arm, the belt and the arm serve the counter by themselves: say only what they cannot do, then what to build next.
+    const armServes = this.hasCounterArm && this.hasConveyor
+    if (this.conveyor.readyCount > 0 && !armServes) return 'A bag has arrived on the return belt. Pick it up.'
     const queue = this.queue()
     const toConfirm = queue.find((c) => c.state === 'depositing' && this.customers.itemOf(c)?.status === 'inLocker')
     if (toConfirm) return 'Tell the waiting customer their item is stored.'
+    if (armServes) {
+      const outOfReach = queue.find((c) => {
+        const item = RETURN_VISIT.has(c.state) ? this.customers.itemOf(c) : null
+        return item?.status === 'inLocker' && item.lockerId !== null && !this.isRobotLocker(item.lockerId)
+      })
+      if (outOfReach) return `${outOfReach.name.split(' ')[0]}'s bag is in a locker the arms cannot reach: fetch it by hand.`
+      const waitingToDeposit = queue.some((c) => c.state === 'waiting' && this.customers.itemOf(c)?.status === 'withCustomer')
+      const robotRoom = this.lockers.all().some((l) => l.state === 'available' && !l.itemId && this.isRobotLocker(l.id))
+      if (waitingToDeposit && !robotRoom) return 'The lockers the arms can reach are full: store bags by hand, or extend the belts.'
+      return this.nextUpgradeHint() ?? 'The shop runs itself. Keep the arms serviced and watch the warehouse.'
+    }
     const collecting = queue.filter((c) => RETURN_VISIT.has(c.state))
     if (collecting.length > 0 && this.hasConveyor) {
       return collecting.length === 1 ? 'A customer is back. Ask the terminal to fetch their bag.' : `${collecting.length} customers are back. Use the terminal to fetch their bags.`
@@ -1930,10 +1957,32 @@ export class GameManager {
         : `${collecting.length} customers are back to collect.`
     }
     if (queue.length > 0) return queue.length === 1 ? 'A customer is waiting at the counter.' : `${queue.length} customers are waiting.`
-    const upgrade = this.catalogueItems().find((i) => i.state === 'available')
-    if (upgrade) return `Quiet moment. You can afford ${upgrade.title}: browse the catalogue on the desk at the back right.`
+    const hint = this.nextUpgradeHint()
+    if (hint) return `Quiet moment. ${hint}`
     if (this.activeDeposits() > 0) return 'Quiet moment. Customers will be back for their things.'
     return 'Quiet moment. More customers are on their way.'
+  }
+
+  /**
+   * What to build next, and where: the cheapest upgrade you can afford anywhere (the catalogue, the control hub, an arm console, the
+   * warehouse console), else the cheapest one you are saving up for. Maintenance is left to the reminders. Null when nothing is left.
+   */
+  nextUpgradeHint(): string | null {
+    const places: { where: string; items: CatalogueItem[] }[] = [{ where: 'the catalogue on the desk', items: this.catalogueItems() }]
+    if (this.hasConveyor) {
+      places.push({ where: 'the control hub', items: this.consoleItems('hub') })
+      for (const zone of AUTO_ZONES) if (this.conveyor.isCovered(zone)) places.push({ where: `the ${ZONE_TITLES[zone]} arm console`, items: this.consoleItems(zone) })
+    }
+    if (this.hasWarehouse) places.push({ where: 'the warehouse console', items: this.consoleItems('warehouse') })
+    const all = places.flatMap(({ where, items }) => items.filter((i) => !i.id.startsWith('service-') && !i.id.startsWith('repair-')).map((item) => ({ where, item })))
+    const cheapest = (state: CatalogueItem['state']) => all.filter((x) => x.item.state === state).sort((a, b) => a.item.cost - b.item.cost)[0]
+    const buy = cheapest('available')
+    if (buy) return `You can afford ${buy.item.title} ($${buy.item.cost.toLocaleString()}): buy it at ${buy.where}.`
+    const save = cheapest('tooExpensive')
+    if (save) return `Next up: ${save.item.title} at ${save.where}. $${Math.ceil(save.item.cost - this.economy.money).toLocaleString()} to go.`
+    const locked = all.filter((x) => x.item.state === 'locked').sort((a, b) => a.item.level - b.item.level || a.item.cost - b.item.cost)[0]
+    if (locked) return `Next up: ${locked.item.title} (${locked.item.note ?? `level ${locked.item.level}`}).`
+    return null
   }
 
   private tutorialObjective(c: Customer): string {

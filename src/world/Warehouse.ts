@@ -18,6 +18,7 @@ import { Route, rounded, type Leg, type Pose } from './paths'
 import { driftArrival, TyreFx } from './drift'
 import { Checkpost, tunnelPortal, type Box } from './Gates'
 import { LaneGraph, WarehouseRobot, type RobotTarget } from './WarehouseRobot'
+import { WarehouseForklift } from './WarehouseForklift'
 
 const T = 0.2
 /** How far the roof's ridge rises above the eaves (the ridge runs north to south down the middle of the shed). */
@@ -115,6 +116,7 @@ export class Warehouse {
   private rise = 1
   private readonly lanes: LaneGraph
   private readonly robots: WarehouseRobot[] = []
+  private readonly forklifts: WarehouseForklift[] = []
 
   constructor(physics: PhysicsWorld) {
     this.physics = physics
@@ -245,6 +247,7 @@ export class Warehouse {
       ...SECTIONS.filter((s) => s !== 'hidden').flatMap((s) => this.slots[s].map((slot) => slot.approach)),
       ...docks.z.map((z) => ({ x: lanes.dock + 1.2, z })),
       ...WAREHOUSE.robotHomes.map(([x, z]) => ({ x, z })),
+      ...WAREHOUSE.forkliftHomes.map(([x, z]) => ({ x, z })),
     ])
 
     // Stocked racks between the north wall and the first racks (no robot lanes there), the supervisor's desk under the board, and
@@ -372,6 +375,16 @@ export class Warehouse {
       }
       this.robots.push(new WarehouseRobot(this.root, this.lanes, { x, z }))
     }
+    while (this.forklifts.length < wh.forklifts.length) {
+      const [x, z] = WAREHOUSE.forkliftHomes[this.forklifts.length] ?? WAREHOUSE.forkliftHomes[0]!
+      // A painted parking bay for each.
+      this.deco(1.3, 0.01, 1.9, mat(0x0f766e, 0.6), x, 0.035, z)
+      this.forklifts.push(new WarehouseForklift(this.root, this.lanes, { x, z }))
+    }
+    if (wh.qa && !this.built.has('qa')) {
+      this.built.add('qa')
+      this.buildQa()
+    }
   }
 
   /** The crates in each section: one per stored crate, coloured by what is really in them (grey if spoiled, a gold band on a VIP's). */
@@ -409,6 +422,11 @@ export class Warehouse {
       const job = wh.robots[i] ?? null
       const colour = job?.crate ? CARGO_COLOUR[job.crate.cargo] : CARGO_COLOUR.general
       robot.update(dt, job, targets, CONFIG.warehouse.robots.grabAt, colour)
+    })
+    this.forklifts.forEach((forklift, i) => {
+      const job = wh.forklifts[i] ?? null
+      const colour = job?.crate ? CARGO_COLOUR[job.crate.cargo] : CARGO_COLOUR.general
+      forklift.update(dt, job, targets, CONFIG.warehouse.robots.grabAt, colour)
     })
   }
 
@@ -804,8 +822,9 @@ export class Warehouse {
   private drawBoard(game: GameManager): void {
     const wh = game.warehouse
     const parked = wh.trucks.filter((t) => t.phase === 'parked').length
-    const busy = wh.robots.filter(Boolean).length
-    const signature = [wh.stored, wh.capacity, wh.coldCapacity, wh.vaultCapacity, wh.hiddenCapacity, parked, wh.waiting, wh.earned, wh.collected, wh.fines, wh.police?.phase ?? '', busy, wh.robots.length].join('|')
+    const busy = wh.jobs().length
+    const units = wh.robots.length + wh.forklifts.length
+    const signature = [wh.stored, wh.capacity, wh.coldCapacity, wh.vaultCapacity, wh.hiddenCapacity, parked, wh.waiting, wh.earned, wh.collected, wh.fines, wh.police?.phase ?? '', busy, units].join('|')
     if (signature === this.board.signature) return
     this.board.signature = signature
     const ctx = this.board.canvas.getContext('2d')
@@ -825,11 +844,44 @@ export class Warehouse {
     ctx.fillStyle = '#e2e8f0'
     ctx.font = '600 30px system-ui, sans-serif'
     ctx.fillText(`Trucks at the docks: ${parked} · waiting on the road: ${wh.waiting}`, 32, 176)
-    ctx.fillText(wh.police ? 'POLICE HERE' : wh.robots.length > 0 ? `Robots: ${busy} of ${wh.robots.length} working` : 'You carry the crates (E on a truck)', 32, 220)
+    ctx.fillText(wh.police ? 'POLICE HERE' : units > 0 ? `${wh.forklifts.length > 0 ? 'Robots and forklifts' : 'Robots'}: ${busy} of ${units} working` : 'You carry the crates (E on a truck)', 32, 220)
     ctx.fillStyle = '#94a3b8'
     ctx.fillText(`Collected: ${wh.collected} crates · $${wh.earned}   Fines: $${wh.fines}`, 32, 272)
     ctx.font = '600 24px system-ui, sans-serif'
     ctx.fillText('Open a crate at the receiving desk. Not everything is what it says.', 32, 340)
+  }
+
+  /** Quality assurance: a lit panel on the north wall (a big tick, a thermometer, the words) over a sampling bench with a tablet. */
+  private buildQa(): void {
+    const { x, z } = WAREHOUSE.qa
+    const panel = makeSign('QUALITY ASSURANCE', 1.9, 0.26, '#064e3b', '#a7f3d0')
+    panel.position.set(x, 3.25, z - 0.1)
+    panel.rotation.y = Math.PI
+    this.root.add(panel)
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 0.06), mat(0x0f172a, 0.5, 0.2))
+    back.position.set(x, 2.45, z - 0.05)
+    this.root.add(back)
+    const glow = new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 1.1 })
+    // A tick: two bars.
+    const short = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.03), glow)
+    short.position.set(x - 0.62, 2.32, z - 0.1)
+    short.rotation.z = 0.7
+    const long = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.03), glow)
+    long.position.set(x - 0.34, 2.45, z - 0.1)
+    long.rotation.z = -0.6
+    // A thermometer: a tube and a bulb, cold blue.
+    const cold = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 1.0 })
+    const tube = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.03), cold)
+    tube.position.set(x + 0.5, 2.5, z - 0.1)
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.04), cold)
+    bulb.position.set(x + 0.5, 2.15, z - 0.1)
+    this.root.add(short, long, tube, bulb)
+    // The sampling bench below, with a tablet and a sample crate.
+    this.solid(1.6, 0.06, 0.6, mat(0xe5e7eb, 0.5, 0.2), x, 0.9, z - 0.36)
+    for (const dx of [-0.72, 0.72]) this.deco(0.06, 0.87, 0.5, mat(0x374151, 0.5, 0.4), dx + x, 0.435, z - 0.36)
+    this.deco(0.34, 0.03, 0.24, mat(0x111827, 0.4, 0.2), x - 0.3, 0.945, z - 0.38)
+    this.deco(0.3, 0.005, 0.2, new THREE.MeshStandardMaterial({ color: 0x93c5fd, emissive: 0x60a5fa, emissiveIntensity: 0.8 }), x - 0.3, 0.962, z - 0.38)
+    this.deco(0.4, 0.3, 0.4, cardboardMat(CARGO_COLOUR.cold), x + 0.35, 1.08, z - 0.36)
   }
 
   private buildDesk(): void {
@@ -868,7 +920,7 @@ export class Warehouse {
   private drawDesk(game: GameManager): void {
     const wh = game.warehouse
     const loads = wh.loads.length
-    const signature = [loads, wh.robots.length, wh.scanner].join('|')
+    const signature = [loads, wh.robots.length, wh.forklifts.length, wh.scanner, wh.qa].join('|')
     if (signature === this.desk.signature) return
     this.desk.signature = signature
     const ctx = this.desk.canvas.getContext('2d')
@@ -887,7 +939,12 @@ export class Warehouse {
     ctx.fillStyle = '#e2e8f0'
     ctx.font = '600 30px system-ui, sans-serif'
     ctx.fillText(wh.scanner ? 'Scanner: contents shown' : 'Open a crate to be sure', 28, 184)
-    ctx.fillText(wh.robots.length > 0 ? `${wh.robots.length} robot${wh.robots.length === 1 ? '' : 's'} on duty` : 'Refuse a load you do not want', 28, 230)
+    const crew = [wh.robots.length > 0 ? `${wh.robots.length} robot${wh.robots.length === 1 ? '' : 's'}` : '', wh.forklifts.length > 0 ? `${wh.forklifts.length} forklift${wh.forklifts.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')
+    ctx.fillText(crew ? `${crew} on duty` : 'Refuse a load you do not want', 28, 230)
+    if (wh.qa) {
+      ctx.fillStyle = '#4ade80'
+      ctx.fillText('QA: nothing spoils', 28, 268)
+    }
     ctx.fillStyle = '#94a3b8'
     ctx.font = '600 26px system-ui, sans-serif'
     ctx.fillText('Press E for the loads', 28, 306)
@@ -1577,11 +1634,14 @@ function roomX0(room: { minX: number; maxX: number; pitch: number }): number {
 
 /** The robot lanes: the cross aisle, the south aisle, the dock lane, a west link, a spur into each room and its lane, the docks and the charging spots. */
 function laneSegments(): [number, number, number, number][] {
-  const { lanes, docks, robotHomes } = WAREHOUSE
+  const { lanes, docks, robotHomes, forkliftHomes } = WAREHOUSE
+  const park = forkliftHomes[0]!
   const segs: [number, number, number, number][] = [
     [lanes.west, lanes.cross, lanes.dock, lanes.cross],
     [lanes.west, lanes.south, lanes.dock, lanes.south],
-    [lanes.dock, lanes.north, lanes.dock, robotHomes[0]![1]],
+    // The dock lane runs on north past the last dock to the forklifts' parking spur.
+    [lanes.dock, park[1], lanes.dock, robotHomes[0]![1]],
+    [park[0], park[1], lanes.dock, park[1]],
     [lanes.west, lanes.cross, lanes.west, lanes.south],
     [robotHomes[0]![0], robotHomes[0]![1], robotHomes[1]![0], robotHomes[0]![1]],
   ]
