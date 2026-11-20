@@ -119,7 +119,12 @@ export function HUD() {
 
       <div className="controls">
         <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}
-        <kbd>M</kbd> mods · <kbd>Esc</kbd> pause
+        {CONFIG.modMenu.enabled && (
+          <>
+            <kbd>M</kbd> mods ·{' '}
+          </>
+        )}
+        <kbd>Esc</kbd> pause
       </div>
     </div>
   )

@@ -66,8 +66,8 @@ the shop while you click around:
 - **Customers:** spawn 1 or 5, jump to the next traffic stage, bring every stored customer back, skip 30 s or 2 min
 - **Options:** customers never lose patience; freeze the shop while the menu is open; start a new game
 
-It's meant for testing and tinkering. To remove it from a release build, set `modMenu.enabled` to `false` in
-`src/sim/config.ts`.
+It's meant for testing and tinkering, so it is only there when you run the game yourself (`npm run dev`): the published
+build has no mod menu and no debug handle.
 
 ### Growing the shop
 

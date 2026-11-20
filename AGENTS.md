@@ -98,7 +98,7 @@ Rules:
   (removes the doorway's wall panel and collider, hides the neighbour's back half, adds a door frame), builds an `Annex` (the hall) and fits
   `LockerWall`s at `ANNEX[side].bankX` and `KeyRack`s at `ANNEX[side].rackX` (hall front wall, `ANNEX_RACK`). A new game undoes all of it
   (`removeBuiltFurniture`). Positions live in `world/layout.ts` (`ANNEX_DOOR`, `ANNEX`, `LOCKER_BANKS`, `KEY_RACKS`).
-- **Mod menu** (`sim/mods.ts`, `ui/ModMenu.tsx`, `CONFIG.modMenu.enabled`): M or ` opens it (Esc closes it instead of pausing; it frees the mouse
+- **Mod menu** (`sim/mods.ts`, `ui/ModMenu.tsx`, `CONFIG.modMenu.enabled` = `import.meta.env.DEV`, so dev only; `isDebugEnabled` is dev only too): M or ` opens it (Esc closes it instead of pausing; it frees the mouse
   and by default freezes the shop). Its buttons queue `store.modRequests`, which the Engine runs through `applyMod(game, request)` (pure, tested in
   `Mods.test.ts`); the debug handle (`__game.mod(...)`, with `?debug=1`) and the promo scripts call it too. Everything goes through normal
   `GameManager` code (`grantXp`, `grantUpgrade` which shares `applyUpgrade` with `buyUpgrade`, `spawnExtraCustomer`, `skipStage`,

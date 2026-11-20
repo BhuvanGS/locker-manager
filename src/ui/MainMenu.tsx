@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CONFIG } from '../sim/config'
 import { useGameStore } from '../store/gameStore'
 
 /** "5 min ago", "yesterday 18:40": when the save was made. */
@@ -74,7 +75,13 @@ export function MainMenu() {
           <li>
             Talking: the next step is pre-selected, so just press <kbd>E</kbd>. Scroll or <kbd>W</kbd>/<kbd>S</kbd> to choose
             something else, <kbd>1</kbd>–<kbd>6</kbd> to jump to an answer, <kbd>Q</kbd> to step away. You stand still while
-            talking. <kbd>Esc</kbd> pauses. <kbd>M</kbd> opens the mod menu (free cash, levels and upgrades, so you don't have to grind).
+            talking. <kbd>Esc</kbd> pauses.
+            {CONFIG.modMenu.enabled && (
+              <>
+                {' '}
+                <kbd>M</kbd> opens the mod menu (free cash, levels and upgrades, so you don't have to grind).
+              </>
+            )}
           </li>
         </ul>
       </div>

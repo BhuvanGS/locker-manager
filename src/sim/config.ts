@@ -756,9 +756,9 @@ export const CONFIG = {
   arrivalRetry: 8,
   /**
    * The mod menu (press M): free cash, levels and upgrades, extra customers, time skips. It exists so testing
-   * and tinkering does not mean grinding. Set `enabled: false` to remove it from a release build.
+   * and tinkering does not mean grinding. Only in development (`npm run dev`): the published build has no mods.
    */
-  modMenu: { enabled: true },
+  modMenu: { enabled: import.meta.env.DEV },
   /**
    * How many people may be in the shop at once (walking in, queueing, being served), however many lockers you have: `base`, one more
    * every `levelsPerExtra` levels, never above `max`. New customers wait outside at the cap; returning customers get `returnHeadroom`
