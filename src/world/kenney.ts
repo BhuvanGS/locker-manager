@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeModel } from './mergeStatic'
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 /**
@@ -39,6 +40,8 @@ export function loadKenney(kit: KenneyKit, name: string): Promise<GLTF> {
     const url = `models/kenney/${key}.glb`
     p = loader.loadAsync(`${import.meta.env.BASE_URL}${url}`).then((g) => {
       prepare(g)
+      // Buildings and street furniture never move: merge their parts (vehicles and boats keep theirs, for the wheels).
+      if (kit === 'city' || kit === 'street') g.scene = mergeModel(g.scene) as unknown as THREE.Group
       ready.set(key, g)
       return g
     })

@@ -61,6 +61,7 @@ export class Park {
     const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.16, 1.2, 8), jetMat)
     jet.position.set(cx, 2.7, cz)
     this.root.add(jet)
+    jet.userData.dynamic = true
     this.jets.push(jet)
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2
@@ -68,6 +69,7 @@ export class Park {
       spout.position.set(cx + Math.cos(a) * 1.6, 1.2, cz + Math.sin(a) * 1.6)
       spout.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6)
       this.root.add(spout)
+      spout.userData.dynamic = true
       this.jets.push(spout)
     }
     this.solids.push({ x: cx, y: 0.5, z: cz, hx: 2.6, hy: 0.5, hz: 2.6 })
@@ -146,6 +148,7 @@ export class Park {
       const seat = this.block(0.55, 0.06, 0.25, red, 0, -1.9, 0, swing)
       seat.castShadow = true
       this.root.add(swing)
+      swing.userData.dynamic = true
       this.swings.push(swing)
     }
     this.person(px + 0.5, pz + 2.2, Math.PI, 'idle', 31)
@@ -301,6 +304,7 @@ export class Park {
     rig.root.rotation.y = yaw
     rig.root.userData.pose = pose
     this.root.add(rig.root)
+    rig.root.userData.dynamic = true
     this.people.push(rig)
   }
 
@@ -313,7 +317,7 @@ export class Park {
   }
 
   private block(w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = this.root): THREE.Mesh {
-    const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, Math.min(0.04, w / 3, h / 3, d / 3)), m)
+    const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 1, Math.min(0.04, w / 3, h / 3, d / 3)), m)
     mesh.position.set(x, y, z)
     mesh.castShadow = true
     mesh.receiveShadow = true

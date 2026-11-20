@@ -8,14 +8,12 @@ All from [ambientCG](https://ambientcg.com), CC0 (public domain), resized to 512
 | `belt-rubber` | Rubber004 | conveyor belts |
 | `arm-paint` | PaintedMetal001 (scratched yellow paint) | robot arms, their beams and rails (surface detail only, on flat yellow) |
 | `till-plastic` | Plastic012B (scuffed black plastic) | the till and the arms' dark parts |
-| `wall-plaster` | Plaster004 | every plaster wall (softened, tinted per room) |
 | `glass-smear` | Smear005 (colour map, used as roughness) | window and door glass |
 | `floor-tiles` | Tiles139 | the lobby floor |
 | `floor-concrete` | Concrete047A | staff area, storage, annexes, halls, warehouse and truck yard |
 | `floor-carpet` | Carpet012 | the office carpet and the lobby rug |
 | `wood` | Wood049 | the lobby bench and the office desk |
 | `ceiling-tiles` | OfficeCeiling001 | suspended ceilings in the shop, annexes, office and halls |
-| `duct-steel` | CorrugatedSteel009 | the bag ducts |
 | `shed-cladding` | CorrugatedSteel007A | the warehouse walls and the roof's pale lining |
 | `shed-roof` | CorrugatedSteel002 | the warehouse's red pitched roof |
 | `wire-mesh` | Fence003 | the vault cage |

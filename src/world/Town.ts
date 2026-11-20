@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { dezfight } from './coplanar'
+import { mergeStatic } from './mergeStatic'
 import type RAPIER from '@dimforge/rapier3d-compat'
 import type { PhysicsWorld } from '../engine/PhysicsWorld'
 import type { Appearance, Special } from '../sim/types'
@@ -107,6 +109,7 @@ export class Town {
     for (let deg = IN; deg <= OUT; deg += 5) ring.push(at(deg))
     const exit = cubic(x, [x[0] + tx[0] * 2.5, x[1] + tx[1] * 2.5], [outEnd[0] - 3, LANE_EAST], outEnd)
     this.loop = rounded([[STREET.eastX, LANE_WEST], inStart, ...entry, ...ring, ...exit, outEnd, [STREET.eastX, LANE_EAST]], 0.15)
+    this.tyres.root.userData.dynamic = true
     this.root.add(this.tyres.root)
     this.buildStreet()
     this.buildJunction()
@@ -124,6 +127,9 @@ export class Town {
     for (let i = 0; i < WALKERS; i++) this.addWalker(i)
     // A few cars already on the road.
     for (let i = 0; i < 4; i++) this.addCar(this.loop.length * (0.12 + i * 0.22))
+    // Thousands of kerbs, slabs, benches and walls never move: bake them into a few meshes per material (far fewer draw calls).
+    dezfight(this.root)
+    mergeStatic(this.root)
   }
 
   // ------------------------------------------------------------------ static
@@ -224,6 +230,8 @@ export class Town {
     const j = STREET.junction.cornerR
     const n = STREET.near
     this.junctionClosed = this.deco(STREET.service.maxX - STREET.service.minX + 2 * j, 0.04, n.maxZ - n.minZ, pavingMat(0xbdb8b0), (STREET.service.minX + STREET.service.maxX) / 2, 0, (n.minZ + n.maxZ) / 2)
+    this.junction.userData.dynamic = true
+    if (this.junctionClosed) this.junctionClosed.userData.dynamic = true
     this.root.add(this.junction)
   }
 
@@ -467,6 +475,7 @@ export class Town {
     rig.root.rotation.y = yaw
     rig.root.userData.pose = 'sit'
     this.root.add(rig.root)
+    rig.root.userData.dynamic = true
     this.loungers.push(rig)
   }
 
@@ -574,7 +583,8 @@ export class Town {
       rig.root.rotation.y = -Math.PI / 2
       rig.root.userData.pose = 'idle'
       this.root.add(rig.root)
-      this.loungers.push(rig)
+      rig.root.userData.dynamic = true
+    this.loungers.push(rig)
     }
   }
 
@@ -754,6 +764,7 @@ export class Town {
         })
       })
     this.root.add(group)
+    group.userData.dynamic = true
     this.cars.push(car)
     this.placeCar(car)
   }
@@ -876,6 +887,7 @@ export class Town {
       bench: null,
       body: this.physics.addMovingBox(rig.root.position.clone().setY(0.9), new THREE.Vector3(0.25, 0.9, 0.25)),
     }
+    rig.root.userData.dynamic = true
     this.walkers.push(w)
     this.plan(w)
   }

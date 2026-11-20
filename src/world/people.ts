@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import type { Appearance, Special } from '../sim/types'
 
@@ -63,7 +64,7 @@ function rbox(w: number, h: number, d: number, r = 0.035): THREE.BufferGeometry 
   const key = `${w.toFixed(3)}-${h.toFixed(3)}-${d.toFixed(3)}-${r}`
   let g = geos.get(key)
   if (!g) {
-    g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2.2, h / 2.2, d / 2.2))
+    g = new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 2.2, h / 2.2, d / 2.2))
     geos.set(key, g)
   }
   return g
@@ -644,6 +645,10 @@ export function makeToon(a: Appearance, opts: ToonOptions = {}): ToonRig {
   }
   part(hips, female ? 0.43 : 0.48, 0.12, 0.25, pantsM, 0, -0.03, 0, 0.04) // seat
 
+  // Fewer draw calls: on each pivot, the blocks in the same material become one mesh (the pivots still move; the face, whose
+  // texture changes, and the cape, which waves, stay as they are).
+  bakePivots(root, new Set<THREE.Object3D>([face, ...(cape ? [cape] : [])]))
+
   return {
     root,
     body,
@@ -836,4 +841,41 @@ export function animateToon(rig: ToonRig, dt: number, pose: ToonPose, speed = 1)
   }
   rig.hips.position.y = 0.84 + bodyY
   if (rig.cape) rig.cape.rotation.x = 0.12 + (moving ? 0.35 + s * 0.06 : Math.sin(rig.breathe * 2) * 0.04)
+}
+
+/** Merge each object's direct mesh children that share a material (in that object's space), except `keep`. */
+function bakePivots(root: THREE.Object3D, keep: Set<THREE.Object3D>): void {
+  const nodes: THREE.Object3D[] = []
+  root.traverse((o) => nodes.push(o))
+  for (const node of nodes) {
+    const groups = new Map<string, THREE.Mesh[]>()
+    for (const c of node.children) {
+      if (!(c instanceof THREE.Mesh) || keep.has(c) || c.children.length > 0 || Array.isArray(c.material)) continue
+      const key = `${c.material.uuid}|${c.castShadow}|${c.receiveShadow}`
+      let list = groups.get(key)
+      if (!list) groups.set(key, (list = []))
+      list.push(c)
+    }
+    for (const list of groups.values()) {
+      if (list.length < 2) continue
+      const geos = list.map((c) => {
+        c.updateMatrix()
+        let g = (c.geometry as THREE.BufferGeometry).clone()
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name)
+        if (g.index) g = g.toNonIndexed()
+        if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2))
+        g.clearGroups()
+        return g.applyMatrix4(c.matrix)
+      })
+      const merged = mergeGeometries(geos, false)
+      for (const g of geos) g.dispose()
+      if (!merged) continue
+      const first = list[0]!
+      const mesh = new THREE.Mesh(merged, first.material)
+      mesh.castShadow = first.castShadow
+      mesh.receiveShadow = first.receiveShadow
+      node.add(mesh)
+      for (const c of list) node.remove(c)
+    }
+  }
 }

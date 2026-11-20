@@ -22,7 +22,7 @@ function block(g: THREE.Object3D, w: number, h: number, d: number, mat: THREE.Ma
   const key = `${w}|${h}|${d}`
   let geo = geos.get(key)
   if (!geo) {
-    geo = new RoundedBoxGeometry(w, h, d, 2, Math.min(0.03, w / 3, h / 3, d / 3))
+    geo = new RoundedBoxGeometry(w, h, d, 1, Math.min(0.03, w / 3, h / 3, d / 3))
     geos.set(key, geo)
   }
   const mesh = new THREE.Mesh(geo, mat)

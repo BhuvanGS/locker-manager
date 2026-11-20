@@ -19,7 +19,7 @@ function m(color: number, roughness = 0.75, metalness = 0, emissive = 0, intensi
 }
 
 function block(g: THREE.Object3D, w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number, r = 0.025): THREE.Mesh {
-  const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 3, h / 3, d / 3)), mat)
+  const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 3, h / 3, d / 3)), mat)
   mesh.position.set(x, y, z)
   mesh.castShadow = true
   mesh.receiveShadow = true

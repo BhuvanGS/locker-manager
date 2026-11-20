@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { savedQuality, type QualityLevel, type QualitySetting } from '../engine/Quality'
 import type { DialogueOptionId } from '../sim/types'
 import type { ReceivingLoad, TerminalEntry } from '../sim/GameManager'
 import type { Section } from '../sim/config'
@@ -122,6 +123,9 @@ export type GameStoreState = {
   newGameRequested: boolean
 
   setPhase: (phase: GamePhase) => void
+  /** Graphics quality chosen in the pause menu (the Engine applies it), and the level in use (auto may have stepped down). */
+  qualitySetting: QualitySetting
+  qualityLevel: QualityLevel
   patch: (data: Partial<GameStoreState>) => void
   pushToast: (text: string, tone: Toast['tone']) => void
   dropToast: (id: number) => void
@@ -132,6 +136,8 @@ let toastSeq = 0
 
 export const useGameStore = create<GameStoreState>((set) => ({
   phase: 'menu',
+  qualitySetting: savedQuality(),
+  qualityLevel: 'high',
   pointerLocked: false,
   fps: 0,
   money: 0,

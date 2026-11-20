@@ -102,7 +102,6 @@ const AVG = {
   carpet: [0.034, 0.044, 0.065],
   wood: [0.198, 0.125, 0.074],
   ceiling: [0.905, 0.905, 0.905],
-  duct: [0.223, 0.223, 0.22],
   cladding: [0.209, 0.402, 0.468],
   grass: [0.13, 0.231, 0.025],
   sand: [0.462, 0.342, 0.165],
@@ -159,18 +158,7 @@ export const sandMat = (color: number): THREE.MeshStandardMaterial => textured('
 /** Gravel ballast on the flat roofs. */
 export const roofGravel = (color: number): THREE.MeshStandardMaterial => textured('roof-gravel', { color, average: AVG.gravel, repeat: 1.2, normalScale: 0.6, soften: { amount: 0.45, grey: 'rgb(108,110,103)' } })
 
-/** Ribbed steel for the ducts (use `cylinderMetreUVs` so the ribs keep their spacing). */
-export const ductSteel = (): THREE.MeshStandardMaterial => textured('duct-steel', { color: 0xa3abb5, average: AVG.duct, repeat: 1, metalness: 0.2, normalScale: 0.9 })
 
-/** Rewrites a cylinder's UVs in metres: around (its circumference) and along (its height). */
-export function cylinderMetreUVs(geometry: THREE.CylinderGeometry): THREE.CylinderGeometry {
-  const { radiusTop, radiusBottom, height } = geometry.parameters
-  const round = Math.PI * (radiusTop + radiusBottom)
-  const uv = geometry.getAttribute('uv')
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * round, uv.getY(i) * height)
-  uv.needsUpdate = true
-  return geometry
-}
 
 
 /** The automation yellow: flat paint with scratches in the light. */

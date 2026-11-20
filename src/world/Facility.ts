@@ -91,6 +91,14 @@ export class Facility {
    * Keep the sun's shadow box centred on the player. It moves in whole shadow-map texels (snapped), so shadow edges do not
    * shimmer as you walk.
    */
+  /** The sun's shadow map size (graphics quality): the old map is dropped so the next frame makes one at the new size. */
+  setShadowSize(size: number): void {
+    if (this.sun.shadow.mapSize.x === size) return
+    this.sun.shadow.mapSize.set(size, size)
+    this.sun.shadow.map?.dispose()
+    this.sun.shadow.map = null
+  }
+
   followSun(x: number, y: number, z: number): void {
     const texel = (SHADOW_HALF * 2) / this.sun.shadow.mapSize.x
     const step = texel * 8

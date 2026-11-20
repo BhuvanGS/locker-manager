@@ -186,6 +186,38 @@ kbd {
   gap: 0.35rem;
 }
 
+/* Graphics quality in the pause menu: four ticket stubs, the chosen one stamped. */
+.quality-label {
+  margin: 1rem 0 0.4rem;
+  font: 400 0.8rem/1.2 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quality-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.quality-btn {
+  padding: 0.5rem 0.2rem 0.42rem;
+  border: 2px dashed rgba(31, 27, 20, 0.35);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: 400 0.72rem/1 var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.quality-btn.on {
+  border: 2px solid var(--stamp);
+  color: var(--stamp);
+  background: rgba(198, 59, 45, 0.08);
+}
+
 /* ------------------------------------------------------------------ HUD */
 
 .hud {

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { Quality } from './Quality'
 import { dezfight } from '../world/coplanar'
 import { RoofBlast } from '../world/RoofBlast'
 import { setStreetLampsNight, Town } from '../world/Town'
@@ -97,6 +98,8 @@ export class Engine {
   /** The meteor's crater and lake (built at start; it draws itself from `game.meteor`). */
   private lake: Lake | null = null
   private roofBlast: RoofBlast | null = null
+  /** Graphics quality (resolution, shadows, view distance): auto steps down on slow machines. */
+  private quality: Quality | null = null
   /** Seconds until the next z-fighting pass (`dezfight`): soon after start, and after each upgrade once its rooms have risen. */
   private dezfightIn = 1.5
   /**
@@ -157,7 +160,6 @@ export class Engine {
     setGlassEnvironment(this.renderer)
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.scene.background = new THREE.Color(0xa9cde8)
     this.scene.fog = new THREE.Fog(0xa9cde8, 30, 90)
     this.cameraRig = new FirstPersonCamera(canvas.clientWidth / Math.max(canvas.clientHeight, 1))
@@ -167,6 +169,8 @@ export class Engine {
   async init(): Promise<void> {
     await this.physics.init()
     this.facility = new Facility(this.physics)
+    const facility = this.facility
+    this.quality = new Quality(this.renderer, this.cameraRig.camera, (size) => facility.setShadowSize(size), () => this.onResize())
     this.scene.add(this.facility.root, this.agents.root, this.held.root)
     this.lake = new Lake(this.physics)
     this.roofBlast = new RoofBlast(this.facility.lobbyRoof, this.facility.lobbyScars)
@@ -583,6 +587,7 @@ export class Engine {
     this.raf = requestAnimationFrame(this.loop)
     const dt = Math.min((time - this.lastTime) / 1000, 0.05)
     this.lastTime = time
+    this.quality?.measure(dt, useGameStore.getState().phase === 'playing')
     this.tick(dt)
     this.renderer.render(this.scene, this.cameraRig.camera)
   }
@@ -669,6 +674,12 @@ export class Engine {
       } else store.pushToast(notice.text, 'info')
     }
 
+    // Graphics quality: apply a new choice from the pause menu, report the level in use, and schedule the shadow redraw.
+    if (this.quality) {
+      if (store.qualitySetting !== this.quality.setting) this.quality.choose(store.qualitySetting)
+      if (store.qualityLevel !== this.quality.level) store.patch({ qualityLevel: this.quality.level })
+      this.quality.beforeRender()
+    }
     if (this.dezfightIn > 0) {
       this.dezfightIn -= dt
       if (this.dezfightIn <= 0) dezfight(this.scene)
@@ -1149,6 +1160,7 @@ export class Engine {
       filmSize: (w: number, h: number) => {
         this.running = false
         cancelAnimationFrame(this.raf)
+        this.quality?.force('high')
         this.renderer.setPixelRatio(1)
         this.renderer.setSize(w, h, false)
         this.cameraRig.resize(w / h)

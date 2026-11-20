@@ -206,6 +206,12 @@ Rules:
   collider yourself, and keep props out of `CUSTOMER_PATH` spots, staff gaps and robot lanes. `glow` is for the warehouse. Walls (`wallMat`) are
   painted block-work (a drawn canvas in `textures.ts`, tinted per colour, on `metreUVs` boxes), cables are flat four-sided cords, and the hall ducts
   are square galvanised sections: keep new things blocky, not photo-textured.
+- **Performance** (`engine/Quality.ts`, `world/mergeStatic.ts`): static scenery is merged into a few meshes per material in 40 m tiles
+  (`mergeStatic`: the Town runs it after its own `dezfight`; anything under `userData.dynamic`, `interact`, a Kenney holder, or a reach blocker
+  is left alone, so mark new moving parts `dynamic`). City and street Kenney models are merged per model at load (`mergeModel`), and each
+  person's blocks are merged per pivot (`bakePivots` in `people.ts`; the face and cape stay separate). `Quality` sets the resolution, the shadow
+  map size and how often it is redrawn (`renderer.shadowMap.autoUpdate` is off; `beforeRender` schedules it) and the view distance; on auto it
+  starts high and steps down when the frame rate stays under 48. The pause menu picks a level (`store.qualitySetting`, saved in localStorage).
 - **Z-fighting** (`world/coplanar.ts`, `dezfight`): the Engine runs it 1.5 s after start or a new game and 6 s after each upgrade (once rooms have
   risen). It finds axis-aligned boxes in different materials sharing a plane and moves the smaller one 3 mm out, at most once per box ever. Still
   avoid coplanar faces when you build; this is the safety net.
