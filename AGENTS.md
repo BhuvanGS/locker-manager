@@ -61,6 +61,18 @@ Rules:
   location change together inside one action. Add a test when you add an action.
 - **No hardcoded per-customer timers.** Arrival and return timing comes from `CONFIG.stages` through the scheduler
   and clock (`nextArrival` / `customerReturn` events). A stage's `maxActive` caps customers with business here.
+- **Crowd cap** (`CONFIG.crowd`, `GameManager.crowdCap`, `customersInside`): at most a small crowd in the shop at once (6, +1 every 3 levels, max 10),
+  however many lockers you own. New arrivals wait outside at the cap; a return due while the shop is `returnHeadroom` over it is put back by
+  `arrivalRetry`. The old `stage.maxActive` + extra lockers cap (everyone with business here, stored bags included) still applies on top.
+- **Earning more per level**: `depositFee()` is the base fee + `feeBonusPerLevel` per level (set on each new customer), and the level-up bonus is
+  `levelUpBonus × level`.
+- **Saving** (`sim/snapshot.ts`, `GameManager.toSave` / `fromSave`, `engine/saveGame.ts`): the whole sim is saved as an object graph (shared
+  references kept, functions skipped) and written back into a fresh `GameManager`, filling class instances and callback holders in place.
+  Randomness is a `SeededRandom` (state in a field), so a loaded game carries on exactly like the original; `Save.test.ts` checks that in
+  lockstep across the fuzz setups. `fromSave` replays `builtLog` (every `upgradeBought`, in order) so the Engine rebuilds the rooms (without the
+  rise animation: `Engine.replaying`), walks customers in the building back in, and sees out finished ones. The Engine autosaves every 30 s,
+  on pausing and when the tab is hidden; the main menu offers Continue. **Keep sim state in plain data on the managers** (no closures holding
+  state, no class instances created inside collections), or saving breaks: `Save.test.ts` will tell you.
 - **Anti-boredom** (`GameManager.updateIdleGuard`): a stage's `maxIdle` pulls the earliest pending event forward when nobody has
   been inside for that long. Arrival gaps mix ordinary random gaps with quick bursts (`burstChance`, `burstGap`). Tests can pass their
   own stages: `new GameManager(seed, stages)`.

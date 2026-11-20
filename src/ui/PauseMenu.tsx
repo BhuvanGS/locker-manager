@@ -13,6 +13,7 @@ export function PauseMenu() {
   const setting = useGameStore((s) => s.qualitySetting)
   const level = useGameStore((s) => s.qualityLevel)
   const patch = useGameStore((s) => s.patch)
+  const saved = useGameStore((s) => s.save?.savedAt ?? null)
 
   const resume = () => {
     setPhase('playing')
@@ -23,7 +24,7 @@ export function PauseMenu() {
     <div className="overlay">
       <div className="menu-card compact">
         <h2>Paused</h2>
-        <p className="muted">The shop clock is stopped while paused.</p>
+        <p className="muted">The shop clock is stopped while paused. The game saves itself every 30 seconds, and whenever you pause.</p>
         <p className="quality-label">
           Graphics <span className="muted">· {setting === 'auto' ? `auto (${level})` : level}</span>
         </p>
@@ -38,6 +39,10 @@ export function PauseMenu() {
           <button type="button" className="btn-primary" onClick={resume}>
             Resume
           </button>
+          <button type="button" className="btn-ghost" onClick={() => patch({ saveRequested: true })}>
+            Save game
+          </button>
+          <p className="save-meta">{saved ? `Saved at ${new Date(saved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Not saved yet'}</p>
           <button type="button" className="btn-ghost" onClick={() => setPhase('menu')}>
             Main menu
           </button>

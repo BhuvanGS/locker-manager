@@ -7,7 +7,7 @@ import { Sky } from '../world/Sky'
 import { FirstPersonCamera } from '../player/FirstPersonCamera'
 import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
-import type { ActionResult, DialogueOptionId } from '../sim/types'
+import type { ActionResult, DialogueOptionId, SimNotice } from '../sim/types'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
 import { applyMod } from '../sim/mods'
 import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type ReceivingView, type TerminalView } from '../store/gameStore'
@@ -48,6 +48,7 @@ import {
   UNDERGROUND,
 } from '../world/layout'
 import { isDebugEnabled } from './debug'
+import { AUTOSAVE_SECONDS, readSave, writeSave } from './saveGame'
 import { InputManager, type InputSnapshot } from './InputManager'
 import { PhysicsWorld } from './PhysicsWorld'
 import { setGlassEnvironment } from '../world/textures'
@@ -58,6 +59,8 @@ import { setGlassEnvironment } from '../world/textures'
  */
 /** Seconds to climb the vault ladder from one end to the other. */
 const CLIMB_SECONDS = 2.2
+/** Half the player's capsule height: the player's position is its middle, a save keeps where the feet are. */
+const PLAYER_HALF_HEIGHT = 1.75 / 2
 
 /** The lobby's middle (where the meteor's shockwave is timed for its roof). */
 const LOBBY_CENTRE = { x: 0, z: 3.6 }
@@ -100,6 +103,11 @@ export class Engine {
   private roofBlast: RoofBlast | null = null
   /** Graphics quality (resolution, shadows, view distance): auto steps down on slow machines. */
   private quality: Quality | null = null
+  /** A game has been started or loaded (before that the menu shows an idle shop, which is not saved). */
+  private started = false
+  /** Rebuilding a loaded game's rooms: they are put up at once instead of rising. */
+  private replaying = false
+  private autosaveIn = AUTOSAVE_SECONDS
   /** Seconds until the next z-fighting pass (`dezfight`): soon after start, and after each upgrade once its rooms have risen. */
   private dezfightIn = 1.5
   /**
@@ -164,6 +172,13 @@ export class Engine {
     this.scene.fog = new THREE.Fog(0xa9cde8, 30, 90)
     this.cameraRig = new FirstPersonCamera(canvas.clientWidth / Math.max(canvas.clientHeight, 1))
     window.addEventListener('resize', this.onResize)
+    window.addEventListener('pagehide', this.onLeave)
+    document.addEventListener('visibilitychange', this.onLeave)
+  }
+
+  /** Closing or hiding the tab saves the game (only while one is being played: the menu's idle shop is not a game). */
+  private readonly onLeave = (): void => {
+    if (document.visibilityState === 'hidden' && useGameStore.getState().phase !== 'menu') this.saveGame()
   }
 
   async init(): Promise<void> {
@@ -201,6 +216,8 @@ export class Engine {
     cancelAnimationFrame(this.raf)
     this.input.detach()
     window.removeEventListener('resize', this.onResize)
+    window.removeEventListener('pagehide', this.onLeave)
+    document.removeEventListener('visibilitychange', this.onLeave)
     this.player?.dispose(this.physics)
     this.renderer.dispose()
     this.physics.dispose()
@@ -220,7 +237,7 @@ export class Engine {
   ): void {
     const wall = new LockerWall(this.game, this.physics, bank, placement)
     wall.root.userData.zone = zone
-    if (animate) wall.appear()
+    if (animate && !this.replaying) wall.appear()
     this.lockerWalls.push(wall)
     this.scene.add(wall.root)
     this.interactionTargets.push(wall.root)
@@ -235,7 +252,7 @@ export class Engine {
     const rows = Math.max(...this.game.lockers.all().filter((l) => l.bank === bank).map((l) => l.row)) + 1
     const screen = new StatusScreen(bank, spot.placement, rows)
     screen.root.userData.zone = spot.zone
-    if (animate) screen.appear()
+    if (animate && !this.replaying) screen.appear()
     this.statusScreens.set(bank, screen)
     this.scene.add(screen.root)
   }
@@ -244,7 +261,7 @@ export class Engine {
   private addOccupancyBoard(kind: HallKind, animate: boolean): void {
     if (!this.game.isDigital || this.occupancyBoards.has(kind)) return
     const board = new OccupancyBoard(kind, HALL_LEVEL[kind] * FLOOR_HEIGHT)
-    if (animate) board.appear()
+    if (animate && !this.replaying) board.appear()
     this.occupancyBoards.set(kind, board)
     this.scene.add(board.root)
   }
@@ -263,7 +280,7 @@ export class Engine {
     if (this.warehouse) return
     this.halls.find((h) => h.kind === 'south')?.openWarehouseDoor()
     const warehouse = new Warehouse(this.physics)
-    if (animate) warehouse.appear()
+    if (animate && !this.replaying) warehouse.appear()
     this.warehouse = warehouse
     this.scene.add(warehouse.root, warehouse.yard)
     this.town?.setJunctionOpen(true)
@@ -283,7 +300,7 @@ export class Engine {
     if (this.office) return
     this.facility?.setOfficeOpen(true)
     const office = new Office(this.physics)
-    if (animate) office.appear()
+    if (animate && !this.replaying) office.appear()
     this.office = office
     this.scene.add(office.root)
     this.interactionTargets.push(office.root)
@@ -296,7 +313,7 @@ export class Engine {
     if (this.conveyorBay) return
     this.facility?.setConveyorOpen(true)
     const bay = new ConveyorBay(this.physics, (id) => this.lockerSlotWorld(id))
-    if (animate) bay.appear()
+    if (animate && !this.replaying) bay.appear()
     this.conveyorBay = bay
     this.scene.add(bay.root)
     this.interactionTargets.push(bay.root)
@@ -361,7 +378,7 @@ export class Engine {
   private addRegisterBoard(animate: boolean): void {
     if (this.registerBoard) return
     const board = new RegisterBoard()
-    if (animate) board.appear()
+    if (animate && !this.replaying) board.appear()
     this.registerBoard = board
     this.scene.add(board.root)
   }
@@ -370,7 +387,7 @@ export class Engine {
   private addAnnex(side: AnnexSide, banks: number[], racks: number[]): void {
     this.facility?.setAnnexOpen(side, true)
     const annex = new Annex(side, this.physics)
-    annex.appear()
+    if (!this.replaying) annex.appear()
     this.annexes.push(annex)
     this.scene.add(annex.root)
     this.interactionTargets.push(annex.root)
@@ -392,13 +409,13 @@ export class Engine {
     } else {
       this.halls.find((h) => h.level === level - 1)?.openHatch()
       const stairs = new Stairs((level - 1) as 0 | 1, this.physics)
-      stairs.appear()
+      if (!this.replaying) stairs.appear()
       this.stairs.push(stairs)
       this.scene.add(stairs.root)
       this.interactionTargets.push(stairs.root)
     }
     const hall = new Hall(kind, this.physics)
-    hall.appear()
+    if (!this.replaying) hall.appear()
     this.halls.push(hall)
     this.scene.add(hall.root)
     this.interactionTargets.push(hall.root)
@@ -464,7 +481,7 @@ export class Engine {
     if (this.game.isDigital) return // no keys any more: nothing to hang on a rack
     const rack = new KeyRack(index, CONFIG.facility.hooksPerRack, placement)
     rack.root.userData.zone = zone
-    if (animate) rack.appear()
+    if (animate && !this.replaying) rack.appear()
     this.keyRacks.push(rack)
     this.scene.add(rack.root)
     this.interactionTargets.push(rack.root)
@@ -561,13 +578,58 @@ export class Engine {
 
   /** Throw away the simulation and start over (the static building is reused). */
   newGame(): void {
-    this.removeBuiltFurniture()
-    this.dezfightIn = 1.5
-    this.game = new GameManager(seedFromUrl())
-    this.buildStartingFurniture()
-    this.agents.clear()
+    this.resetWorld(new GameManager(seedFromUrl()))
     this.player?.teleport(PLAYER_SPAWN.x, PLAYER_SPAWN.z)
     this.cameraRig.lookToward(0, 6, PLAYER_SPAWN.x, PLAYER_SPAWN.z)
+  }
+
+  /** Carry on the saved game: rebuild every room it had bought (at once), and put the player back where they stood. */
+  loadGame(): boolean {
+    const file = readSave()
+    if (!file) return false
+    let game: GameManager
+    try {
+      game = GameManager.fromSave(file.sim)
+    } catch (err) {
+      console.error('Could not load the saved game', err)
+      return false
+    }
+    this.resetWorld(game)
+    this.replaying = true
+    try {
+      for (const notice of game.drainNotices()) this.handleNotice(notice)
+    } finally {
+      this.replaying = false
+    }
+    const p = file.player
+    this.player?.teleport(p.x, p.z, p.feetY)
+    this.cameraRig.setAngles(p.yaw, p.pitch)
+    return true
+  }
+
+  /** Write the game to this browser's storage (see `saveGame.ts`). */
+  saveGame(): boolean {
+    if (!this.started || !this.player) return false
+    const pos = this.player.getPosition()
+    const ok = writeSave({
+      summary: { savedAt: Date.now(), level: this.game.economy.level.level, money: Math.round(this.game.economy.money), lockers: this.game.lockers.total },
+      player: { x: pos.x, feetY: pos.y - PLAYER_HALF_HEIGHT, z: pos.z, yaw: this.cameraRig.getYaw(), pitch: this.cameraRig.getPitch() },
+      sim: this.game.toSave(),
+    })
+    this.autosaveIn = AUTOSAVE_SECONDS
+    if (ok) useGameStore.setState({ save: readSave()?.summary ?? null })
+    return ok
+  }
+
+  private resetWorld(game: GameManager): void {
+    this.removeBuiltFurniture()
+    this.dezfightIn = 1.5
+    this.game = game
+    this.started = true
+    this.autosaveIn = AUTOSAVE_SECONDS
+    this.climb = null
+    this.buildStartingFurniture()
+    this.agents.clear()
     this.dialogueSig = ''
     this.catalogueSig = ''
     this.catalogueView = null
@@ -598,6 +660,18 @@ export class Engine {
       this.newGame()
       store.patch({ newGameRequested: false })
     }
+    if (store.continueRequested) {
+      store.patch({ continueRequested: false })
+      if (!this.loadGame()) {
+        store.pushToast('The saved game could not be loaded. Starting a new one.', 'bad')
+        this.newGame()
+      }
+    }
+    if (store.saveRequested) {
+      store.patch({ saveRequested: false })
+      // Success shows in the pause menu ("Saved at …"); a failure needs saying.
+      if (!this.saveGame()) store.pushToast('Could not save: this browser is not letting the game store anything.', 'bad')
+    }
     const input = this.input.snapshot()
     if (this.debugWalk) {
       input.forward = this.debugWalk.forward
@@ -610,7 +684,12 @@ export class Engine {
     const pausePressed = input.pausePressed
     const playing = store.phase === 'playing'
 
+    if (playing) {
+      this.autosaveIn -= dt
+      if (this.autosaveIn <= 0) this.saveGame()
+    }
     if (playing && pausePressed) {
+      this.saveGame()
       store.setPhase('paused')
       if (document.pointerLockElement) document.exitPointerLock()
       return
@@ -643,36 +722,7 @@ export class Engine {
 
     // Simulation only advances while playing (pausing stops the clock).
     if (playing) this.game.update(dt)
-    for (const notice of this.game.drainNotices()) {
-      if (notice.type === 'customerSpawned') this.agents.spawn(this.game, notice.customerId)
-      else if (notice.type === 'customerLeaving') this.agents.leave(notice.customerId)
-      else if (notice.type === 'payment') store.pushToast(`+$${notice.amount}`, 'good')
-      else if (notice.type === 'xp') store.pushToast(`+${notice.amount} XP`, 'info')
-      // Mistakes are already toasted from the action's own result message, so only walk-outs need one here.
-      else if (notice.type === 'mistake') continue
-      else if (notice.type === 'walkout') store.pushToast(notice.message, 'bad')
-      else if (notice.type === 'jam') store.pushToast(notice.text, 'bad')
-      else if (notice.type === 'alert') store.pushToast(notice.text, 'bad')
-      else if (notice.type === 'stageStarted') store.showBanner(notice.title, notice.text)
-      else if (notice.type === 'levelUp') {
-        const unlocked = notice.unlocked.length > 0 ? `New in the catalogue: ${notice.unlocked.join(', ')}.` : 'Customers will arrive a little faster.'
-        store.showBanner(`Level ${notice.level}`, `+$${notice.bonus} bonus. ${unlocked}`, 'Level up')
-      } else if (notice.type === 'upgradeBought') {
-        this.dezfightIn = 6
-        if (notice.kind === 'lockerBank') this.addLockerBank(notice.index, true)
-        else if (notice.kind === 'keyRack') this.addKeyRack(notice.index, true)
-        else if (notice.kind === 'register') this.addRegisterBoard(true)
-        else if (notice.kind === 'digital') this.goDigital()
-        else if (notice.kind === 'conveyor') this.addConveyor(true)
-        else if (notice.kind === 'office') this.addOffice(true)
-        else if (notice.kind === 'warehouse') this.addWarehouse(true)
-        else if (notice.kind === 'automation' && notice.id.startsWith('line-') && notice.zone) this.addLine(notice.zone)
-        else if (notice.kind === 'automation' && notice.id === 'counter-arm') this.addCounterArm()
-        else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
-        else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
-        // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
-      } else store.pushToast(notice.text, 'info')
-    }
+    for (const notice of this.game.drainNotices()) this.handleNotice(notice)
 
     // Graphics quality: apply a new choice from the pause menu, report the level in use, and schedule the shadow redraw.
     if (this.quality) {
@@ -747,6 +797,39 @@ export class Engine {
 
     this.syncHud(dt, aim)
   }
+
+  /** React to one thing the simulation reports: agents, toasts and banners, and the rooms and machines an upgrade builds. */
+  private handleNotice(notice: SimNotice): void {
+    if (this.replaying && notice.type !== 'upgradeBought' && notice.type !== 'customerSpawned') return
+    if (notice.type === 'customerSpawned') this.agents.spawn(this.game, notice.customerId)
+    else if (notice.type === 'customerLeaving') this.agents.leave(notice.customerId)
+    else if (notice.type === 'payment') useGameStore.getState().pushToast(`+$${notice.amount}`, 'good')
+    else if (notice.type === 'xp') useGameStore.getState().pushToast(`+${notice.amount} XP`, 'info')
+    // Mistakes are already toasted from the action's own result message, so only walk-outs need one here.
+    else if (notice.type === 'mistake') return
+    else if (notice.type === 'walkout') useGameStore.getState().pushToast(notice.message, 'bad')
+    else if (notice.type === 'jam') useGameStore.getState().pushToast(notice.text, 'bad')
+    else if (notice.type === 'alert') useGameStore.getState().pushToast(notice.text, 'bad')
+    else if (notice.type === 'stageStarted') useGameStore.getState().showBanner(notice.title, notice.text)
+    else if (notice.type === 'levelUp') {
+      const unlocked = notice.unlocked.length > 0 ? `New in the catalogue: ${notice.unlocked.join(', ')}.` : 'Customers will arrive a little faster.'
+      useGameStore.getState().showBanner(`Level ${notice.level}`, `+$${notice.bonus} bonus. ${unlocked}`, 'Level up')
+    } else if (notice.type === 'upgradeBought') {
+      this.dezfightIn = this.replaying ? 1.5 : 6
+      if (notice.kind === 'lockerBank') this.addLockerBank(notice.index, true)
+      else if (notice.kind === 'keyRack') this.addKeyRack(notice.index, true)
+      else if (notice.kind === 'register') this.addRegisterBoard(true)
+      else if (notice.kind === 'digital') this.goDigital()
+      else if (notice.kind === 'conveyor') this.addConveyor(true)
+      else if (notice.kind === 'office') this.addOffice(true)
+      else if (notice.kind === 'warehouse') this.addWarehouse(true)
+      else if (notice.kind === 'automation' && notice.id.startsWith('line-') && notice.zone) this.addLine(notice.zone)
+      else if (notice.kind === 'automation' && notice.id === 'counter-arm') this.addCounterArm()
+      else if (notice.kind === 'annex' && notice.side) this.addAnnex(notice.side, notice.banks ?? [], notice.racks ?? [])
+      else if (notice.kind === 'hall' && notice.hall) this.addHall(notice.hall, notice.banks ?? [], notice.racks ?? [])
+      // 'labels' needs no new objects: the lockers, racks and held key notice `game.hasLabels` themselves.
+    } else useGameStore.getState().pushToast(notice.text, 'info')
+      }
 
   private startClimb(to: 'down' | 'up'): void {
     if (to === 'up' && !this.game.vaultHatchOpen) this.game.toggleVaultHatch()

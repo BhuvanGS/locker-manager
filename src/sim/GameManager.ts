@@ -1,4 +1,5 @@
-import { mulberry32 } from '../lib/random'
+import { SeededRandom } from '../lib/random'
+import { encode, hydrate } from './snapshot'
 import {
   AUTOMATION_UPGRADES,
   CONFIG,
@@ -130,7 +131,10 @@ export class GameManager {
   /** Which part of the building each locker bank is in, and which row of that part (an arm station). */
   private readonly bankInfo = new Map<number, { zone: AutoZone; row: number }>([[0, { zone: 'main', row: 0 }]])
   private readonly factory: CustomerFactory
+  private readonly rng: SeededRandom
   private readonly rand: () => number
+  /** Every `upgradeBought` notice so far, in order: a loaded game replays them so the 3D world builds the same rooms. */
+  private builtLog: SimNotice[] = []
 
   /** Switches the mod menu can flip. */
   readonly mods = { noPatienceLoss: false }
@@ -159,7 +163,8 @@ export class GameManager {
 
   /** `stages` defaults to the real traffic plan; tests pass their own. */
   constructor(seed = 1, stages: readonly ArrivalStage[] = CONFIG.stages) {
-    this.rand = mulberry32(seed)
+    this.rng = new SeededRandom(seed)
+    this.rand = () => this.rng.next()
     this.factory = new CustomerFactory(this.rand)
     const { lockerRows, lockerCols, hooksPerRack } = CONFIG.facility
     this.lockers = new LockerManager(lockerRows, lockerCols)
@@ -182,6 +187,35 @@ export class GameManager {
     this.economy = new EconomyManager(CONFIG.economy.startingMoney, CONFIG.economy.startingReputation)
     this.scheduler = new CustomerScheduler(stages, this.rand)
     this.scheduleNextArrival()
+  }
+
+  /** The whole simulation as plain JSON-safe data (see `snapshot.ts`). Menus and conversations are not kept open. */
+  toSave(): unknown {
+    const open = { dialogue: this.dialogue, catalogueOpen: this.catalogueOpen, terminalOpen: this.terminalOpen, dealOpen: this.dealOpen, consoleScope: this.consoleScope, receivingOpen: this.receivingOpen, notices: this.notices }
+    this.dialogue = null
+    this.catalogueOpen = this.terminalOpen = this.dealOpen = this.receivingOpen = false
+    this.consoleScope = null
+    this.notices = []
+    try {
+      return encode(this)
+    } finally {
+      Object.assign(this, open)
+    }
+  }
+
+  /**
+   * A game carried on from `toSave()` data. Its notices replay every room and machine that was bought (so the 3D world can rebuild
+   * them) and walk the customers who were in the building back in; those who had already been served are seen out.
+   */
+  static fromSave(data: unknown, stages: readonly ArrivalStage[] = CONFIG.stages): GameManager {
+    const game = new GameManager(1, stages)
+    hydrate(game, data as Parameters<typeof hydrate>[1])
+    game.notices = [...game.builtLog]
+    for (const c of game.customers.all()) {
+      if (c.state === 'completed' || c.state === 'leftWithoutService') game.customerExited(c.id)
+      else if (c.state !== 'stored') game.notices.push({ type: 'customerSpawned', customerId: c.id })
+    }
+    return game
   }
 
   get now(): number {
@@ -351,6 +385,7 @@ export class GameManager {
   }
 
   private notify(notice: SimNotice): void {
+    if (notice.type === 'upgradeBought') this.builtLog.push(notice)
     this.notices.push(notice)
   }
 
@@ -371,13 +406,14 @@ export class GameManager {
     const stage = this.scheduler.stage
     // More lockers means room for more customers with business here.
     const extraLockers = this.lockers.total - CONFIG.facility.lockerRows * CONFIG.facility.lockerCols
-    if (stage.maxActive !== undefined && this.activeCustomers() >= stage.maxActive + extraLockers) {
+    const full = stage.maxActive !== undefined && this.activeCustomers() >= stage.maxActive + extraLockers
+    if (full || this.customersInside() >= this.crowdCap()) {
       this.clock.scheduleIn(CONFIG.arrivalRetry, { type: 'nextArrival' })
       return
     }
     const opts = {
       patience: stage.patience,
-      fee: CONFIG.economy.depositFee,
+      fee: this.depositFee(),
       satisfaction: CONFIG.customer.startingSatisfaction,
     }
     const first = this.firstCustomerId === null
@@ -456,7 +492,30 @@ export class GameManager {
     this.notify({ type: 'customerLeaving', customerId: c.id })
   }
 
+  /** People in the shop right now: walking in, queueing or being served (not those with a bag stored, nor anyone on their way out). */
+  customersInside(): number {
+    return this.customers.all().filter((c) => c.state === 'arriving' || c.state === 'waiting' || c.state === 'depositing' || c.state === 'returning' || c.state === 'waitingForCollection' || c.state === 'collecting').length
+  }
+
+  /** How many people may be in the shop at once (`CONFIG.crowd`): a small crowd that grows slowly with your level. */
+  crowdCap(): number {
+    const { base, levelsPerExtra, max } = CONFIG.crowd
+    return Math.min(max, base + Math.floor((this.economy.level.level - 1) / levelsPerExtra))
+  }
+
+  /** What a new customer pays to leave a bag: the base fee, a little more for every level you have earned. */
+  depositFee(): number {
+    return Math.round(CONFIG.economy.depositFee * (1 + CONFIG.progression.feeBonusPerLevel * (this.economy.level.level - 1)))
+  }
+
   private onReturn(id: CustomerId): void {
+    // A full shop: they come back a little later (the tutorial's one customer is never held up).
+    if (this.scheduler.stage.patience !== null && this.customersInside() >= this.crowdCap() + CONFIG.crowd.returnHeadroom) {
+      const c = this.customers.get(id)
+      c.expectedReturnAt = this.now + CONFIG.arrivalRetry
+      this.clock.schedule(c.expectedReturnAt, { type: 'customerReturn', customerId: id })
+      return
+    }
     this.customers.transition(id, 'returning')
     this.notify({ type: 'customerSpawned', customerId: id })
   }
@@ -1347,7 +1406,7 @@ export class GameManager {
     const stage = this.scheduler.stage
     const { customer, item } = this.factory.customer({
       patience: stage.patience,
-      fee: CONFIG.economy.depositFee,
+      fee: this.depositFee(),
       satisfaction: CONFIG.customer.startingSatisfaction,
       avoid: this.labelsInUse(),
     })

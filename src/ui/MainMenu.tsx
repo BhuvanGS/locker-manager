@@ -1,14 +1,28 @@
+import { useState } from 'react'
 import { useGameStore } from '../store/gameStore'
+
+/** "5 min ago", "yesterday 18:40": when the save was made. */
+function when(savedAt: number): string {
+  const s = (Date.now() - savedAt) / 1000
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.round(s / 60)} min ago`
+  const d = new Date(savedAt)
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return s < 86400 ? `today ${time}` : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${time}`
+}
 
 export function MainMenu() {
   const patch = useGameStore((s) => s.patch)
+  const save = useGameStore((s) => s.save)
+  const [confirmNew, setConfirmNew] = useState(false)
 
-  const start = () => {
-    patch({ phase: 'playing', newGameRequested: true })
+  const go = (request: { newGameRequested: true } | { continueRequested: true }) => {
+    patch({ phase: 'playing', ...request })
     const canvas = document.getElementById('game-canvas')
     canvas?.focus()
     canvas?.requestPointerLock()?.catch(() => {})
   }
+  const start = () => (save && !confirmNew ? setConfirmNew(true) : go({ newGameRequested: true }))
 
   return (
     <div className="overlay">
@@ -20,9 +34,35 @@ export function MainMenu() {
           identical keys. No computer, no labels, no notebook. Customers leave their things with you
           and come back later. Remember who left what, where you put it, and which key opens it.
         </p>
-        <button type="button" className="btn-primary" onClick={start}>
-          Open the shop
-        </button>
+        {save ? (
+          <div className="save-slot">
+            <button type="button" className="btn-primary" onClick={() => go({ continueRequested: true })}>
+              Continue
+            </button>
+            <p className="save-meta">
+              Level {save.level} · ${save.money.toLocaleString()} · {save.lockers} lockers · saved {when(save.savedAt)}
+            </p>
+            {confirmNew ? (
+              <div className="save-confirm">
+                <span>A new game replaces this save.</span>
+                <button type="button" className="btn-danger" onClick={start}>
+                  Start over
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setConfirmNew(false)}>
+                  Keep it
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn-ghost" onClick={start}>
+                New game
+              </button>
+            )}
+          </div>
+        ) : (
+          <button type="button" className="btn-primary" onClick={start}>
+            Open the shop
+          </button>
+        )}
         <ul className="control-list">
           <li>
             <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Shift</kbd> walk faster · <kbd>Mouse</kbd> look

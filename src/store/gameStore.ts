@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { saveSummary, type SaveSummary } from '../engine/saveGame'
 import { savedQuality, type QualityLevel, type QualitySetting } from '../engine/Quality'
 import type { DialogueOptionId } from '../sim/types'
 import type { ReceivingLoad, TerminalEntry } from '../sim/GameManager'
@@ -121,6 +122,11 @@ export type GameStoreState = {
 
   /** Set by the menu to ask the Engine for a fresh game. */
   newGameRequested: boolean
+  /** Set by the menu to carry on the saved game, or to save now (both consumed by the Engine). */
+  continueRequested: boolean
+  saveRequested: boolean
+  /** The saved game on this browser (for the main menu), refreshed by the Engine each time it saves. */
+  save: SaveSummary | null
 
   setPhase: (phase: GamePhase) => void
   /** Graphics quality chosen in the pause menu (the Engine applies it), and the level in use (auto may have stepped down). */
@@ -180,6 +186,9 @@ export const useGameStore = create<GameStoreState>((set) => ({
   pendingReceive: null,
   pendingConsoleBuy: null,
   newGameRequested: false,
+  continueRequested: false,
+  saveRequested: false,
+  save: saveSummary(),
   setPhase: (phase) => set({ phase }),
   patch: (data) => set(data),
   pushToast: (text, tone) =>

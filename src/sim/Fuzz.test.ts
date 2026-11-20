@@ -9,7 +9,7 @@ import { GameManager } from './GameManager'
  * what its locker says, what the customer thinks, what is in the player's hands. Nothing may throw.
  */
 
-const SETUPS: string[][] = [
+export const SETUPS: string[][] = [
   [],
   ['labels', 'register', 'bank2', 'bank3'],
   ['labels', 'register', 'digital'],
@@ -100,17 +100,21 @@ function check(g: GameManager): void {
   }
 }
 
-function play(seed: number, setup: string[]): void {
+const options = ['greet', 'askName', 'accept', 'turnAway', 'confirmStored', 'giveBack', 'handOver', 'goodbye'] as const
+
+export function fuzzGame(seed: number, setup: string[]): GameManager {
   const g = new GameManager(seed)
   g.economy.xp = 100_000
   g.economy.money = 1_000_000
   for (const id of setup) g.grantUpgrade(id)
   g.drainNotices()
-  const rand = mulberry32(seed * 7919 + 13)
-  const pick = <T>(list: T[]): T | undefined => list[Math.floor(rand() * list.length)]
-  const options = ['greet', 'askName', 'accept', 'turnAway', 'confirmStored', 'giveBack', 'handOver', 'goodbye'] as const
+  return g
+}
 
-  for (let step = 0; step < 350; step++) {
+/** One random thing a player might do (valid or not), then the customers' walking done instantly. */
+export function randomStep(g: GameManager, rand: () => number): void {
+  const pick = <T>(list: T[]): T | undefined => list[Math.floor(rand() * list.length)]
+  {
     const customers = g.customers.all()
     const lockers = g.lockers.all()
     const roll = rand()
@@ -185,9 +189,19 @@ function play(seed: number, setup: string[]): void {
         if (n.type === 'customerLeaving') g.customerExited(n.customerId)
       }
     }
+  }
+}
+
+function play(seed: number, setup: string[]): void {
+  const g = fuzzGame(seed, setup)
+  const rand = mulberry32(seed * 7919 + 13)
+  for (let step = 0; step < 350; step++) {
+    randomStep(g, rand)
     check(g)
   }
 }
+
+export { check }
 
 describe('Random play keeps every record consistent', () => {
   for (const [i, setup] of SETUPS.entries()) {

@@ -434,7 +434,7 @@ export const CONFIG = {
       burstChance: 0.25,
       burstGap: [2, 5],
       returnAfter: [35, 150],
-      patience: 150,
+      patience: 175,
       maxIdle: 12,
     },
     {
@@ -447,7 +447,7 @@ export const CONFIG = {
       burstChance: 0.3,
       burstGap: [2, 5],
       returnAfter: [35, 170],
-      patience: 130,
+      patience: 155,
       maxIdle: 10,
     },
     {
@@ -460,7 +460,7 @@ export const CONFIG = {
       burstChance: 0.35,
       burstGap: [1.5, 4],
       returnAfter: [40, 190],
-      patience: 100,
+      patience: 125,
       maxIdle: 8,
     },
     {
@@ -473,7 +473,7 @@ export const CONFIG = {
       burstChance: 0.3,
       burstGap: [2, 5],
       returnAfter: [40, 200],
-      patience: 100,
+      patience: 125,
       maxIdle: 10,
       maxActive: 8,
     },
@@ -508,7 +508,9 @@ export const CONFIG = {
   /** Levels, and what levelling up gives. Level n needs 100·n XP. */
   progression: {
     /** Cash bonus on reaching a level: this × the new level. */
-    levelUpBonus: 20,
+    levelUpBonus: 50,
+    /** Each level above 1 raises the deposit fee new customers pay by this fraction of the base fee (0.1 = $15 → $16.50 at level 2). */
+    feeBonusPerLevel: 0.1,
     /** Each level above 1 makes customers arrive this much faster (0.1 = 10 % more often). */
     paceBonusPerLevel: 0.1,
   },
@@ -734,6 +736,12 @@ export const CONFIG = {
   },
   /** When a stage's active-customer cap is reached, check again after this many seconds. */
   arrivalRetry: 8,
+  /**
+   * How many people may be in the shop at once (walking in, queueing, being served), however many lockers you have: `base`, one more
+   * every `levelsPerExtra` levels, never above `max`. New customers wait outside at the cap; returning customers get `returnHeadroom`
+   * places more (they have a bag to collect), then wait too.
+   */
+  crowd: { base: 6, levelsPerExtra: 3, max: 10, returnHeadroom: 2 },
   /** When the idle guard pulls an event forward, it fires this many seconds from now [min, max]. */
   idlePullIn: [2, 5],
   /**

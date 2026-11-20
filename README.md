@@ -39,7 +39,7 @@ Open http://localhost:5173, press **Open the shop**, and click the view to captu
 | `W` `S` / arrows / mouse wheel (in a conversation) | Move the highlight |
 | `1`–`6` | Jump straight to an answer. Each number keeps the same meaning for the whole visit; finished steps stay greyed out |
 | `Q` / `Backspace` | Step away from the conversation |
-| `Esc` | Pause. The shop clock stops while paused |
+| `Esc` | Pause. The shop clock stops while paused, and the game saves (it also saves every 30 s; the main menu has Continue) |
 
 ### How a customer works
 
