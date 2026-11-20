@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { CONFIG } from '../sim/config'
 import { useGameStore, type Banner, type Toast } from '../store/gameStore'
 import { CataloguePanel } from './CataloguePanel'
 import { ConsolePanel } from './ConsolePanel'
 import { DealPanel } from './DealPanel'
 import { DialoguePanel } from './DialoguePanel'
+import { ModMenu } from './ModMenu'
 import { ReceivingPanel } from './ReceivingPanel'
 import { TerminalPanel } from './TerminalPanel'
 
@@ -38,6 +40,8 @@ export function HUD() {
       console: st.console,
       deal: st.deal,
       receiving: st.receiving,
+      modOpen: st.modOpen,
+      modInfo: st.modInfo,
       banner: st.banner,
       pointerLocked: st.pointerLocked,
     })),
@@ -104,16 +108,18 @@ export function HUD() {
       {s.console && <ConsolePanel console={s.console} />}
       {s.deal && <DealPanel deal={s.deal} />}
       {s.receiving && <ReceivingPanel view={s.receiving} />}
+      {s.modOpen && s.modInfo && <ModMenu info={s.modInfo} />}
+      {CONFIG.modMenu.enabled && !s.modOpen && <ModChip />}
 
       <Toasts />
 
       {s.banner && <BannerCard banner={s.banner} />}
 
-      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.terminal && !s.console && !s.deal && !s.receiving && !s.banner && <p className="click-hint">Click to look around</p>}
+      {!s.pointerLocked && !s.dialogue && !s.catalogue && !s.terminal && !s.console && !s.deal && !s.receiving && !s.modOpen && !s.banner && <p className="click-hint">Click to look around</p>}
 
       <div className="controls">
         <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Mouse</kbd> look · <kbd>E</kbd>/<kbd>Click</kbd> use · <kbd>Scroll</kbd>/<kbd>1-6</kbd> talk ·{' '}
-        <kbd>Esc</kbd> pause
+        <kbd>M</kbd> mods · <kbd>Esc</kbd> pause
       </div>
     </div>
   )
@@ -240,5 +246,15 @@ function BannerCard({ banner }: { banner: Banner }) {
         <span>Admit one</span>
       </span>
     </div>
+  )
+}
+
+/** Small button for opening the mod menu with the mouse (only clickable while the mouse is free). */
+function ModChip() {
+  const patch = useGameStore((s) => s.patch)
+  return (
+    <button type="button" className="mod-chip" onClick={() => patch({ modOpen: true })}>
+      Mods <kbd>M</kbd>
+    </button>
   )
 }

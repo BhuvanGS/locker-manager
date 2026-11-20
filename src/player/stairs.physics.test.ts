@@ -21,6 +21,7 @@ const idle: InputSnapshot = {
   confirmPressed: false,
   cancelPressed: false,
   pausePressed: false,
+  modPressed: false,
   jumpPressed: false,
   mouseDeltaX: 0,
   mouseDeltaY: 0,

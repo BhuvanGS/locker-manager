@@ -16,6 +16,8 @@ export type InputSnapshot = {
   /** Q or Backspace: step away from the conversation. */
   cancelPressed: boolean
   pausePressed: boolean
+  /** M or ` : open / close the mod menu. */
+  modPressed: boolean
   mouseDeltaX: number
   mouseDeltaY: number
 }
@@ -34,6 +36,8 @@ const GAME_KEYS = new Set([
   'ArrowLeft',
   'ArrowRight',
   'Escape',
+  'KeyM',
+  'Backquote',
   'Enter',
   'Space',
   'KeyQ',
@@ -106,6 +110,7 @@ export class InputManager {
       confirmPressed: hit('Enter') || hit('Space'),
       cancelPressed: hit('KeyQ') || hit('Backspace'),
       pausePressed: hit('Escape'),
+      modPressed: hit('KeyM') || hit('Backquote'),
       mouseDeltaX: this.mouseDeltaX,
       mouseDeltaY: this.mouseDeltaY,
     }

@@ -123,7 +123,9 @@ describe('The warehouse (game rules)', () => {
     expect(g.takeCrateFromTruck(truck.id).ok).toBe(false) // one at a time
     expect(g.objective()).toMatch(/Store the crate/)
     expect(g.storeCrate('cold').ok).toBe(false) // no cold room yet
+    const money = g.economy.money
     expect(g.storeCrate('shelves').ok).toBe(true)
+    expect(g.economy.money).toBeGreaterThan(money) // a handling charge for each crate put away
     expect(g.hands).toBeNull()
     expect(wh.stored).toBe(1)
     expect(truck.onBoard).toBe(load.crates - 1)
@@ -452,6 +454,9 @@ describe('Automation: the warehouse robots', () => {
     expect(b.wh.cratesOf(load.id)).toBe(2)
     expect(b.wh.loads.includes(load)).toBe(false)
     expect(b.events).toContainEqual(expect.objectContaining({ type: 'stored', crates: 2 }))
+    // Putting crates away earns a handling charge as it happens (the full fee still comes at collection).
+    expect(b.wh.takeHandling()).toBe(b.wh.stored * Math.round(w.cargo.general.fee * w.handlingShare))
+    expect(b.wh.takeHandling()).toBe(0)
   })
 
   it('the second robot works alongside, faster', () => {

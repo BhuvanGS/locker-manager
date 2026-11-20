@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CONFIG } from './config'
 import { GameManager } from './GameManager'
+import type { Customer } from './types'
 
 /** A game with the conveyor and the counter arm (granted, so nothing is charged). */
 function withCounterArm(seed = 3) {
@@ -116,5 +117,50 @@ describe('Counter arm upgrades', () => {
     expect(jobs.map((j) => j.customerId).sort()).toEqual([a, b].sort())
     expect(new Set(jobs.map((j) => j.arm)).size).toBe(2)
   })
-})
 
+  /** Four customers who leave their bags and only come back when the test says so, with the counter arm doing all the work. */
+  function quietShop(): { g: GameManager; stored: () => Customer[]; comeBack: (id: string) => void } {
+    const g = new GameManager(5, [
+      { id: 'test', title: 'Test', intro: '', customers: 4, firstArrivalDelay: 1, arrivalGap: [3, 3], returnAfter: [9000, 9000], patience: 1000 },
+    ])
+    g.grantUpgrade('counter-arm')
+    g.drainNotices()
+    run(g, 120)
+    const stored = () => g.customers.all().filter((c) => c.state === 'stored' && g.customers.itemOf(c)?.status === 'inLocker')
+    expect(stored().length).toBe(4)
+    const comeBack = (id: string) => {
+      g.clock.removeWhere((e) => e.type === 'customerReturn' && e.customerId === id)
+      ;(g as unknown as { onReturn(id: string): void }).onReturn(id)
+      g.customerReachedCounter(id)
+    }
+    return { g, stored, comeBack }
+  }
+
+  it('still hands the bag over to someone you greeted and then left standing', () => {
+    const { g, stored, comeBack } = quietShop()
+    const id = stored()[0]!.id
+    comeBack(id)
+    // Hello, then walk off: they are now "collecting", and the arm must still serve them.
+    expect(g.talkTo(id).ok).toBe(true)
+    expect(g.choose('greet').ok).toBe(true)
+    g.closeDialogue()
+    expect(g.customers.get(id).state).toBe('collecting')
+    run(g, 120)
+    expect(g.customers.has(id)).toBe(false) // served and gone
+  })
+
+  it('puts bags fetched early back in a locker when the tray is full and someone at the counter needs theirs', () => {
+    const { g, stored, comeBack } = quietShop()
+    const [late, ...early] = stored()
+    // Fill the return tray with the bags of people who are not back yet.
+    for (const c of early) expect(g.requestBag(g.customers.itemOf(c)!.lockerId!).ok).toBe(true)
+    run(g, 150)
+    expect(g.conveyor.readyCount).toBe(CONFIG.automation.readyCapacity)
+    comeBack(late!.id)
+    run(g, 240)
+    expect(g.customers.has(late!.id)).toBe(false) // the flow kept going: their bag was fetched and handed over
+    // The early bags went back on the belt; the tray has room again.
+    expect(g.conveyor.readyCount).toBeLessThan(CONFIG.automation.readyCapacity)
+    for (const c of early) expect(['inLocker', 'onConveyor']).toContain(g.customers.itemOf(c)!.status)
+  })
+})

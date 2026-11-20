@@ -298,6 +298,7 @@ export class WarehouseManager {
     this.addCrates(crate, section, 1)
     this.carrying = null
     this.bookDelivered(crate, 1, deals)
+    this.bookHandling(crate)
     return { ok: true, message: `Stored ${SECTION_WORDS[section]}.` }
   }
 
@@ -477,6 +478,23 @@ export class WarehouseManager {
     if (load.taken < load.crates) return
     this.loads = this.loads.filter((l) => l !== load)
     this.leave(truck)
+  }
+
+  /** Handling earned for crates put away since the game last collected it (`takeHandling`). */
+  handled = 0
+
+  /** Book the handling charge for one crate just put away (`CONFIG.warehouse.handlingShare` of its fee; nothing for spoiled or contraband). */
+  private bookHandling(crate: CrateData): void {
+    if (crate.spoiled || crate.kind === 'contra') return
+    const rate = CONFIG.warehouse.cargo[crate.cargo].fee * (crate.kind === 'vip' ? CONFIG.warehouse.vipFeeFactor : 1)
+    this.handled += Math.round(rate * CONFIG.warehouse.handlingShare)
+  }
+
+  /** The handling earned so far, handed over once (it then starts again from 0). */
+  takeHandling(): number {
+    const out = this.handled
+    this.handled = 0
+    return out
   }
 
   private loadOne(truck: Truck, crate: CrateData): void {
@@ -703,6 +721,7 @@ export class WarehouseManager {
     if (job.dir === 'in') {
       this.addCrates(crate, job.section, 1)
       this.bookDelivered(crate, 1, deals)
+      this.bookHandling(crate)
       // Tell the player once the whole load is in.
       if (!this.loads.some((l) => l.id === crate.loadId) && !this.robots.some((j) => j !== job && j?.crate?.loadId === crate.loadId)) {
         events.push({ type: 'stored', owner: crate.owner, crates: this.cratesOf(crate.loadId), section: job.section })

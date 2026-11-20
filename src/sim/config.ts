@@ -483,6 +483,11 @@ export const CONFIG = {
     depositFee: 15,
     /** Extra tip at 100 satisfaction, scaled down linearly. */
     maxTip: 5,
+    /**
+     * Paid the moment a bag is stored (by you, the belt or the counter arm), as this fraction of the customer's fee, on top of the full
+     * fee they pay when they collect it. So automated work earns money as it happens, not only XP.
+     */
+    dropOffShare: 0.4,
     startingReputation: 50,
     xp: { deposit: 20, correctReturn: 30 },
     /** Reputation change when a customer walks out unserved / is politely turned away. */
@@ -667,6 +672,8 @@ export const CONFIG = {
       illegal: { label: 'Contraband', fee: 110 },
     },
     vipFeeFactor: 0.7,
+    /** Paid for each crate put away (by the robots or by you), as this fraction of its collection fee, on top of that fee. Not the contact's crates. */
+    handlingShare: 0.35,
     /** What a kei trucker's load is, at random (metals only ever come from VIP deals; contraband only from the contact). */
     keiMix: { general: 0.55, food: 0.27, cold: 0.18 },
     /**
@@ -736,6 +743,11 @@ export const CONFIG = {
   },
   /** When a stage's active-customer cap is reached, check again after this many seconds. */
   arrivalRetry: 8,
+  /**
+   * The mod menu (press M): free cash, levels and upgrades, extra customers, time skips. It exists so testing
+   * and tinkering does not mean grinding. Set `enabled: false` to remove it from a release build.
+   */
+  modMenu: { enabled: true },
   /**
    * How many people may be in the shop at once (walking in, queueing, being served), however many lockers you have: `base`, one more
    * every `levelsPerExtra` levels, never above `max`. New customers wait outside at the cap; returning customers get `returnHeadroom`

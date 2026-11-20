@@ -39,6 +39,7 @@ Open http://localhost:5173, press **Open the shop**, and click the view to captu
 | `W` `S` / arrows / mouse wheel (in a conversation) | Move the highlight |
 | `1`–`6` | Jump straight to an answer. Each number keeps the same meaning for the whole visit; finished steps stay greyed out |
 | `Q` / `Backspace` | Step away from the conversation |
+| `M` or `` ` `` | **Mod menu** (see below) |
 | `Esc` | Pause. The shop clock stops while paused, and the game saves (it also saves every 30 s; the main menu has Continue) |
 
 ### How a customer works
@@ -52,6 +53,21 @@ Open http://localhost:5173, press **Open the shop**, and click the view to captu
 The wrong key won't turn (you lose a moment fumbling). Hand someone the wrong bag and they'll say it isn't theirs.
 You can try again, but every try makes them angrier (😕 → 😠 → 🤬): you lose reputation, and a furious customer
 pays only half price and doesn't tip.
+
+### Mod menu (skip the grind)
+
+Press `M` (or `` ` ``, or click the small "Mods" button) to open the mod menu. It gives you the mouse and, by default, freezes
+the shop while you click around:
+
+- **Cash:** +$100 / +$1,000 / +$10,000
+- **Level:** +1 level, +100 XP, or jump to level 4 or 8 (with the normal level-up bonus and banner)
+- **Upgrades:** unlock any single upgrade for free (it also unlocks what it needs first), or **unlock everything**, including
+  the annexes. They appear in the shop exactly as if you had bought them
+- **Customers:** spawn 1 or 5, jump to the next traffic stage, bring every stored customer back, skip 30 s or 2 min
+- **Options:** customers never lose patience; freeze the shop while the menu is open; start a new game
+
+It's meant for testing and tinkering. To remove it from a release build, set `modMenu.enabled` to `false` in
+`src/sim/config.ts`.
 
 ### Growing the shop
 

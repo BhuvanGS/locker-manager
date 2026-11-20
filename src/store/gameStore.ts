@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { saveSummary, type SaveSummary } from '../engine/saveGame'
 import { savedQuality, type QualityLevel, type QualitySetting } from '../engine/Quality'
 import type { DialogueOptionId } from '../sim/types'
+import type { ModInfo, ModRequest } from '../sim/mods'
 import type { ReceivingLoad, TerminalEntry } from '../sim/GameManager'
 import type { Section } from '../sim/config'
 import type { CatalogueItem } from '../sim/UpgradeManager'
@@ -120,6 +121,13 @@ export type GameStoreState = {
   /** Console row clicked in the UI, consumed by the Engine. */
   pendingConsoleBuy: string | null
 
+  /** Mod menu (cheats for testing; see sim/mods.ts). */
+  modOpen: boolean
+  /** Freeze the shop while the mod menu is open. */
+  modPause: boolean
+  modInfo: ModInfo | null
+  /** Requests from the menu's buttons, consumed by the Engine. */
+  modRequests: ModRequest[]
   /** Set by the menu to ask the Engine for a fresh game. */
   newGameRequested: boolean
   /** Set by the menu to carry on the saved game, or to save now (both consumed by the Engine). */
@@ -136,6 +144,7 @@ export type GameStoreState = {
   pushToast: (text: string, tone: Toast['tone']) => void
   dropToast: (id: number) => void
   showBanner: (title: string, text: string, eyebrow?: string) => void
+  requestMod: (request: ModRequest) => void
 }
 
 let toastSeq = 0
@@ -185,6 +194,10 @@ export const useGameStore = create<GameStoreState>((set) => ({
   pendingDeal: null,
   pendingReceive: null,
   pendingConsoleBuy: null,
+  modOpen: false,
+  modPause: true,
+  modInfo: null,
+  modRequests: [],
   newGameRequested: false,
   continueRequested: false,
   saveRequested: false,
@@ -194,5 +207,6 @@ export const useGameStore = create<GameStoreState>((set) => ({
   pushToast: (text, tone) =>
     set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, text, tone }].slice(-4) })),
   dropToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  requestMod: (request) => set((s) => ({ modRequests: [...s.modRequests, request] })),
   showBanner: (title, text, eyebrow = 'New stage') => set({ banner: { id: ++toastSeq, eyebrow, title, text } }),
 }))

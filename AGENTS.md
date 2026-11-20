@@ -95,8 +95,9 @@ Rules:
   (removes the doorway's wall panel and collider, hides the neighbour's back half, adds a door frame), builds an `Annex` (the hall) and fits
   `LockerWall`s at `ANNEX[side].bankX` and `KeyRack`s at `ANNEX[side].rackX` (hall front wall, `ANNEX_RACK`). A new game undoes all of it
   (`removeBuiltFurniture`). Positions live in `world/layout.ts` (`ANNEX_DOOR`, `ANNEX`, `LOCKER_BANKS`, `KEY_RACKS`).
-- **Cheats are debug-only** (`sim/mods.ts`): there is no mod menu in the game any more. `applyMod(game, request)` (pure, tested in `Mods.test.ts`)
-  is reached only through the debug handle (`__game.mod(...)`, with `?debug=1`) and the promo scripts. Everything goes through normal
+- **Mod menu** (`sim/mods.ts`, `ui/ModMenu.tsx`, `CONFIG.modMenu.enabled`): M or ` opens it (Esc closes it instead of pausing; it frees the mouse
+  and by default freezes the shop). Its buttons queue `store.modRequests`, which the Engine runs through `applyMod(game, request)` (pure, tested in
+  `Mods.test.ts`); the debug handle (`__game.mod(...)`, with `?debug=1`) and the promo scripts call it too. Everything goes through normal
   `GameManager` code (`grantXp`, `grantUpgrade` which shares `applyUpgrade` with `buyUpgrade`, `spawnExtraCustomer`, `skipStage`,
   `callBackStoredCustomers`, `mods.noPatienceLoss`), so level-ups, banners and the 3D furniture behave exactly as in normal play.
 - **South expansion and floors** (`kind: 'hall'` in `CONFIG.upgrades`, `world/Hall.ts`, `world/Stairs.ts`): the south hall is behind the storage
@@ -162,7 +163,10 @@ Rules:
 - **Sun shadow** (`Facility.followSun`, called by the Engine every frame): the directional light's shadow box (±`SHADOW_HALF` m) is centred on the player, snapped to texel steps, so far rooms get proper shadows without
   shimmering. Anything with a roof must cast shadows (`castShadow`) or the sun shines through it.
 - **VIP cars** (`world/VipCar.ts`): follows `game.deals.offer`. When the car parks, the VIP walks `WALK` (pavement → front door → lobby → office door → chair), timed to arrive at `readyAt` (`CONFIG.deals.arrivalSeconds`); the office draws them seated from then on; when the offer ends they walk back and the car leaves. `nearDoor()` opens the front door for them. **Names:** `CustomerAgents` keeps a name sprite per agent.
-- **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): `counterJobs`, one per arm (`counter-arm-2` adds a second arm on its own rail; `counterArms`), each a take or give;
+- **Counter arm** (`upgrade id 'counter-arm'`, `GameManager.updateCounterArm`): it serves anyone back for a bag (`RETURN_VISIT`: greeted or not), and
+  `refileStrayBag` sends a bag fetched early back to a free locker when the tray (`readyCapacity`) is full while someone at the counter waits, so the flow
+  never stalls. Bags stored pay `dropOffShare` of the fee at once; crates put away pay `handlingShare` of theirs (`WarehouseManager.takeHandling`).
+  `counterJobs`, one per arm (`counter-arm-2` adds a second arm on its own rail; `counterArms`), each a take or give;
   `counter-speed-1/2` shorten each job (`counterSeconds`, `CONFIG.automation.counterSpeedSeconds`). Per job: an item is `withArm` from the grab (progress 0.4 / 0.35) until the job ends; the take job
   reserves its locker up front and loads the belt at the end, the give job removes the ready bag from the tray at the grab and pays through `finishReturn`. A job is dropped (before the grab) if you start talking
   to the customer or they leave. The view (`CounterArm`) draws one rig per arm, keyframes over `counterJobViews()`.

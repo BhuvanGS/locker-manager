@@ -231,7 +231,10 @@ export class GameManager {
     }
     this.conveyor.update(dt)
     this.updateCounterArm(dt)
-    if (this.hasWarehouse) this.handleWarehouseEvents(this.warehouse.update(dt, this.now, this.deals, this.rand))
+    if (this.hasWarehouse) {
+      this.handleWarehouseEvents(this.warehouse.update(dt, this.now, this.deals, this.rand))
+      this.payHandling()
+    }
     if (this.hasOffice) {
       const before = this.deals.offer
       const event = this.deals.update(this.now, this.economy.reputation, this.rand)
@@ -452,6 +455,9 @@ export class GameManager {
     c.expectedReturnAt = this.now + delay
     this.customers.transition(c.id, 'stored')
     this.clock.schedule(c.expectedReturnAt, { type: 'customerReturn', customerId: c.id })
+    const dropOff = Math.round(c.fee * CONFIG.economy.dropOffShare)
+    this.economy.earn(dropOff)
+    this.notify({ type: 'payment', amount: dropOff })
     this.gainXp(CONFIG.economy.xp.deposit)
     this.notify({ type: 'customerLeaving', customerId: c.id })
     if (this.dialogue?.customerId === c.id) this.dialogue = null
@@ -841,6 +847,7 @@ export class GameManager {
         const item = this.customers.itemOf(c)
         if (item?.status === 'inLocker' && item.lockerId && this.isRobotLocker(item.lockerId) && !this.conveyor.isBusy(item.lockerId)) this.requestBag(item.lockerId)
       }
+      this.refileStrayBag()
     }
     for (const job of [...this.counterJobs]) this.advanceCounterJob(job, dt)
     // Each free arm takes the next customer nobody is serving yet.
@@ -848,6 +855,35 @@ export class GameManager {
       if (this.counterJobs.some((j) => j.arm === arm)) continue
       if (!this.startCounterJob(arm)) break
     }
+  }
+
+  /**
+   * The return tray only holds a few bags. If it is full of bags nobody at the counter is waiting for (fetched early from the terminal for
+   * someone not back yet) while a customer who is back needs theirs fetched, the oldest stray bag goes back on the belt to a free locker, so
+   * the flow never stops until you clear the tray by hand.
+   */
+  private refileStrayBag(): void {
+    if (this.conveyor.fetchesInProgress() < CONFIG.automation.readyCapacity) return
+    const someoneWaits = this.customers.all().some((c) => {
+      if (!RETURN_VISIT.has(c.state)) return false
+      const item = this.customers.itemOf(c)
+      return item?.status === 'inLocker' && item.lockerId !== null && this.isRobotLocker(item.lockerId) && !this.conveyor.isBusy(item.lockerId)
+    })
+    if (!someoneWaits) return
+    const stray = this.conveyor.parcels.find((p) => {
+      if (p.phase !== 'ready') return false
+      const owner = this.customers.get(this.customers.item(p.itemId).customerId)
+      return !RETURN_VISIT.has(owner.state) && !this.counterJobs.some((j) => j.customerId === owner.id)
+    })
+    if (!stray) return
+    const cfg = CONFIG.automation
+    const inbound = this.conveyor.inbound()
+    if (inbound.length >= cfg.beltCapacity || inbound.some((p) => p.phase === 'beltIn' && p.t < cfg.loadGap)) return
+    const locker = this.lockers.all().find((l) => l.state === 'available' && this.isRobotLocker(l.id) && !l.itemId && !this.conveyor.isBusy(l.id))
+    if (!locker) return
+    this.conveyor.takeReadyFor(stray.itemId)
+    locker.state = 'reserved'
+    this.conveyor.load(stray.itemId, locker.id)
   }
 
   private startCounterJob(arm: number): boolean {
@@ -865,7 +901,8 @@ export class GameManager {
         this.counterJobs.push({ arm, kind: 'take', customerId: c.id, t: 0, moved: false, lockerId: locker.id })
         return true
       }
-      if (c.state === 'waitingForCollection' && item.status === 'onConveyor' && this.conveyor.isReady(item.id)) {
+      // Back for their bag (greeted or not: saying hello and stepping away must not leave the bag on the tray for ever).
+      if (RETURN_VISIT.has(c.state) && item.status === 'onConveyor' && this.conveyor.isReady(item.id)) {
         this.counterJobs.push({ arm, kind: 'give', customerId: c.id, t: 0, moved: false, lockerId: null })
         return true
       }
@@ -891,7 +928,7 @@ export class GameManager {
     }
     if (!c || !item) return abort()
     if (!job.moved) {
-      const expected = job.kind === 'take' ? c.state === 'waiting' && item.status === 'withCustomer' : c.state === 'waitingForCollection' && this.conveyor.isReady(item.id)
+      const expected = job.kind === 'take' ? c.state === 'waiting' && item.status === 'withCustomer' : RETURN_VISIT.has(c.state) && this.conveyor.isReady(item.id)
       if (!expected || this.dialogue?.customerId === c.id) return abort()
     }
     job.t += dt
@@ -920,6 +957,14 @@ export class GameManager {
       c.visit.greeted = true
       this.finishReturn(c, item, null)
     }
+  }
+
+  /** Pay out the handling charge for crates put away (robots or you). */
+  private payHandling(): void {
+    const paid = this.warehouse.takeHandling()
+    if (paid <= 0) return
+    this.economy.earn(paid)
+    this.notify({ type: 'payment', amount: paid })
   }
 
   /** Turn what happened in the warehouse into money, reputation and messages. */
@@ -1059,6 +1104,7 @@ export class GameManager {
     if (this.hands?.kind !== 'crate') return fail('You are not carrying a crate.')
     const r = this.warehouse.storeCarried(section, this.deals)
     if (r.ok) this.hands = null
+    this.payHandling()
     return r.ok ? ok(r.message) : fail(r.message)
   }
 

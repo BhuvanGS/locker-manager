@@ -44,4 +44,18 @@ describe('Earning more as you level', () => {
     const id = g.spawnExtraCustomer()
     expect(g.customers.get(id).fee).toBe(g.depositFee())
   })
+
+  it('pays a drop-off charge the moment a bag is stored, even when the counter arm does all the work', () => {
+    const g = new GameManager(5, [{ id: 'test', title: 'Test', intro: '', customers: 1, firstArrivalDelay: 1, arrivalGap: [3, 3], returnAfter: [9000, 9000], patience: 1000 }])
+    g.grantUpgrade('counter-arm')
+    g.drainNotices()
+    const money = g.economy.money
+    for (let t = 0; t < 60; t += 0.25) {
+      g.update(0.25)
+      for (const n of g.drainNotices()) if (n.type === 'customerSpawned') g.customerReachedCounter(n.customerId)
+    }
+    const c = g.customers.all()[0]!
+    expect(c.state).toBe('stored')
+    expect(g.economy.money - money).toBe(Math.round(c.fee * CONFIG.economy.dropOffShare))
+  })
 })

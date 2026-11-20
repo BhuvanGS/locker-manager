@@ -9,7 +9,7 @@ import { PlayerController } from '../player/PlayerController'
 import { GameManager } from '../sim/GameManager'
 import type { ActionResult, DialogueOptionId, SimNotice } from '../sim/types'
 import { CONFIG, ZONE_TITLES, type AutoZone } from '../sim/config'
-import { applyMod } from '../sim/mods'
+import { applyMod, modInfo } from '../sim/mods'
 import { useGameStore, type CatalogueView, type ConsoleView, type DealView, type DialogueView, type ReceivingView, type TerminalView } from '../store/gameStore'
 import { AutomationConsole } from '../world/AutomationConsole'
 import { ConveyorBay } from '../world/ConveyorBay'
@@ -156,6 +156,10 @@ export class Engine {
   private terminalSig = ''
   private terminalView: TerminalView | null = null
   private terminalIndex = 0
+  private modSig = ''
+  private modView: ReturnType<typeof modInfo> | null = null
+  /** Whether the mod menu was open last frame (to release / regain the mouse on the change). */
+  private modWasOpen = false
   /** Debug only: forced walking input, so automation can walk through doors. */
   private debugWalk: { forward: number; right: number; sprint?: boolean } | null = null
 
@@ -641,7 +645,9 @@ export class Engine {
     this.dealView = null
     this.receivingSig = ''
     this.receivingView = null
-    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, deal: null, receiving: null, banner: null })
+    this.modSig = ''
+    this.modView = null
+    useGameStore.setState({ toasts: [], dialogue: null, catalogue: null, terminal: null, console: null, deal: null, receiving: null, banner: null, modOpen: false, modInfo: null, modRequests: [] })
   }
 
   private readonly loop = (time: number): void => {
@@ -681,8 +687,33 @@ export class Engine {
     const player = this.player
     if (!player || !this.facility || !this.interaction) return
 
-    const pausePressed = input.pausePressed
-    const playing = store.phase === 'playing'
+    // Mod menu: M (or `) toggles it, Esc closes it instead of pausing, and it hands the mouse back while open.
+    const modsOn = CONFIG.modMenu.enabled
+    let modOpen = modsOn && store.modOpen && store.phase === 'playing'
+    let pausePressed = input.pausePressed
+    if (modsOn && store.phase === 'playing') {
+      if (input.modPressed) modOpen = !modOpen
+      else if (modOpen && pausePressed) {
+        modOpen = false
+        pausePressed = false
+      }
+    }
+    if (modOpen !== store.modOpen) store.patch({ modOpen })
+    if (modOpen !== this.modWasOpen) {
+      this.modWasOpen = modOpen
+      if (modOpen) {
+        if (document.pointerLockElement) document.exitPointerLock()
+      } else {
+        this.canvas.requestPointerLock()?.catch(() => {})
+      }
+    }
+    if (modsOn && store.modRequests.length > 0) {
+      const requests = store.modRequests
+      store.patch({ modRequests: [] })
+      for (const request of requests) this.report(applyMod(this.game, request))
+    }
+    // While the menu is open the shop can be frozen so there is time to click around.
+    const playing = store.phase === 'playing' && !(modOpen && store.modPause)
 
     if (playing) {
       this.autosaveIn -= dt
@@ -697,7 +728,7 @@ export class Engine {
 
     // Player and camera. While you are talking or browsing the catalogue you stand still
     // (W/S/arrows choose answers instead).
-    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || this.game.dealOpen || this.game.receivingOpen
+    const talking = this.game.dialogue !== null || this.game.catalogueOpen || this.game.terminalOpen || this.game.consoleScope !== null || this.game.dealOpen || this.game.receivingOpen || modOpen
     if (playing) {
       this.cameraRig.handleMouseDelta(input.mouseDeltaX, input.mouseDeltaY)
       player.update(talking ? { ...input, forward: 0, right: 0, sprint: false, jumpPressed: false } : input, this.cameraRig.getYaw(), dt)
@@ -771,7 +802,7 @@ export class Engine {
 
     // Interaction.
     let aim = null
-    if (playing) {
+    if (playing && !modOpen) {
       aim = this.interaction.aim(camera, this.game)
       if (this.game.dialogue) {
         // In a conversation, E / click / Enter answer instead of poking whatever is under the crosshair.
@@ -1050,6 +1081,13 @@ export class Engine {
     }
 
     // Mod menu view, cached the same way.
+    const modOpen = CONFIG.modMenu.enabled && useGameStore.getState().modOpen
+    const mod = modOpen ? modInfo(game) : null
+    const modSig = mod ? JSON.stringify(mod) : ''
+    if (modSig !== this.modSig) {
+      this.modSig = modSig
+      this.modView = mod
+    }
 
     // Catalogue view, cached the same way.
     let catalogue: CatalogueView | null = null
@@ -1172,6 +1210,7 @@ export class Engine {
       consoleIndex: this.consoleIndex,
       terminal: this.terminalView,
       terminalIndex: this.terminalIndex,
+      modInfo: this.modView,
     })
   }
 
